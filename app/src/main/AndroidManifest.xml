@@ -24,6 +24,11 @@
             </intent-filter>
         </activity>
 
+        <!-- 로그인 액티비티 -->
+        <activity
+            android:name=".LoginActivity"
+            android:exported="false" />
+
         <!-- 메인 액티비티 -->
         <activity
             android:name=".MainActivity"

@@ -10,7 +10,7 @@
 
     <!-- 스플래시 화면 전용 테마 (야간 모드) -->
     <style name="SplashTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="android:windowBackground">@drawable/daysync_logo</item>
+        <item name="android:windowBackground">@android:color/black</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowFullscreen">true</item>
     </style>
