@@ -66,7 +66,7 @@ public class LoginActivity extends AppCompatActivity {
                 }
             });
         } catch (Exception e) {
-            Log.e(TAG, "onCreate 오류: ", e);
+            Log.e(TAG, "onCreate 오류: ",e);
             Toast.makeText(this, "로그인 화면 로드 중 오류가 발생했습니다.", Toast.LENGTH_SHORT).show();
         }
     }

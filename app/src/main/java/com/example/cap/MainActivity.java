@@ -16,7 +16,7 @@ public class MainActivity extends AppCompatActivity {
         SharedPreferences preferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
         String nickname = preferences.getString("nickname", "사용자");
 
-        // Find TextView and set welcome message
+        // 텍스트뷰 확인 후 환영인사
         TextView tvMainMessage = findViewById(R.id.tvMainMessage);
         if (tvMainMessage != null) {
             tvMainMessage.setText(nickname + "님, 환영합니다!");

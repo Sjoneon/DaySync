@@ -13,7 +13,7 @@ import androidx.appcompat.app.AppCompatActivity;
 public class SplashActivity extends AppCompatActivity {
 
     private static final String TAG = "SplashActivity";
-    private static final int SPLASH_DURATION = 2000; // 2초
+    private static final int SPLASH_DURATION = 2000; //  2초
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
