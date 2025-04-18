@@ -11,7 +11,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Cap"
-        tools:targetApi="31">
+        tools:targetApi="35">
 
         <!-- 스플래시 액티비티를 첫 화면으로 설정 -->
         <activity
