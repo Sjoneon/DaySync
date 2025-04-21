@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 캘린더 스타일 -->
+    <style name="CalendarTheme" parent="ThemeOverlay.MaterialComponents">
+        <item name="colorAccent">#FFFFFF</item>
+        <item name="colorControlActivated">#666666</item>
+        <item name="android:textColorPrimary">@android:color/white</item>
+        <item name="android:textColorSecondary">#AAAAAA</item>
+        <item name="android:colorBackground">@android:color/black</item>
+    </style>
+
+    <style name="CalendarDateText">
+        <item name="android:textColor">@android:color/white</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+
+    <style name="CalendarWeekText">
+        <item name="android:textColor">#CCCCCC</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
+    <!-- Event 아이템 스타일 -->
+    <style name="EventItem">
+        <item name="android:background">#444444</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:layout_marginBottom">4dp</item>
+    </style>
+
+    <!-- 다이얼로그 테마 -->
+    <style name="DialogTheme" parent="ThemeOverlay.MaterialComponents.Dialog.Alert">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:colorBackground">#333333</item>
+        <item name="android:textColorPrimary">@android:color/white</item>
+        <item name="colorAccent">#FFFFFF</item>
+        <item name="buttonBarPositiveButtonStyle">@style/DialogButtonStyle</item>
+        <item name="buttonBarNegativeButtonStyle">@style/DialogButtonStyle</item>
+    </style>
+
+    <style name="DialogButtonStyle" parent="Widget.MaterialComponents.Button.TextButton.Dialog">
+        <item name="android:textColor">#FFFFFF</item>
+    </style>
+</resources>

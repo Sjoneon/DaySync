@@ -6,4 +6,21 @@
     <string name="submit_button">생성</string>
     <string name="empty_nickname_error">닉네임을 입력해주세요</string>
     <string name="welcome_user">%s님, 환영합니다!</string>
+
+    <!-- 내비게이션 드로어 관련 문자열 -->
+    <string name="navigation_drawer_open">내비게이션 드로어 열기</string>
+    <string name="navigation_drawer_close">내비게이션 드로어 닫기</string>
+
+    <!-- 채팅 인터페이스 관련 문자열 -->
+    <string name="hint_message">메시지를 입력하세요...</string>
+    <string name="content_desc_voice">음성 입력</string>
+    <string name="content_desc_send">메시지 전송</string>
+
+    <!-- 메뉴 아이템 관련 문자열 -->
+    <string name="menu_chat">채팅</string>
+    <string name="menu_calendar">일정 관리</string>
+    <string name="menu_alarm">알람 설정</string>
+    <string name="menu_route">경로 추천</string>
+    <string name="menu_settings">설정</string>
+    <string name="menu_help">도움말</string>
 </resources>
