@@ -1,5 +1,5 @@
 // LoginActivity.java
-package com.example.cap;
+package com.sjoneon.cap;
 
 import android.content.Intent;
 import android.content.SharedPreferences;

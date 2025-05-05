@@ -1,4 +1,4 @@
-package com.example.cap;
+package com.sjoneon.cap;
 
 import org.junit.Test;
 

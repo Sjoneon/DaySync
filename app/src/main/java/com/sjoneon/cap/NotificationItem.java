@@ -1,4 +1,4 @@
-package com.example.cap;
+package com.sjoneon.cap;
 
 /**
  * 알림 정보를 담는 데이터 클래스

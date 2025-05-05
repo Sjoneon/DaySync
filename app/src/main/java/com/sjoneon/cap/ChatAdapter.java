@@ -1,4 +1,4 @@
-package com.example.cap;
+package com.sjoneon.cap;
 
 import android.text.format.DateFormat;
 import android.view.LayoutInflater;

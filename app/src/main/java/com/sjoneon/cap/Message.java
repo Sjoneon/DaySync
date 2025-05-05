@@ -1,4 +1,4 @@
-package com.example.cap;
+package com.sjoneon.cap;
 
 /**
  * 채팅 메시지를 나타내는 데이터 클래스

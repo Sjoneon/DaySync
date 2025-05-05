@@ -1,4 +1,4 @@
-package com.example.cap;
+package com.sjoneon.cap;
 
 import android.content.SharedPreferences;
 import android.os.Bundle;
