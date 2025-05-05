@@ -2,27 +2,24 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="#333333"
+    android:background="@color/background_dialog"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="@dimen/padding_xlarge">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        android:text="알람 레이블"
-        android:textColor="@android:color/white"
-        android:textSize="16sp" />
+        android:layout_marginBottom="@dimen/margin_medium"
+        android:text="@string/alarm_title"
+        android:textColor="@color/text_primary"
+        android:textSize="@dimen/text_size_large" />
 
     <EditText
         android:id="@+id/editAlarmLabel"
+        style="@style/EditTextStyle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/rounded_edittext_background"
-        android:hint="알람 레이블을 입력하세요"
-        android:inputType="text"
-        android:padding="12dp"
-        android:textColor="@android:color/white"
-        android:textColorHint="#AAAAAA" />
+        android:hint="@string/alarm_label_hint"
+        android:inputType="text" />
 
 </LinearLayout>

@@ -3,29 +3,29 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/black">
+    android:background="@color/background_black">
 
     <LinearLayout
         android:id="@+id/layoutSearch"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp"
+        android:padding="@dimen/padding_xlarge"
         app:layout_constraintTop_toTopOf="parent">
 
         <EditText
             android:id="@+id/editStartLocation"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
+            android:layout_marginBottom="@dimen/margin_medium"
             android:background="@drawable/rounded_edittext_background"
             android:drawableStart="@android:drawable/ic_menu_mylocation"
-            android:drawablePadding="8dp"
-            android:hint="출발지"
+            android:drawablePadding="@dimen/padding_medium"
+            android:hint="@string/start_location_hint"
             android:inputType="text"
-            android:padding="12dp"
-            android:textColor="@android:color/white"
-            android:textColorHint="#AAAAAA" />
+            android:padding="@dimen/padding_large"
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_hint" />
 
         <EditText
             android:id="@+id/editDestination"
@@ -33,30 +33,30 @@
             android:layout_height="wrap_content"
             android:background="@drawable/rounded_edittext_background"
             android:drawableStart="@android:drawable/ic_menu_directions"
-            android:drawablePadding="8dp"
-            android:hint="도착지"
+            android:drawablePadding="@dimen/padding_medium"
+            android:hint="@string/destination_hint"
             android:inputType="text"
-            android:padding="12dp"
-            android:textColor="@android:color/white"
-            android:textColorHint="#AAAAAA" />
+            android:padding="@dimen/padding_large"
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_hint" />
 
         <Button
             android:id="@+id/buttonSearchRoute"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="@dimen/margin_xlarge"
             android:background="@drawable/rounded_button_background"
-            android:text="경로 검색"
-            android:textColor="@android:color/white" />
+            android:text="@string/search_route"
+            android:textColor="@color/text_primary" />
     </LinearLayout>
 
     <TextView
         android:id="@+id/textNoRoutes"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="출발지와 도착지를 입력하여 경로를 검색하세요."
-        android:textColor="@android:color/white"
-        android:textSize="16sp"
+        android:text="@string/no_routes"
+        android:textColor="@color/text_primary"
+        android:textSize="@dimen/text_size_large"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -67,7 +67,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:clipToPadding="false"
-        android:padding="16dp"
+        android:padding="@dimen/padding_xlarge"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/layoutSearch" />

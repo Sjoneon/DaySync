@@ -2,32 +2,33 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="176dp"
-    android:background="#333333"
+    android:background="@color/background_dialog"
     android:gravity="bottom"
     android:orientation="vertical"
-    android:padding="16dp"
+    android:padding="@dimen/padding_xlarge"
     android:theme="@style/ThemeOverlay.AppCompat.Dark">
 
     <ImageView
-        android:layout_width="64dp"
-        android:layout_height="64dp"
-        android:contentDescription="프로필 이미지"
+        android:layout_width="@dimen/profile_icon_size"
+        android:layout_height="@dimen/profile_icon_size"
+        android:contentDescription="@string/profile_image_desc"
         android:src="@mipmap/ic_launcher_round" />
 
     <TextView
         android:id="@+id/textViewUsername"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="사용자님"
-        android:textAppearance="@style/TextAppearance.AppCompat.Body1"
-        android:textColor="@android:color/white"
-        android:textSize="16sp" />
+        android:layout_marginTop="@dimen/margin_medium"
+        android:text="@string/welcome_message"
+        style="@style/CustomTextTitle"
+        android:textColor="@color/text_primary"
+        android:textSize="@dimen/text_size_large" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="DaySync와 함께하는 일상"
-        android:textColor="#AAAAAA"
-        android:textSize="14sp" />
+        android:text="@string/app_slogan"
+        style="@style/CustomTextSubtitle"
+        android:textColor="@color/text_tertiary"
+        android:textSize="@dimen/text_size_medium" />
 </LinearLayout>

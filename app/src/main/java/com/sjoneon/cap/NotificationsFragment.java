@@ -18,6 +18,9 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.List;
 
+/**
+ * 알림 목록을 표시하는 프래그먼트
+ */
 public class NotificationsFragment extends Fragment {
 
     private TextView textNoNotifications;
@@ -46,7 +49,7 @@ public class NotificationsFragment extends Fragment {
         buttonMarkAllRead.setOnClickListener(v -> {
             notificationRepository.markAllAsRead();
             loadNotifications();
-            Toast.makeText(getContext(), "모든 알림을 읽음 처리했습니다.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), R.string.all_notifications_read, Toast.LENGTH_SHORT).show();
         });
 
         // 알림 목록 로드
@@ -123,7 +126,7 @@ public class NotificationsFragment extends Fragment {
             holder.itemView.setOnClickListener(v -> {
                 notificationRepository.markAsRead(notification.getId());
                 holder.viewUnread.setVisibility(View.INVISIBLE);
-                Toast.makeText(getContext(), "알림을 읽음 처리했습니다.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), R.string.notification_read, Toast.LENGTH_SHORT).show();
             });
 
             // 삭제 버튼 클릭 리스너
@@ -139,7 +142,7 @@ public class NotificationsFragment extends Fragment {
                     recyclerViewNotifications.setVisibility(View.GONE);
                 }
 
-                Toast.makeText(getContext(), "알림이 삭제되었습니다.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), R.string.notification_deleted, Toast.LENGTH_SHORT).show();
             });
         }
 

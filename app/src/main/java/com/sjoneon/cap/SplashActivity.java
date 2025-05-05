@@ -1,4 +1,3 @@
-// SplashActivity.java
 package com.sjoneon.cap;
 
 import android.content.Intent;
@@ -9,10 +8,13 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+/**
+ * 앱 시작 시 스플래시 화면을 표시하는 액티비티
+ */
 public class SplashActivity extends AppCompatActivity {
 
     private static final String TAG = "SplashActivity";
-    private static final int SPLASH_DURATION = 2000; //  2초
+    private static final int SPLASH_DURATION = 2000; // 2초
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,14 +35,14 @@ public class SplashActivity extends AppCompatActivity {
                         finish();
                     } catch (Exception e) {
                         Log.e(TAG, "Handler 내부 오류: ", e);
-                        Toast.makeText(SplashActivity.this, "오류가 발생했습니다.", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(SplashActivity.this, getString(R.string.error_occurred), Toast.LENGTH_SHORT).show();
                     }
                 }
             }, SPLASH_DURATION);
 
         } catch (Exception e) {
             Log.e(TAG, "onCreate 오류: ", e);
-            Toast.makeText(this, "스플래시 화면 로드 중 오류가 발생했습니다.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.splash_screen_error), Toast.LENGTH_SHORT).show();
         }
     }
 }

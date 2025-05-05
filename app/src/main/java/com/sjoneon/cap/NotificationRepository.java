@@ -24,6 +24,10 @@ public class NotificationRepository {
     private List<NotificationItem> notifications;
     private final Gson gson;
 
+    /**
+     * 생성자 (private - 싱글톤 패턴)
+     * @param context 컨텍스트
+     */
     private NotificationRepository(Context context) {
         this.context = context.getApplicationContext();
         this.gson = new Gson();
@@ -32,6 +36,8 @@ public class NotificationRepository {
 
     /**
      * 싱글톤 인스턴스 가져오기
+     * @param context 컨텍스트
+     * @return NotificationRepository 인스턴스
      */
     public static synchronized NotificationRepository getInstance(Context context) {
         if (instance == null) {
@@ -68,6 +74,7 @@ public class NotificationRepository {
 
     /**
      * 모든 알림 가져오기
+     * @return 알림 목록 (최신순)
      */
     public List<NotificationItem> getAllNotifications() {
         // 시간 역순으로 정렬 (최신 알림이 먼저 표시되도록)
@@ -82,6 +89,7 @@ public class NotificationRepository {
 
     /**
      * 새 알림 추가
+     * @param notification 추가할 알림
      */
     public void addNotification(NotificationItem notification) {
         notifications.add(notification);
@@ -90,6 +98,7 @@ public class NotificationRepository {
 
     /**
      * 알림 삭제
+     * @param id 삭제할 알림 ID
      */
     public void deleteNotification(int id) {
         for (int i = 0; i < notifications.size(); i++) {
@@ -103,6 +112,7 @@ public class NotificationRepository {
 
     /**
      * 알림 읽음 처리
+     * @param id 알림 ID
      */
     public void markAsRead(int id) {
         for (NotificationItem notification : notifications) {
@@ -126,6 +136,7 @@ public class NotificationRepository {
 
     /**
      * 읽지 않은 알림 개수
+     * @return 읽지 않은 알림 개수
      */
     public int getUnreadCount() {
         int count = 0;

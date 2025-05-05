@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.cap"
+    namespace = "com.sjoneon.cap"  // com.example.cap에서 수정
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.cap"
+        applicationId = "com.sjoneon.cap"  // com.example.cap에서 수정
         minSdk = 34
         targetSdk = 35
         versionCode = 1

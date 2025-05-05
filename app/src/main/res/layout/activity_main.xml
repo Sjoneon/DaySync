@@ -5,7 +5,7 @@
     android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/black"
+    android:background="@color/background_black"
     tools:context=".MainActivity">
 
     <!-- 메인 콘텐츠 영역 -->
@@ -16,15 +16,15 @@
         <com.google.android.material.appbar.AppBarLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@android:color/black">
+            android:background="@color/background_black">
 
             <androidx.appcompat.widget.Toolbar
                 android:id="@+id/toolbar"
                 android:layout_width="match_parent"
                 android:layout_height="?attr/actionBarSize"
-                android:background="@android:color/black"
-                app:title="DaySync"
-                app:titleTextColor="@android:color/white" />
+                android:background="@color/background_black"
+                app:title="@string/app_name"
+                app:titleTextColor="@color/text_primary" />
         </com.google.android.material.appbar.AppBarLayout>
 
         <!-- 화면 전환을 위한 프레임 레이아웃 -->
@@ -46,7 +46,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="0dp"
                     android:clipToPadding="false"
-                    android:paddingBottom="16dp"
+                    android:paddingBottom="@dimen/padding_xlarge"
                     app:layout_constraintBottom_toTopOf="@+id/inputLayout"
                     app:layout_constraintTop_toTopOf="parent" />
 
@@ -55,7 +55,7 @@
                     android:id="@+id/inputLayout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:padding="8dp"
+                    android:padding="@dimen/padding_medium"
                     app:layout_constraintBottom_toBottomOf="parent">
 
                     <EditText
@@ -63,12 +63,12 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:background="@drawable/rounded_edittext_background"
-                        android:hint="메시지를 입력하세요..."
+                        android:hint="@string/hint_message"
                         android:inputType="textMultiLine"
                         android:maxLines="4"
-                        android:padding="12dp"
-                        android:textColor="@android:color/white"
-                        android:textColorHint="#AAAAAA"
+                        android:padding="@dimen/padding_large"
+                        android:textColor="@color/text_primary"
+                        android:textColorHint="@color/text_hint"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintEnd_toStartOf="@+id/buttonVoice"
                         app:layout_constraintStart_toStartOf="parent"
@@ -76,31 +76,31 @@
 
                     <ImageButton
                         android:id="@+id/buttonVoice"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="8dp"
+                        android:layout_width="@dimen/button_height"
+                        android:layout_height="@dimen/button_height"
+                        android:layout_marginStart="@dimen/margin_medium"
                         android:background="@drawable/rounded_button_background"
-                        android:contentDescription="음성 입력"
+                        android:contentDescription="@string/content_desc_voice"
                         android:src="@android:drawable/ic_btn_speak_now"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintEnd_toStartOf="@+id/buttonSend"
                         app:layout_constraintStart_toEndOf="@+id/editTextMessage"
                         app:layout_constraintTop_toTopOf="parent"
-                        app:tint="@android:color/white" />
+                        app:tint="@color/text_primary" />
 
                     <ImageButton
                         android:id="@+id/buttonSend"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="8dp"
+                        android:layout_width="@dimen/button_height"
+                        android:layout_height="@dimen/button_height"
+                        android:layout_marginStart="@dimen/margin_medium"
                         android:background="@drawable/rounded_button_background"
-                        android:contentDescription="메시지 전송"
+                        android:contentDescription="@string/content_desc_send"
                         android:src="@android:drawable/ic_menu_send"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toEndOf="@+id/buttonVoice"
                         app:layout_constraintTop_toTopOf="parent"
-                        app:tint="@android:color/white" />
+                        app:tint="@color/text_primary" />
                 </androidx.constraintlayout.widget.ConstraintLayout>
             </androidx.constraintlayout.widget.ConstraintLayout>
         </FrameLayout>
@@ -112,10 +112,10 @@
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        android:background="#222222"
+        android:background="@color/background_dark"
         app:headerLayout="@layout/nav_header"
-        app:itemIconTint="@android:color/white"
-        app:itemTextColor="@android:color/white"
+        app:itemIconTint="@color/text_primary"
+        app:itemTextColor="@color/text_primary"
         app:menu="@menu/drawer_menu" />
 
 </androidx.drawerlayout.widget.DrawerLayout>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 마진 패딩 -->
+    <dimen name="margin_small">4dp</dimen>
+    <dimen name="margin_medium">8dp</dimen>
+    <dimen name="margin_large">16dp</dimen>
+    <dimen name="margin_xlarge">32dp</dimen>
+
+    <!-- 패딩 -->
+    <dimen name="padding_small">4dp</dimen>
+    <dimen name="padding_medium">8dp</dimen>
+    <dimen name="padding_large">12dp</dimen>
+    <dimen name="padding_xlarge">16dp</dimen>
+
+    <!-- 텍스트 크기 -->
+    <dimen name="text_size_small">12sp</dimen>
+    <dimen name="text_size_medium">14sp</dimen>
+    <dimen name="text_size_large">16sp</dimen>
+    <dimen name="text_size_xlarge">18sp</dimen>
+    <dimen name="text_size_xxlarge">20sp</dimen>
+
+    <!-- 모서리 반경 -->
+    <dimen name="corner_radius">8dp</dimen>
+    <dimen name="corner_radius_large">25dp</dimen>
+
+    <!-- 버튼 크기 -->
+    <dimen name="button_height">48dp</dimen>
+    <dimen name="button_icon_size">24dp</dimen>
+    <dimen name="icon_size_small">32dp</dimen>
+    <dimen name="icon_size_medium">36dp</dimen>
+    <dimen name="icon_size_large">40dp</dimen>
+
+    <!-- 최대 너비 -->
+    <dimen name="max_width_message">260dp</dimen>
+    <dimen name="max_width_input">340dp</dimen>
+
+    <!-- 프로필 아이콘 크기 -->
+    <dimen name="profile_icon_size">64dp</dimen>
+
+    <!-- 알림 표시기 크기 -->
+    <dimen name="notification_dot_size">8dp</dimen>
+</resources>

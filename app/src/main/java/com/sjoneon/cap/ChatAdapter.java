@@ -13,6 +13,9 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * 채팅 메시지를 표시하기 위한 RecyclerView 어댑터
+ */
 public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     private static final int VIEW_TYPE_USER = 1;
@@ -20,6 +23,10 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     private List<Message> messageList;
 
+    /**
+     * 생성자
+     * @param messageList 채팅 메시지 목록
+     */
     public ChatAdapter(List<Message> messageList) {
         this.messageList = messageList;
     }
@@ -62,20 +69,29 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         return messageList.get(position).isUser() ? VIEW_TYPE_USER : VIEW_TYPE_AI;
     }
 
-    // 새 메시지 추가 메서드
+    /**
+     * 새 메시지 추가 메서드
+     * @param message 추가할 메시지
+     */
     public void addMessage(Message message) {
         messageList.add(message);
         notifyItemInserted(messageList.size() - 1);
     }
 
-    // 시간 포맷팅 메서드
+    /**
+     * 시간 포맷팅 메서드
+     * @param timestamp 타임스탬프
+     * @return 포맷팅된 시간 문자열 (HH:mm)
+     */
     private String formatTime(long timestamp) {
         Calendar calendar = Calendar.getInstance(Locale.getDefault());
         calendar.setTimeInMillis(timestamp);
         return DateFormat.format("HH:mm", calendar).toString();
     }
 
-    // 사용자 메시지용 ViewHolder
+    /**
+     * 사용자 메시지용 ViewHolder
+     */
     static class UserMessageViewHolder extends RecyclerView.ViewHolder {
         TextView textViewMessage;
         TextView textViewTime;
@@ -87,7 +103,9 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         }
     }
 
-    // AI 메시지용 ViewHolder
+    /**
+     * AI 메시지용 ViewHolder
+     */
     static class AiMessageViewHolder extends RecyclerView.ViewHolder {
         TextView textViewMessage;
         TextView textViewTime;

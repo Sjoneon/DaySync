@@ -18,6 +18,9 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 경로 추천 기능을 제공하는 프래그먼트
+ */
 public class RouteFragment extends Fragment {
 
     private EditText editStartLocation;
@@ -60,7 +63,7 @@ public class RouteFragment extends Fragment {
         String destination = editDestination.getText().toString().trim();
 
         if (startLocation.isEmpty() || destination.isEmpty()) {
-            Toast.makeText(getContext(), "출발지와 도착지를 모두 입력해주세요.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), R.string.empty_location_error, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -81,7 +84,7 @@ public class RouteFragment extends Fragment {
         // 첫 번째 경로 옵션
         RouteItem route1 = new RouteItem(
                 "버스 + 지하철",
-                "총 이동 시간: 45분",
+                getString(R.string.departure_time_format, "08:15"),
                 "08:15",
                 new String[]{
                         "버스 102번 - 청주역 정류장 (8:15 출발)",
@@ -92,7 +95,7 @@ public class RouteFragment extends Fragment {
         // 두 번째 경로 옵션
         RouteItem route2 = new RouteItem(
                 "버스",
-                "총 이동 시간: 55분",
+                getString(R.string.departure_time_format, "08:20"),
                 "08:20",
                 new String[]{
                         "버스 202번 - 청주역 정류장 (8:20 출발)",
@@ -103,7 +106,7 @@ public class RouteFragment extends Fragment {
         // 세 번째 경로 옵션
         RouteItem route3 = new RouteItem(
                 "도보 + 버스",
-                "총 이동 시간: 60분",
+                getString(R.string.departure_time_format, "08:25"),
                 "08:25",
                 new String[]{
                         "도보 15분 - 가까운 정류장까지",
@@ -197,13 +200,14 @@ public class RouteFragment extends Fragment {
             RouteItem route = routes.get(position);
             holder.textRouteType.setText(route.getRouteType());
             holder.textRouteSummary.setText(route.getRouteSummary());
-            holder.textDepartureTime.setText(route.getDepartureTime() + " 출발");
+            holder.textDepartureTime.setText(getString(R.string.departure_time_format, route.getDepartureTime()));
 
             // 경로 세부 정보 표시/숨기기
             holder.layoutRouteDetail.setVisibility(route.isExpanded() ? View.VISIBLE : View.GONE);
 
             // 경로 세부 정보 확장/축소 버튼
-            holder.buttonExpandRoute.setText(route.isExpanded() ? "간략히 보기" : "상세 보기");
+            holder.buttonExpandRoute.setText(route.isExpanded() ?
+                    R.string.hide_details : R.string.show_details);
             holder.buttonExpandRoute.setOnClickListener(v -> {
                 route.setExpanded(!route.isExpanded());
                 notifyItemChanged(position);
@@ -211,7 +215,7 @@ public class RouteFragment extends Fragment {
 
             // 길 안내 시작 버튼
             holder.buttonStartNavigation.setOnClickListener(v -> {
-                Toast.makeText(getContext(), "길 안내 기능 준비 중...", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), R.string.navigation_not_ready, Toast.LENGTH_SHORT).show();
                 // 실제로는 여기서 네비게이션 기능 실행
             });
         }

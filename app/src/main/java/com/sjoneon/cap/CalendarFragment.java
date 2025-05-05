@@ -26,6 +26,9 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * 일정 관리 기능을 제공하는 프래그먼트
+ */
 public class CalendarFragment extends Fragment {
 
     private CalendarView calendarView;
@@ -57,6 +60,9 @@ public class CalendarFragment extends Fragment {
         return view;
     }
 
+    /**
+     * 캘린더 뷰 설정
+     */
     private void setupCalendarView() {
         calendarView.setOnDateChangeListener(new CalendarView.OnDateChangeListener() {
             @Override
@@ -72,12 +78,18 @@ public class CalendarFragment extends Fragment {
         });
     }
 
+    /**
+     * 리사이클러뷰 설정
+     */
     private void setupRecyclerView() {
         recyclerViewEvents.setLayoutManager(new LinearLayoutManager(getContext()));
         eventAdapter = new CalendarEventAdapter(eventList);
         recyclerViewEvents.setAdapter(eventAdapter);
     }
 
+    /**
+     * 플로팅 액션 버튼 설정
+     */
     private void setupFab() {
         fabAddEvent.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -89,6 +101,7 @@ public class CalendarFragment extends Fragment {
 
     /**
      * 특정 날짜의 일정을 로드
+     * @param date 날짜
      */
     private void loadEventsForDate(long date) {
         // 실제 구현에서는 데이터베이스에서 해당 날짜의 일정을 가져와야 함
@@ -110,7 +123,7 @@ public class CalendarFragment extends Fragment {
 
         // 일정이 없는 경우 메시지 표시
         if (eventList.isEmpty()) {
-            Toast.makeText(getContext(), "일정이 없습니다.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), R.string.no_events, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -129,14 +142,14 @@ public class CalendarFragment extends Fragment {
         timePicker.setIs24HourView(true);
 
         builder.setView(dialogView)
-                .setTitle("일정 추가")
-                .setPositiveButton("저장", (dialog, id) -> {
+                .setTitle(R.string.add_event)
+                .setPositiveButton(R.string.save, (dialog, id) -> {
                     // 입력 데이터 가져오기
                     String title = editTitle.getText().toString().trim();
                     String description = editDescription.getText().toString().trim();
 
                     if (title.isEmpty()) {
-                        Toast.makeText(getContext(), "제목을 입력해주세요.", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), R.string.empty_event_title, Toast.LENGTH_SHORT).show();
                         return;
                     }
 
@@ -149,9 +162,9 @@ public class CalendarFragment extends Fragment {
                     eventList.add(newEvent);
                     eventAdapter.notifyDataSetChanged();
 
-                    Toast.makeText(getContext(), "일정이 추가되었습니다.", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), R.string.event_added, Toast.LENGTH_SHORT).show();
                 })
-                .setNegativeButton("취소", (dialog, id) -> dialog.cancel());
+                .setNegativeButton(R.string.cancel, (dialog, id) -> dialog.cancel());
 
         AlertDialog dialog = builder.create();
         dialog.show();

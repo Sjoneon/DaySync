@@ -24,6 +24,10 @@ import com.google.android.material.navigation.NavigationView;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 앱의 메인 액티비티
+ * 네비게이션 드로어와 채팅 인터페이스를 관리합니다.
+ */
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
     private DrawerLayout drawerLayout;
@@ -46,7 +50,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         // 사용자 닉네임 가져오기
         SharedPreferences preferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
-        userNickname = preferences.getString("nickname", "사용자");
+        userNickname = preferences.getString("nickname", getString(R.string.app_name));
 
         // 뷰 초기화
         initializeViews();
@@ -61,6 +65,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         setupChatInterface();
     }
 
+    /**
+     * 뷰 초기화 메서드
+     */
     private void initializeViews() {
         // 툴바 및 드로어 요소 찾기
         toolbar = findViewById(R.id.toolbar);
@@ -76,7 +83,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         // 네비게이션 헤더에서 사용자 이름 설정
         View headerView = navigationView.getHeaderView(0);
         TextView textViewUsername = headerView.findViewById(R.id.textViewUsername);
-        textViewUsername.setText(userNickname + "님");
+        textViewUsername.setText(getString(R.string.welcome_user, userNickname));
 
         // 리사이클러 뷰 설정
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -87,6 +94,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         addWelcomeMessage();
     }
 
+    /**
+     * 네비게이션 드로어 설정 메서드
+     */
     private void setupNavigationDrawer() {
         // 네비게이션 드로어 토글 설정
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
@@ -99,6 +109,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         navigationView.setNavigationItemSelectedListener(this);
     }
 
+    /**
+     * 채팅 인터페이스 설정 메서드
+     */
     private void setupChatInterface() {
         // 메시지 전송 버튼 클릭 리스너
         buttonSend.setOnClickListener(new View.OnClickListener() {
@@ -118,16 +131,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             @Override
             public void onClick(View v) {
                 // 음성 입력 처리 (Speech-to-Text 구현 필요)
-                Toast.makeText(MainActivity.this, "음성 입력 기능 준비 중...", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, getString(R.string.voice_input_not_ready), Toast.LENGTH_SHORT).show();
             }
         });
     }
 
     /**
-     * 환영 메시지 추가
+     * 환영 메시지 추가 메서드
      */
     private void addWelcomeMessage() {
-        String welcomeMessage = userNickname + "님, 안녕하세요!\n무엇을 도와드릴까요?";
+        String welcomeMessage = getString(R.string.welcome_user, userNickname) + "\n무엇을 도와드릴까요?";
         Message aiMessage = new Message(welcomeMessage, false);
         messageList.add(aiMessage);
         chatAdapter.notifyDataSetChanged();
@@ -135,7 +148,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 사용자 메시지 전송 및 AI 응답 처리
+     * 사용자 메시지 전송 및 AI 응답 처리 메서드
+     * @param content 메시지 내용
      */
     private void sendMessage(String content) {
         // 사용자 메시지 추가
@@ -148,11 +162,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * AI 응답 처리 (임시 구현)
+     * AI 응답 처리 메서드 (임시 구현)
+     * @param userMessage 사용자 메시지
      */
     private void processAiResponse(String userMessage) {
-        // 간단한 임시 응답
-        String aiResponse = "죄송합니다, 아직 AI 응답 기능이 완전히 구현되지 않았습니다.\n사용자 입력: " + userMessage;
+        // 임시 응답 생성
+        String aiResponse = getString(R.string.ai_response_not_ready, userMessage);
 
         // 실제 구현에서는 여기에 AI 처리 로직 추가
 
@@ -168,7 +183,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 채팅 스크롤을 최신 메시지로 이동
+     * 채팅 스크롤을 최신 메시지로 이동하는 메서드
      */
     private void scrollToBottom() {
         if (messageList.size() > 0) {
@@ -184,30 +199,30 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (id == R.id.nav_chat) {
             // 채팅 화면 (기본 화면)
             showChatInterface();
-            toolbar.setTitle("채팅");
+            toolbar.setTitle(R.string.menu_chat);
         } else if (id == R.id.nav_calendar) {
             // 일정 관리 화면으로 전환
             showFragment(new CalendarFragment());
-            toolbar.setTitle("일정 관리");
+            toolbar.setTitle(R.string.menu_calendar);
         } else if (id == R.id.nav_alarm) {
             // 알람 설정 화면으로 전환
             showFragment(new AlarmFragment());
-            toolbar.setTitle("알람 설정");
+            toolbar.setTitle(R.string.menu_alarm);
         } else if (id == R.id.nav_route) {
             // 경로 추천 화면으로 전환
             showFragment(new RouteFragment());
-            toolbar.setTitle("경로 추천");
+            toolbar.setTitle(R.string.menu_route);
         } else if (id == R.id.nav_notifications) {
             // 알림 목록 화면으로 전환
             showFragment(new NotificationsFragment());
-            toolbar.setTitle("알림 목록");
+            toolbar.setTitle(R.string.menu_notifications);
         } else if (id == R.id.nav_settings) {
             // 설정 화면으로 전환
-            Toast.makeText(this, "설정 기능 준비 중...", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.feature_not_ready, getString(R.string.menu_settings)), Toast.LENGTH_SHORT).show();
             // 추후 SettingsFragment 구현 예정
         } else if (id == R.id.nav_help) {
             // 도움말 화면으로 전환
-            Toast.makeText(this, "도움말 기능 준비 중...", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.feature_not_ready, getString(R.string.menu_help)), Toast.LENGTH_SHORT).show();
             // 추후 HelpFragment 구현 예정
         }
 
@@ -217,7 +232,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 프래그먼트를 화면에 표시
+     * 프래그먼트를 화면에 표시하는 메서드
+     * @param fragment 표시할 프래그먼트
      */
     private void showFragment(Fragment fragment) {
         View chatContainer = findViewById(R.id.chat_container);
@@ -229,7 +245,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 채팅 인터페이스를 다시 표시
+     * 채팅 인터페이스를 다시 표시하는 메서드
      */
     private void showChatInterface() {
         View chatContainer = findViewById(R.id.chat_container);

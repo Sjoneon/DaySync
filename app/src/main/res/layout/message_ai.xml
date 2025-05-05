@@ -3,29 +3,27 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingStart="16dp"
-    android:paddingTop="8dp"
-    android:paddingEnd="16dp"
-    android:paddingBottom="8dp">
+    android:paddingStart="@dimen/padding_xlarge"
+    android:paddingTop="@dimen/padding_medium"
+    android:paddingEnd="@dimen/padding_xlarge"
+    android:paddingBottom="@dimen/padding_medium">
 
     <ImageView
         android:id="@+id/imageViewAi"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
+        android:layout_width="@dimen/icon_size_medium"
+        android:layout_height="@dimen/icon_size_medium"
         android:src="@mipmap/ic_launcher"
+        android:contentDescription="@string/app_name"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
         android:id="@+id/textViewMessage"
+        style="@style/MessageAI"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:background="#444444"
-        android:maxWidth="260dp"
-        android:padding="12dp"
+        android:layout_marginStart="@dimen/margin_medium"
         android:text="AI 응답 메시지 예시입니다."
-        android:textColor="@android:color/white"
         app:layout_constraintStart_toEndOf="@+id/imageViewAi"
         app:layout_constraintTop_toTopOf="parent" />
 
@@ -33,10 +31,10 @@
         android:id="@+id/textViewTime"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="4dp"
+        android:layout_marginStart="@dimen/margin_small"
         android:text="12:35"
-        android:textColor="#AAAAAA"
-        android:textSize="12sp"
+        android:textColor="@color/text_tertiary"
+        android:textSize="@dimen/text_size_small"
         app:layout_constraintBottom_toBottomOf="@+id/textViewMessage"
         app:layout_constraintStart_toEndOf="@+id/textViewMessage" />
 

@@ -27,6 +27,9 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
+/**
+ * 알람 설정 및 관리를 위한 프래그먼트
+ */
 public class AlarmFragment extends Fragment {
 
     private RecyclerView recyclerViewAlarms;
@@ -38,6 +41,7 @@ public class AlarmFragment extends Fragment {
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        // 하드코딩된 레이아웃 리소스를 소프트코딩으로 교체
         View view = inflater.inflate(R.layout.fragment_alarm, container, false);
 
         // 뷰 초기화
@@ -100,7 +104,8 @@ public class AlarmFragment extends Fragment {
                 true
         );
 
-        timePickerDialog.setTitle("알람 시간 설정");
+        // 하드코딩된 문자열을 리소스로 변경
+        timePickerDialog.setTitle(getString(R.string.alarm_time_setting));
         timePickerDialog.show();
     }
 
@@ -115,19 +120,19 @@ public class AlarmFragment extends Fragment {
         EditText editAlarmLabel = dialogView.findViewById(R.id.editAlarmLabel);
 
         builder.setView(dialogView)
-                .setTitle("알람 레이블")
-                .setPositiveButton("설정", (dialog, id) -> {
+                .setTitle(R.string.alarm_label_setting)
+                .setPositiveButton(R.string.alarm_set, (dialog, id) -> {
                     String label = editAlarmLabel.getText().toString().trim();
 
                     // 레이블이 비어있으면 기본값 설정
                     if (label.isEmpty()) {
-                        label = "알람";
+                        label = getString(R.string.default_alarm_label);
                     }
 
                     // 알람 추가
                     addAlarm(hourOfDay, minute, label);
                 })
-                .setNegativeButton("취소", (dialog, id) -> dialog.cancel());
+                .setNegativeButton(R.string.cancel, (dialog, id) -> dialog.cancel());
 
         AlertDialog dialog = builder.create();
         dialog.show();
@@ -154,7 +159,8 @@ public class AlarmFragment extends Fragment {
         // 실제 알람 설정 (AlarmManager 사용)
         scheduleAlarm(alarmId, hourOfDay, minute, label);
 
-        Toast.makeText(getContext(), "알람이 " + timeString + "에 설정되었습니다.", Toast.LENGTH_SHORT).show();
+        // 하드코딩된 문자열을 리소스로 변경
+        Toast.makeText(getContext(), getString(R.string.alarm_time_set, timeString), Toast.LENGTH_SHORT).show();
     }
 
     /**
@@ -274,7 +280,7 @@ public class AlarmFragment extends Fragment {
                 updateAlarmListVisibility();
 
                 // 실제로는 여기서 AlarmManager에서 알람 취소 처리
-                Toast.makeText(getContext(), "알람이 삭제되었습니다.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), R.string.alarm_deleted, Toast.LENGTH_SHORT).show();
             });
         }
 

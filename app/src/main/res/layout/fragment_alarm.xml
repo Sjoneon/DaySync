@@ -3,15 +3,15 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/black">
+    android:background="@color/background_black">
 
     <TextView
         android:id="@+id/textNoAlarms"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="설정된 알람이 없습니다."
-        android:textColor="@android:color/white"
-        android:textSize="16sp"
+        android:text="@string/no_alarms"
+        android:textColor="@color/text_primary"
+        android:textSize="@dimen/text_size_large"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -22,7 +22,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:clipToPadding="false"
-        android:padding="16dp"
+        android:padding="@dimen/padding_xlarge"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
@@ -31,12 +31,12 @@
         android:id="@+id/fabAddAlarm"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:contentDescription="알람 추가"
+        android:layout_margin="@dimen/margin_xlarge"
+        android:contentDescription="@string/add_event"
         android:src="@android:drawable/ic_input_add"
-        app:backgroundTint="#666666"
+        app:backgroundTint="@color/background_button"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:tint="@android:color/white" />
+        app:tint="@color/text_primary" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

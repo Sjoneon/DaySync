@@ -22,6 +22,10 @@ public class NotificationHelper {
     private Context context;
     private NotificationManagerCompat notificationManager;
 
+    /**
+     * 생성자
+     * @param context 컨텍스트
+     */
     public NotificationHelper(Context context) {
         this.context = context;
         this.notificationManager = NotificationManagerCompat.from(context);
@@ -82,16 +86,15 @@ public class NotificationHelper {
         // 알림 표시
         notificationManager.notify(id, builder.build());
 
-        // 알림 내역 저장 (실제로는 데이터베이스에 저장)
+        // 알림 내역 저장
         saveNotification(id, title, content);
     }
 
     /**
-     * 알림 저장 (실제로는 데이터베이스에 저장)
+     * 알림 저장 (NotificationRepository 사용)
      */
     private void saveNotification(int id, String title, String content) {
-        // 실제 구현에서는 여기서 데이터베이스에 알림 내역 저장
-        // 지금은 임시로 SharedPreferences 사용
+        // 알림 저장소를 통해 알림 저장
         NotificationRepository.getInstance(context).addNotification(
                 new NotificationItem(id, title, content, System.currentTimeMillis(), false)
         );
