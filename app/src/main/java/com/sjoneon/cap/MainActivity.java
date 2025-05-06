@@ -1,6 +1,7 @@
 package com.sjoneon.cap;
 
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.view.MenuItem;
 import android.view.View;
@@ -13,6 +14,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.content.ContextCompat;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
@@ -58,6 +60,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         // 툴바 설정
         setSupportActionBar(toolbar);
 
+        // 액션바에 홈 버튼 표시 (네비게이션 드로어 열기용)
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setHomeButtonEnabled(true);
+        }
+
         // 네비게이션 드로어 설정
         setupNavigationDrawer();
 
@@ -102,11 +110,26 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
                 this, drawerLayout, toolbar,
                 R.string.navigation_drawer_open, R.string.navigation_drawer_close);
+
+        // 토글 아이콘(햄버거 메뉴) 색상 설정
+        toggle.getDrawerArrowDrawable().setColor(ContextCompat.getColor(this, R.color.text_primary));
+
         drawerLayout.addDrawerListener(toggle);
         toggle.syncState();
 
         // 네비게이션 뷰에 리스너 설정
         navigationView.setNavigationItemSelectedListener(this);
+
+        // 전체 메뉴 아이템 및 카테고리 텍스트 스타일 적용
+        NavigationCategoryHelper.styleNavigationMenu(this, navigationView);
+
+        // 메뉴 아이콘 색상 설정
+        navigationView.setItemIconTintList(ColorStateList.valueOf(
+                ContextCompat.getColor(this, R.color.text_primary)));
+
+        // 아이템 텍스트 색상 설정
+        navigationView.setItemTextColor(ColorStateList.valueOf(
+                ContextCompat.getColor(this, R.color.text_primary)));
     }
 
     /**

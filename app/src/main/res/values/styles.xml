@@ -87,4 +87,32 @@
         <item name="android:padding">@dimen/padding_large</item>
         <item name="android:textColor">@color/text_primary</item>
     </style>
+    <!-- 내비게이션 뷰 스타일 -->
+    <style name="NavigationViewStyle">
+        <item name="android:textColorSecondary">@color/text_primary</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textSize">@dimen/text_size_medium</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- 내비게이션 메뉴 그룹 헤더 스타일 -->
+    <style name="NavigationGroupHeader">
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">@dimen/text_size_large</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:paddingTop">@dimen/padding_large</item>
+        <item name="android:paddingBottom">@dimen/padding_medium</item>
+    </style>
+
+    <!-- 내비게이션 아이콘 색상 -->
+    <style name="NavigationIconStyle">
+        <item name="android:tint">@color/text_primary</item>
+    </style>
+
+    <!-- 툴바 스타일 (햄버거 메뉴 아이콘 색상 포함) -->
+    <style name="ToolbarStyle" parent="ThemeOverlay.MaterialComponents.ActionBar">
+        <item name="colorControlNormal">@color/text_primary</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+    </style>
 </resources>

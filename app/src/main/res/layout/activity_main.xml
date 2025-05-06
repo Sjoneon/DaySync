@@ -24,7 +24,8 @@
                 android:layout_height="?attr/actionBarSize"
                 android:background="@color/background_black"
                 app:title="@string/app_name"
-                app:titleTextColor="@color/text_primary" />
+                app:titleTextColor="@color/text_primary"
+                app:popupTheme="@style/ToolbarStyle" />
         </com.google.android.material.appbar.AppBarLayout>
 
         <!-- 화면 전환을 위한 프레임 레이아웃 -->
@@ -116,6 +117,12 @@
         app:headerLayout="@layout/nav_header"
         app:itemIconTint="@color/text_primary"
         app:itemTextColor="@color/text_primary"
+        app:itemIconSize="24dp"
+        app:itemTextAppearance="@style/NavigationViewStyle"
+        app:subheaderColor="@color/text_primary"
+        app:dividerInsetStart="16dp"
+        app:dividerInsetEnd="16dp"
+        app:dividerColor="@color/divider_color"
         app:menu="@menu/drawer_menu" />
 
 </androidx.drawerlayout.widget.DrawerLayout>
