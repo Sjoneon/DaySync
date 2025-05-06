@@ -8,15 +8,15 @@ android {
 
     defaultConfig {
         applicationId = "com.sjoneon.cap"
-        minSdk = 34
+        minSdk = 21 // 네이버 지도 SDK 최소 21 (Android 5.0) 이상 필요
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // 네이버 지도 API 키 설정
-        manifestPlaceholders["naverMapApiKey"] = "l4dae8ewvg"
+        // 네이버 지도 API 키 설정 - 변경된 메타데이터 이름 사용
+        manifestPlaceholders["NCP_KEY_ID"] = "l4dae8ewvg"
     }
 
     buildTypes {
@@ -43,8 +43,8 @@ dependencies {
     // Gson 라이브러리 (JSON 직렬화/역직렬화용)
     implementation("com.google.code.gson:gson:2.10.1")
 
-    // 네이버 지도 SDK - 수정된 위치
-    implementation("com.naver.maps:map-sdk:3.16.2")
+    // 네이버 지도 SDK (최신 버전)
+    implementation("com.naver.maps:map-sdk:3.21.0")
 
     // 네이버 지도 위치 추적 기능
     implementation("com.google.android.gms:play-services-location:21.0.1")

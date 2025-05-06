@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application
+        android:name=".MyApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -21,10 +22,10 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="35">
 
-        <!-- 네이버 지도 API 키 설정 -->
+        <!-- 네이버 지도 API 키 설정 (메타데이터 이름 변경) -->
         <meta-data
             android:name="com.naver.maps.map.CLIENT_ID"
-            android:value="${naverMapApiKey}" />
+            android:value="l4dae8ewvg" />
 
         <!-- 스플래시 액티비티를 첫 화면으로 설정 -->
         <activity

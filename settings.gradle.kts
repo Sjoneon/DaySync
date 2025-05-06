@@ -16,8 +16,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // 네이버 맵 SDK를 위한 저장소 추가
-        maven(url = "https://naver.jfrog.io/artifactory/maven/")
+        // 네이버 지도 SDK 최신 저장소 추가
+        maven {
+            url = uri("https://repository.map.naver.com/archive/maven")
+        }
     }
 }
 
