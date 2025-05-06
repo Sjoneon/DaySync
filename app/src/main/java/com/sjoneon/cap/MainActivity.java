@@ -235,6 +235,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             // 경로 추천 화면으로 전환
             showFragment(new RouteFragment());
             toolbar.setTitle(R.string.menu_route);
+        } else if (id == R.id.nav_map) {
+            // 지도 화면으로 전환
+            showFragment(new MapFragment());
+            toolbar.setTitle(R.string.menu_map);
         } else if (id == R.id.nav_notifications) {
             // 알림 목록 화면으로 전환
             showFragment(new NotificationsFragment());

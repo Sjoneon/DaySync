@@ -24,6 +24,11 @@
             android:iconTint="@color/text_primary"
             android:title="경로 추천" />
         <item
+            android:id="@+id/nav_map"
+            android:icon="@android:drawable/ic_menu_mapmode"
+            android:iconTint="@color/text_primary"
+            android:title="지도" />
+        <item
             android:id="@+id/nav_notifications"
             android:icon="@android:drawable/ic_popup_reminder"
             android:iconTint="@color/text_primary"

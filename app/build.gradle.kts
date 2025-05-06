@@ -3,17 +3,20 @@ plugins {
 }
 
 android {
-    namespace = "com.sjoneon.cap"  // com.example.cap에서 수정
+    namespace = "com.sjoneon.cap"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.sjoneon.cap"  // com.example.cap에서 수정
+        applicationId = "com.sjoneon.cap"
         minSdk = 34
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // 네이버 지도 API 키 설정
+        manifestPlaceholders["naverMapApiKey"] = "l4dae8ewvg"
     }
 
     buildTypes {
@@ -39,6 +42,15 @@ dependencies {
 
     // Gson 라이브러리 (JSON 직렬화/역직렬화용)
     implementation("com.google.code.gson:gson:2.10.1")
+
+    // 네이버 지도 SDK - 수정된 위치
+    implementation("com.naver.maps:map-sdk:3.16.2")
+
+    // 네이버 지도 위치 추적 기능
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+
+    // OkHttp (네트워크 요청)
+    implementation("com.squareup.okhttp3:okhttp:4.11.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
