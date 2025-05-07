@@ -13,6 +13,7 @@ public class MyApplication extends Application {
 
     private static final String TAG = "MyApplication";
     private static final String CLIENT_ID = "l4dae8ewvg"; // 네이버 맵 API 클라이언트 ID
+    private static final String CLIENT_SECRET = "teM3IEaDFmhkSyYRpm3rU655tnaLXiaOFBMLB83X"; // 네이버 맵 API 클라이언트 시크릿
 
     @Override
     public void onCreate() {
@@ -25,6 +26,8 @@ public class MyApplication extends Application {
             // 네이버 맵 SDK 초기화 - 클라이언트 ID 등록
             NaverMapSdk.getInstance(this).setClient(
                     new NaverMapSdk.NaverCloudPlatformClient(CLIENT_ID));
+
+            // 헤더에 시크릿 키 설정을 위한 코드는 각 API 호출 시 추가 필요
 
             Log.d(TAG, "네이버 맵 SDK 초기화 완료");
 

@@ -25,10 +25,19 @@ import com.naver.maps.map.CameraUpdate;
 import com.naver.maps.map.LocationTrackingMode;
 import com.naver.maps.map.MapView;
 import com.naver.maps.map.NaverMap;
+import com.naver.maps.map.NaverMapOptions;
 import com.naver.maps.map.NaverMapSdk;
 import com.naver.maps.map.OnMapReadyCallback;
 import com.naver.maps.map.overlay.Marker;
 import com.naver.maps.map.util.FusedLocationSource;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
+import okhttp3.Interceptor;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
 
 /**
  * 지도 기능을 제공하는 프래그먼트
@@ -37,6 +46,10 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     private static final String TAG = "MapFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1000;
+
+    // 네이버 맵 API 키
+    private static final String CLIENT_ID = "l4dae8ewvg";
+    private static final String CLIENT_SECRET = "teM3IEaDFmhkSyYRpm3rU655tnaLXiaOFBMLB83X";
 
     // 위치 권한
     private static final String[] PERMISSIONS = {
@@ -51,6 +64,9 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     private FusedLocationSource locationSource;
     private MapView mapView;
     private NaverMap naverMap;
+
+    // HTTP 클라이언트
+    private OkHttpClient httpClient;
 
     // UI 요소
     private EditText editStartLocation;
@@ -84,12 +100,46 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
         locationSource = new FusedLocationSource(this, LOCATION_PERMISSION_REQUEST_CODE);
 
+        // HTTP 클라이언트 초기화 (API 요청용)
+        initHttpClient();
+
         // 네이버 맵 초기화
         mapView = view.findViewById(R.id.mapView);
         mapView.onCreate(savedInstanceState);
+
+        // 네이버 맵 옵션 설정
+        NaverMapOptions options = new NaverMapOptions()
+                .locationButtonEnabled(true)
+                .compassEnabled(true)
+                .zoomControlEnabled(true);
+
+        // 맵 비동기 로드
         mapView.getMapAsync(this);
 
         return view;
+    }
+
+    /**
+     * HTTP 클라이언트 초기화 - 네이버 맵 API 인증 헤더 추가
+     */
+    private void initHttpClient() {
+        httpClient = new OkHttpClient.Builder()
+                .addInterceptor(new Interceptor() {
+                    @NonNull
+                    @Override
+                    public okhttp3.Response intercept(@NonNull Chain chain) throws IOException {
+                        Request originalRequest = chain.request();
+
+                        // 네이버 맵 API 인증 헤더 추가
+                        Request.Builder requestBuilder = originalRequest.newBuilder()
+                                .header("X-NCP-APIGW-API-KEY-ID", CLIENT_ID)
+                                .header("X-NCP-APIGW-API-KEY", CLIENT_SECRET);
+
+                        Request request = requestBuilder.build();
+                        return chain.proceed(request);
+                    }
+                })
+                .build();
     }
 
     /**
@@ -126,6 +176,8 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             Toast.makeText(requireContext(), "지도 인증 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         });
     }
+
+    // 나머지 코드는 동일...
 
     /**
      * 현재 위치 가져오기
