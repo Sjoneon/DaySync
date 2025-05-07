@@ -60,9 +60,9 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     // 네이버 API 관련 상수
     private static final String CLIENT_ID = "l4dae8ewvg";
     private static final String CLIENT_SECRET = "teM3IEaDFmhkSyYRpm3rU655tnaLXiaOFBMLB83X";
-    private static final String GEOCODE_URL = "https://naveropenapi.apigw.ntruss.com/map-geocode/v2/geocode";
-    private static final String DIRECTION_URL = "https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving";
-    private static final String REVERSE_GEOCODE_URL = "https://naveropenapi.apigw.ntruss.com/map-reversegeocode/v2/gc";
+
+    // 임시 사용 (실제로는 지오코딩 API 사용 필요)
+    private boolean useReverseGeocoding = false;
 
     // 위치 권한
     private static final String[] PERMISSIONS = {
@@ -198,8 +198,21 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             // 위치 정보 로깅
             Log.d(TAG, "현재 위치 업데이트: " + startLatLng.latitude + ", " + startLatLng.longitude);
 
-            // 역지오코딩으로 주소 가져오기
-            reverseGeocode(startLatLng, true);
+            // 역지오코딩 대신 현재 위치 좌표만 표시 (API 구독 필요)
+            if (useReverseGeocoding) {
+                // 역지오코딩으로 주소 가져오기 (API 구독 필요)
+                reverseGeocode(startLatLng, true);
+            } else {
+                // 좌표만 표시
+                String locationStr = String.format("위도: %.6f, 경도: %.6f",
+                        startLatLng.latitude, startLatLng.longitude);
+                editStartLocation.setText(locationStr);
+
+                // 마커 설정
+                startMarker.setPosition(startLatLng);
+                startMarker.setCaptionText("출발");
+                startMarker.setMap(naverMap);
+            }
         }
     }
 
@@ -234,8 +247,21 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                                 startMarker.setPosition(startLatLng);
                                 startMarker.setMap(naverMap);
 
-                                // 역지오코딩으로 주소 가져오기
-                                reverseGeocode(currentLatLng, true);
+                                // 역지오코딩 대신 좌표만 표시 (API 구독 필요)
+                                if (useReverseGeocoding) {
+                                    // 역지오코딩으로 주소 가져오기 (API 구독 필요)
+                                    reverseGeocode(currentLatLng, true);
+                                } else {
+                                    // 좌표만 표시
+                                    String locationStr = String.format("위도: %.6f, 경도: %.6f",
+                                            currentLatLng.latitude, currentLatLng.longitude);
+                                    editStartLocation.setText(locationStr);
+
+                                    // 마커 설정
+                                    startMarker.setPosition(startLatLng);
+                                    startMarker.setCaptionText("출발");
+                                    startMarker.setMap(naverMap);
+                                }
                             } else {
                                 Log.w(TAG, "위치 정보를 가져올 수 없습니다");
                                 // 기본 위치로 설정 (서울시청)
@@ -264,174 +290,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     }
 
     /**
-     * 주소로 좌표를 검색하는 지오코딩 메서드
-     * @param address 검색할 주소
-     * @param isStart 시작 지점 여부
-     */
-    private void geocode(String address, boolean isStart) {
-        HttpUrl httpUrl = HttpUrl.parse(GEOCODE_URL)
-                .newBuilder()
-                .addQueryParameter("query", address)
-                .build();
-
-        Request request = new Request.Builder()
-                .url(httpUrl)
-                .addHeader("X-NCP-APIGW-API-KEY-ID", CLIENT_ID)
-                .addHeader("X-NCP-APIGW-API-KEY", CLIENT_SECRET)
-                .build();
-
-        okHttpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e(TAG, "지오코딩 요청 실패: " + e.getMessage(), e);
-                requireActivity().runOnUiThread(() -> {
-                    Toast.makeText(requireContext(), "주소 검색 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                });
-            }
-
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                if (response.isSuccessful()) {
-                    try {
-                        String jsonData = response.body().string();
-                        Log.d(TAG, "지오코딩 응답: " + jsonData);
-
-                        JSONObject jsonObject = new JSONObject(jsonData);
-                        JSONArray addresses = jsonObject.getJSONArray("addresses");
-
-                        if (addresses.length() > 0) {
-                            JSONObject addressObj = addresses.getJSONObject(0);
-                            double latitude = Double.parseDouble(addressObj.getString("y"));
-                            double longitude = Double.parseDouble(addressObj.getString("x"));
-                            Log.d(TAG, "검색 결과 좌표: " + latitude + ", " + longitude);
-
-                            requireActivity().runOnUiThread(() -> {
-                                LatLng latLng = new LatLng(latitude, longitude);
-
-                                if (isStart) {
-                                    startLatLng = latLng;
-                                    startMarker.setPosition(latLng);
-                                    startMarker.setMap(naverMap);
-
-                                    // 카메라 이동
-                                    CameraPosition cameraPosition = new CameraPosition(latLng, 15);
-                                    naverMap.setCameraPosition(cameraPosition);
-                                } else {
-                                    endLatLng = latLng;
-                                    endMarker.setPosition(latLng);
-                                    endMarker.setMap(naverMap);
-                                }
-
-                                // 두 지점이 모두 설정된 경우 경로 가져오기
-                                if (startLatLng != null && endLatLng != null) {
-                                    getDirections(startLatLng, endLatLng);
-                                }
-                            });
-                        } else {
-                            Log.w(TAG, "검색 결과가 없습니다: " + address);
-                            requireActivity().runOnUiThread(() -> {
-                                Toast.makeText(requireContext(), "검색 결과가 없습니다: " + address, Toast.LENGTH_SHORT).show();
-                            });
-                        }
-                    } catch (JSONException e) {
-                        Log.e(TAG, "JSON 파싱 오류: " + e.getMessage(), e);
-                        requireActivity().runOnUiThread(() -> {
-                            Toast.makeText(requireContext(), "응답 파싱 오류: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                        });
-                    }
-                } else {
-                    String errorBody = response.body() != null ? response.body().string() : "응답 본문 없음";
-                    Log.e(TAG, "지오코딩 요청 실패: " + response.code() + " - " + errorBody);
-                    requireActivity().runOnUiThread(() -> {
-                        Toast.makeText(requireContext(), "요청 실패: " + response.code(), Toast.LENGTH_SHORT).show();
-                    });
-                }
-            }
-        });
-    }
-
-    /**
-     * 좌표로 주소를 검색하는 역지오코딩 메서드
-     * @param latLng 검색할 좌표
-     * @param isStart 시작 지점 여부
-     */
-    private void reverseGeocode(LatLng latLng, boolean isStart) {
-        HttpUrl httpUrl = HttpUrl.parse(REVERSE_GEOCODE_URL)
-                .newBuilder()
-                .addQueryParameter("coords", latLng.longitude + "," + latLng.latitude)
-                .addQueryParameter("output", "json")
-                .build();
-
-        Request request = new Request.Builder()
-                .url(httpUrl)
-                .addHeader("X-NCP-APIGW-API-KEY-ID", CLIENT_ID)
-                .addHeader("X-NCP-APIGW-API-KEY", CLIENT_SECRET)
-                .build();
-
-        okHttpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e(TAG, "역지오코딩 요청 실패: " + e.getMessage(), e);
-                requireActivity().runOnUiThread(() -> {
-                    Toast.makeText(requireContext(), "주소 검색 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                });
-            }
-
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                if (response.isSuccessful()) {
-                    try {
-                        String jsonData = response.body().string();
-                        Log.d(TAG, "역지오코딩 응답: " + jsonData);
-
-                        JSONObject jsonObject = new JSONObject(jsonData);
-
-                        JSONArray results = jsonObject.getJSONArray("results");
-                        if (results.length() > 0) {
-                            JSONObject result = results.getJSONObject(0);
-                            String address = result.getJSONObject("region").getJSONObject("area1").getString("name") + " " +
-                                    result.getJSONObject("region").getJSONObject("area2").getString("name") + " " +
-                                    result.getJSONObject("region").getJSONObject("area3").getString("name");
-                            Log.d(TAG, "역지오코딩 주소 결과: " + address);
-
-                            requireActivity().runOnUiThread(() -> {
-                                if (isStart) {
-                                    editStartLocation.setText(address);
-                                    startMarker.setPosition(latLng);
-                                    startMarker.setCaptionText("출발");
-                                    startMarker.setMap(naverMap);
-                                } else {
-                                    editDestination.setText(address);
-                                    endMarker.setPosition(latLng);
-                                    endMarker.setCaptionText("도착");
-                                    endMarker.setMap(naverMap);
-                                }
-                            });
-                        } else {
-                            Log.w(TAG, "역지오코딩 결과가 없습니다");
-                            requireActivity().runOnUiThread(() -> {
-                                Toast.makeText(requireContext(), "주소 검색 결과가 없습니다", Toast.LENGTH_SHORT).show();
-                            });
-                        }
-                    } catch (JSONException e) {
-                        Log.e(TAG, "역지오코딩 JSON 파싱 오류: " + e.getMessage(), e);
-                        requireActivity().runOnUiThread(() -> {
-                            Toast.makeText(requireContext(), "응답 파싱 오류: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                        });
-                    }
-                } else {
-                    String errorBody = response.body() != null ? response.body().string() : "응답 본문 없음";
-                    Log.e(TAG, "역지오코딩 요청 실패: " + response.code() + " - " + errorBody);
-                    requireActivity().runOnUiThread(() -> {
-                        Toast.makeText(requireContext(), "요청 실패: " + response.code(), Toast.LENGTH_SHORT).show();
-                    });
-                }
-            }
-        });
-    }
-
-    /**
-     * 경로 검색 메서드
+     * 경로 검색 메서드 (간소화)
      */
     private void searchRoute() {
         String startAddress = editStartLocation.getText().toString().trim();
@@ -442,152 +301,92 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             return;
         }
 
-        // 시작 위치 지오코딩
-        geocode(startAddress, true);
-
-        // 도착 위치 지오코딩
-        geocode(endAddress, false);
+        // 임시 더미 경로 생성 (API 연동 필요)
+        createDummyRoute();
     }
 
     /**
-     * 경로 가져오기 메서드
-     * @param start 시작 좌표
-     * @param end 목적지 좌표
+     * 임시 더미 경로 생성 (API 대신 더미 데이터 사용)
      */
-    private void getDirections(LatLng start, LatLng end) {
-        HttpUrl httpUrl = HttpUrl.parse(DIRECTION_URL)
-                .newBuilder()
-                .addQueryParameter("start", start.longitude + "," + start.latitude)
-                .addQueryParameter("goal", end.longitude + "," + end.latitude)
-                .build();
+    private void createDummyRoute() {
+        // 출발지 표시
+        startMarker.setPosition(startLatLng);
+        startMarker.setCaptionText("출발");
+        startMarker.setMap(naverMap);
 
-        Request request = new Request.Builder()
-                .url(httpUrl)
-                .addHeader("X-NCP-APIGW-API-KEY-ID", CLIENT_ID)
-                .addHeader("X-NCP-APIGW-API-KEY", CLIENT_SECRET)
-                .build();
+        // 목적지 위치 설정 (임시로 출발지 근처 위치 사용)
+        endLatLng = new LatLng(startLatLng.latitude + 0.01, startLatLng.longitude + 0.01);
+        endMarker.setPosition(endLatLng);
+        endMarker.setCaptionText("도착");
+        endMarker.setMap(naverMap);
 
-        Log.d(TAG, "경로 요청 URL: " + httpUrl);
+        // 경로 좌표 생성
+        List<LatLng> pathLatLngs = new ArrayList<>();
+        pathLatLngs.add(startLatLng);
 
-        okHttpClient.newCall(request).enqueue(new Callback() {
+        // 중간 지점 추가
+        LatLng midPoint1 = new LatLng(
+                startLatLng.latitude + (endLatLng.latitude - startLatLng.latitude) * 0.3,
+                startLatLng.longitude + (endLatLng.longitude - startLatLng.longitude) * 0.3);
+
+        LatLng midPoint2 = new LatLng(
+                startLatLng.latitude + (endLatLng.latitude - startLatLng.latitude) * 0.7,
+                startLatLng.longitude + (endLatLng.longitude - startLatLng.longitude) * 0.7);
+
+        pathLatLngs.add(midPoint1);
+        pathLatLngs.add(midPoint2);
+        pathLatLngs.add(endLatLng);
+
+        // 경로 그리기
+        pathOverlay.setCoords(pathLatLngs);
+        pathOverlay.setMap(naverMap);
+
+        // 지도 카메라 위치 조정
+        double minLat = Math.min(startLatLng.latitude, endLatLng.latitude);
+        double maxLat = Math.max(startLatLng.latitude, endLatLng.latitude);
+        double minLng = Math.min(startLatLng.longitude, endLatLng.longitude);
+        double maxLng = Math.max(startLatLng.longitude, endLatLng.longitude);
+
+        LatLng center = new LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
+
+        // 적절한 확대/축소 수준 설정
+        CameraPosition cameraPosition = new CameraPosition(center, 14);
+        naverMap.setCameraPosition(cameraPosition);
+
+        // 경로 정보 표시
+        infoWindow.setAdapter(new InfoWindow.DefaultTextAdapter(requireContext()) {
+            @NonNull
             @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                Log.e(TAG, "경로 요청 실패: " + e.getMessage(), e);
-                requireActivity().runOnUiThread(() -> {
-                    Toast.makeText(requireContext(), "경로 검색 실패: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                });
-            }
-
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                if (response.isSuccessful()) {
-                    try {
-                        String jsonData = response.body().string();
-                        Log.d(TAG, "경로 응답: " + jsonData);
-
-                        JSONObject jsonObject = new JSONObject(jsonData);
-
-                        // 경로 그리기
-                        if (jsonObject.has("route")) {
-                            JSONObject route = jsonObject.getJSONObject("route");
-                            JSONArray traoptimal = route.getJSONArray("traoptimal");
-
-                            if (traoptimal.length() > 0) {
-                                JSONObject path = traoptimal.getJSONObject(0);
-                                JSONArray pathCoords = path.getJSONArray("path");
-
-                                List<LatLng> pathLatLngs = new ArrayList<>();
-                                for (int i = 0; i < pathCoords.length(); i++) {
-                                    JSONArray coord = pathCoords.getJSONArray(i);
-                                    double lon = coord.getDouble(0);
-                                    double lat = coord.getDouble(1);
-                                    pathLatLngs.add(new LatLng(lat, lon));
-                                }
-
-                                requireActivity().runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        // 경로 그리기 (좌표가 2개 이상인지 확인)
-                                        if (pathLatLngs.size() >= 2) {
-                                            // 기존 경로 제거
-                                            pathOverlay.setMap(null);
-
-                                            // 새 경로 설정 및 지도에 표시
-                                            pathOverlay.setCoords(pathLatLngs);
-                                            pathOverlay.setMap(naverMap);
-
-                                            // 지도 카메라 위치 조정
-                                            double minLat = Math.min(start.latitude, end.latitude);
-                                            double maxLat = Math.max(start.latitude, end.latitude);
-                                            double minLng = Math.min(start.longitude, end.longitude);
-                                            double maxLng = Math.max(start.longitude, end.longitude);
-
-                                            LatLng center = new LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
-
-                                            // 줌 레벨 계산 (값이 클수록 더 축소됨)
-                                            double zoomLevel = 13;
-                                            if (maxLat - minLat > 0.1 || maxLng - minLng > 0.1) zoomLevel = 11;
-                                            if (maxLat - minLat > 0.3 || maxLng - minLng > 0.3) zoomLevel = 9;
-                                            if (maxLat - minLat > 0.5 || maxLng - minLng > 0.5) zoomLevel = 8;
-
-                                            CameraPosition cameraPosition = new CameraPosition(center, zoomLevel);
-                                            naverMap.setCameraPosition(cameraPosition);
-
-                                            // 경로 정보 표시
-                                            try {
-                                                if (path.has("summary")) {
-                                                    JSONObject summary = path.getJSONObject("summary");
-                                                    int duration = summary.getInt("duration") / 1000 / 60; // 분 단위로 변환
-                                                    int distance = summary.getInt("distance") / 1000; // km 단위로 변환
-
-                                                    // 인포 윈도우 설정
-                                                    infoWindow.setAdapter(new InfoWindow.DefaultTextAdapter(requireContext()) {
-                                                        @NonNull
-                                                        @Override
-                                                        public CharSequence getText(@NonNull InfoWindow infoWindow) {
-                                                            return getString(R.string.route_info) + "\n" +
-                                                                    getString(R.string.route_distance_duration, distance, duration);
-                                                        }
-                                                    });
-                                                    infoWindow.open(endMarker);
-                                                }
-                                            } catch (JSONException e) {
-                                                Log.e(TAG, "경로 정보 파싱 오류: " + e.getMessage(), e);
-                                                Toast.makeText(requireContext(), "경로 정보 파싱 오류", Toast.LENGTH_SHORT).show();
-                                            }
-                                        } else {
-                                            Log.w(TAG, "유효한 경로를 찾을 수 없습니다 (좌표 수: " + pathLatLngs.size() + ")");
-                                            Toast.makeText(requireContext(), "유효한 경로를 찾을 수 없습니다", Toast.LENGTH_SHORT).show();
-                                        }
-                                    }
-                                });
-                            } else {
-                                Log.w(TAG, "경로 정보가 없습니다");
-                                requireActivity().runOnUiThread(() -> {
-                                    Toast.makeText(requireContext(), "경로 정보가 없습니다", Toast.LENGTH_SHORT).show();
-                                });
-                            }
-                        } else {
-                            Log.w(TAG, "경로 정보가 없습니다");
-                            requireActivity().runOnUiThread(() -> {
-                                Toast.makeText(requireContext(), "경로 정보가 없습니다", Toast.LENGTH_SHORT).show();
-                            });
-                        }
-                    } catch (JSONException e) {
-                        Log.e(TAG, "경로 응답 파싱 오류: " + e.getMessage(), e);
-                        requireActivity().runOnUiThread(() -> {
-                            Toast.makeText(requireContext(), "응답 파싱 오류: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                        });
-                    }
-                } else {
-                    String errorBody = response.body() != null ? response.body().string() : "응답 본문 없음";
-                    Log.e(TAG, "경로 요청 실패: " + response.code() + " - " + errorBody);
-                    requireActivity().runOnUiThread(() -> {
-                        Toast.makeText(requireContext(), "요청 실패: " + response.code(), Toast.LENGTH_SHORT).show();
-                    });
-                }
+            public CharSequence getText(@NonNull InfoWindow infoWindow) {
+                return getString(R.string.route_info) + "\n" +
+                        getString(R.string.route_distance_duration, 3, 15); // 임시 데이터: 3km, 15분
             }
         });
+        infoWindow.open(endMarker);
+
+        Toast.makeText(requireContext(), "경로가 생성되었습니다(더미 데이터)", Toast.LENGTH_SHORT).show();
+    }
+
+    /**
+     * 주소로 좌표를 검색하는 지오코딩 메서드 (API 구독 필요)
+     * @param address 검색할 주소
+     * @param isStart 시작 지점 여부
+     */
+    private void geocode(String address, boolean isStart) {
+        // 이 메서드는 API 구독이 필요하므로 현재 사용하지 않음
+        Toast.makeText(requireContext(), "지오코딩 API를 사용하려면 네이버 클라우드 플랫폼에서 API 구독이 필요합니다",
+                Toast.LENGTH_LONG).show();
+    }
+
+    /**
+     * 좌표로 주소를 검색하는 역지오코딩 메서드 (API 구독 필요)
+     * @param latLng 검색할 좌표
+     * @param isStart 시작 지점 여부
+     */
+    private void reverseGeocode(LatLng latLng, boolean isStart) {
+        // 이 메서드는 API 구독이 필요하므로 현재 사용하지 않음
+        Toast.makeText(requireContext(), "역지오코딩 API를 사용하려면 네이버 클라우드 플랫폼에서 API 구독이 필요합니다",
+                Toast.LENGTH_LONG).show();
     }
 
     /**
@@ -606,6 +405,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         }
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     }
+
     // 생명주기 메서드 재정의
     @Override
     public void onStart() {

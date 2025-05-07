@@ -19,9 +19,9 @@ public class MyApplication extends Application {
 
         // 네이버 지도 SDK 초기화 및 클라이언트 ID 설정
         try {
-            // NCP_CLIENT_ID 방식으로 변경 (NcpKeyId 방식 대신)
+            // NaverMapSdk를 초기화하고 클라이언트 ID 설정
             NaverMapSdk.getInstance(this).setClient(
-                    new NaverMapSdk.Client("l4dae8ewvg"));
+                    new NaverMapSdk.NaverCloudPlatformClient("l4dae8ewvg"));
 
             // 인증 실패 리스너 등록
             NaverMapSdk.getInstance(this).setOnAuthFailedListener(exception -> {
