@@ -22,6 +22,11 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="35">
 
+        <!-- 네이버 맵 API 클라이언트 ID -->
+        <meta-data
+            android:name="com.naver.maps.map.CLIENT_ID"
+            android:value="l4dae8ewvg" />
+
         <!-- 스플래시 액티비티를 첫 화면으로 설정 -->
         <activity
             android:name=".SplashActivity"
