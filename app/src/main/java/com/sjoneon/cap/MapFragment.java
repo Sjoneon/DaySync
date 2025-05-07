@@ -33,21 +33,8 @@ import com.naver.maps.map.overlay.Marker;
 import com.naver.maps.map.overlay.PathOverlay;
 import com.naver.maps.map.util.FusedLocationSource;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
-
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.HttpUrl;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
 
 /**
  * 네이버 지도 API를 이용한 지도 및 경로 표시 프래그먼트
@@ -57,18 +44,14 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     private static final String TAG = "MapFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1000;
 
-    // 네이버 API 관련 상수
-    private static final String CLIENT_ID = "l4dae8ewvg";
-    private static final String CLIENT_SECRET = "teM3IEaDFmhkSyYRpm3rU655tnaLXiaOFBMLB83X";
-
-    // 임시 사용 (실제로는 지오코딩 API 사용 필요)
-    private boolean useReverseGeocoding = false;
-
     // 위치 권한
     private static final String[] PERMISSIONS = {
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION
     };
+
+    // 위치 변경 감지 최소 거리 (미터 단위)
+    private static final float MIN_LOCATION_DISTANCE = 3.0f; // 3미터
 
     private MapView mapView;
     private NaverMap naverMap;
@@ -90,8 +73,8 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     private LatLng startLatLng;
     private LatLng endLatLng;
 
-    // OkHttp 클라이언트
-    private OkHttpClient okHttpClient;
+    // 마지막 위치 저장용 (변경 감지에 사용)
+    private Location lastLocation;
 
     @Nullable
     @Override
@@ -112,12 +95,6 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         // 위치 소스 초기화 (액티비티 대신 프래그먼트 전달)
         locationSource = new FusedLocationSource(this, LOCATION_PERMISSION_REQUEST_CODE);
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
-
-        // OkHttp 클라이언트 초기화
-        okHttpClient = new OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build();
 
         // 경로 검색 버튼 클릭 리스너 설정
         buttonSearchRoute.setOnClickListener(v -> searchRoute());
@@ -147,16 +124,21 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
             // 위치 변경 리스너 설정
             naverMap.addOnLocationChangeListener(location -> {
-                Log.d(TAG, "위치 변경: " + location.getLatitude() + ", " + location.getLongitude());
-                // 위치가 변경되면 현재 위치 업데이트
-                updateCurrentLocation(location);
+                // 이전 위치가 없거나 최소 거리 이상 변경된 경우에만 업데이트
+                if (isSignificantLocationChange(location)) {
+                    Log.d(TAG, "위치 변경: " + location.getLatitude() + ", " + location.getLongitude());
+                    // 위치가 변경되면 현재 위치 업데이트
+                    updateCurrentLocation(location);
+                    // 현재 위치를 마지막 위치로 저장
+                    lastLocation = location;
+                }
             });
 
             // 현재 위치 표시 활성화
             naverMap.getUiSettings().setLocationButtonEnabled(true);
 
-            // 한국 기준으로 초기 카메라 위치 설정 (서울)
-            LatLng defaultLocation = new LatLng(37.5666, 126.9782); // 서울 시청
+            // 한국 기준으로 초기 카메라 위치 설정 (청주)
+            LatLng defaultLocation = new LatLng(36.6357, 127.4912); // 청주 시청
             naverMap.moveCamera(CameraUpdate.scrollTo(defaultLocation));
 
             // UI 설정
@@ -179,6 +161,24 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     }
 
     /**
+     * 위치 변경이 유의미한지 확인 (3m 이상 변경되었는지)
+     * @param newLocation 새로운 위치
+     * @return 유의미한 변경인지 여부
+     */
+    private boolean isSignificantLocationChange(Location newLocation) {
+        // 첫 위치인 경우
+        if (lastLocation == null) {
+            return true;
+        }
+
+        // 이전 위치와 새 위치 간의 거리 계산 (미터 단위)
+        float distance = lastLocation.distanceTo(newLocation);
+
+        // 설정된 최소 거리 이상 변경된 경우에만 true 반환
+        return distance >= MIN_LOCATION_DISTANCE;
+    }
+
+    /**
      * 현재 위치 정보 업데이트
      */
     private void updateCurrentLocation(Location location) {
@@ -198,21 +198,15 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
             // 위치 정보 로깅
             Log.d(TAG, "현재 위치 업데이트: " + startLatLng.latitude + ", " + startLatLng.longitude);
 
-            // 역지오코딩 대신 현재 위치 좌표만 표시 (API 구독 필요)
-            if (useReverseGeocoding) {
-                // 역지오코딩으로 주소 가져오기 (API 구독 필요)
-                reverseGeocode(startLatLng, true);
-            } else {
-                // 좌표만 표시
-                String locationStr = String.format("위도: %.6f, 경도: %.6f",
-                        startLatLng.latitude, startLatLng.longitude);
-                editStartLocation.setText(locationStr);
+            // 좌표 표시
+            String locationStr = String.format("위도: %.6f, 경도: %.6f",
+                    startLatLng.latitude, startLatLng.longitude);
+            editStartLocation.setText(locationStr);
 
-                // 마커 설정
-                startMarker.setPosition(startLatLng);
-                startMarker.setCaptionText("출발");
-                startMarker.setMap(naverMap);
-            }
+            // 마커 설정
+            startMarker.setPosition(startLatLng);
+            startMarker.setCaptionText("출발");
+            startMarker.setMap(naverMap);
         }
     }
 
@@ -242,35 +236,30 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
                                 // 시작 위치 설정
                                 startLatLng = currentLatLng;
+                                lastLocation = location; // 마지막 위치 설정
 
                                 // 시작 마커 설정
                                 startMarker.setPosition(startLatLng);
                                 startMarker.setMap(naverMap);
 
-                                // 역지오코딩 대신 좌표만 표시 (API 구독 필요)
-                                if (useReverseGeocoding) {
-                                    // 역지오코딩으로 주소 가져오기 (API 구독 필요)
-                                    reverseGeocode(currentLatLng, true);
-                                } else {
-                                    // 좌표만 표시
-                                    String locationStr = String.format("위도: %.6f, 경도: %.6f",
-                                            currentLatLng.latitude, currentLatLng.longitude);
-                                    editStartLocation.setText(locationStr);
+                                // 좌표 표시
+                                String locationStr = String.format("위도: %.6f, 경도: %.6f",
+                                        currentLatLng.latitude, currentLatLng.longitude);
+                                editStartLocation.setText(locationStr);
 
-                                    // 마커 설정
-                                    startMarker.setPosition(startLatLng);
-                                    startMarker.setCaptionText("출발");
-                                    startMarker.setMap(naverMap);
-                                }
+                                // 마커 설정
+                                startMarker.setPosition(startLatLng);
+                                startMarker.setCaptionText("출발");
+                                startMarker.setMap(naverMap);
                             } else {
                                 Log.w(TAG, "위치 정보를 가져올 수 없습니다");
-                                // 기본 위치로 설정 (서울시청)
-                                LatLng defaultLocation = new LatLng(37.5666, 126.9782);
+                                // 기본 위치로 설정 (청주)
+                                LatLng defaultLocation = new LatLng(36.6357, 127.4912); // 청주 시청
                                 CameraPosition cameraPosition = new CameraPosition(defaultLocation, 15);
                                 naverMap.setCameraPosition(cameraPosition);
 
                                 // 기본 위치 메시지
-                                Toast.makeText(requireContext(), "현재 위치를 가져올 수 없어 기본 위치(서울)로 설정됩니다", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(requireContext(), "현재 위치를 가져올 수 없어 기본 위치(청주)로 설정됩니다", Toast.LENGTH_SHORT).show();
                             }
                         }
                     })
@@ -278,8 +267,8 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                         Log.e(TAG, "위치 정보 가져오기 실패: " + e.getMessage(), e);
                         Toast.makeText(requireContext(), "위치 정보를 가져오는데 실패했습니다", Toast.LENGTH_SHORT).show();
 
-                        // 기본 위치 설정 (서울시청)
-                        LatLng defaultLocation = new LatLng(37.5666, 126.9782);
+                        // 기본 위치 설정 (청주)
+                        LatLng defaultLocation = new LatLng(36.6357, 127.4912); // 청주 시청
                         CameraPosition cameraPosition = new CameraPosition(defaultLocation, 15);
                         naverMap.setCameraPosition(cameraPosition);
                     });
@@ -365,28 +354,6 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         infoWindow.open(endMarker);
 
         Toast.makeText(requireContext(), "경로가 생성되었습니다(더미 데이터)", Toast.LENGTH_SHORT).show();
-    }
-
-    /**
-     * 주소로 좌표를 검색하는 지오코딩 메서드 (API 구독 필요)
-     * @param address 검색할 주소
-     * @param isStart 시작 지점 여부
-     */
-    private void geocode(String address, boolean isStart) {
-        // 이 메서드는 API 구독이 필요하므로 현재 사용하지 않음
-        Toast.makeText(requireContext(), "지오코딩 API를 사용하려면 네이버 클라우드 플랫폼에서 API 구독이 필요합니다",
-                Toast.LENGTH_LONG).show();
-    }
-
-    /**
-     * 좌표로 주소를 검색하는 역지오코딩 메서드 (API 구독 필요)
-     * @param latLng 검색할 좌표
-     * @param isStart 시작 지점 여부
-     */
-    private void reverseGeocode(LatLng latLng, boolean isStart) {
-        // 이 메서드는 API 구독이 필요하므로 현재 사용하지 않음
-        Toast.makeText(requireContext(), "역지오코딩 API를 사용하려면 네이버 클라우드 플랫폼에서 API 구독이 필요합니다",
-                Toast.LENGTH_LONG).show();
     }
 
     /**

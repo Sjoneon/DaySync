@@ -22,11 +22,6 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="35">
 
-        <!-- 네이버 지도 API 키 설정 (메타데이터 이름 변경) -->
-        <meta-data
-            android:name="com.naver.maps.map.CLIENT_ID"
-            android:value="l4dae8ewvg" />
-
         <!-- 스플래시 액티비티를 첫 화면으로 설정 -->
         <activity
             android:name=".SplashActivity"

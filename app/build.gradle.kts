@@ -14,9 +14,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // 네이버 지도 API 키 설정 - 변경된 메타데이터 이름 사용
-        manifestPlaceholders["NCP_KEY_ID"] = "l4dae8ewvg"
     }
 
     buildTypes {
@@ -44,7 +41,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
 
     // 네이버 지도 SDK (최신 버전)
-    implementation("com.naver.maps:map-sdk:3.21.0")
+    implementation("com.naver.maps:map-sdk:3.17.0")
 
     // 네이버 지도 위치 추적 기능
     implementation("com.google.android.gms:play-services-location:21.0.1")
