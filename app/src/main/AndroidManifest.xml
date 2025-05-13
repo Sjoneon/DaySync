@@ -21,7 +21,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Cap"
         android:usesCleartextTraffic="true"
-        tools:targetApi="35">
+        android:networkSecurityConfig="@xml/network_security_config"
+        tools:targetApi="35"
+        >
 
         <!-- 네이버 맵 API 클라이언트 ID -->
         <meta-data

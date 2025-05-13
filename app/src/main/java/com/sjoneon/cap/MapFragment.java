@@ -44,7 +44,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     };
 
     // 위치 변경 감지 최소 거리 (미터 단위)
-    private static final float MIN_LOCATION_DISTANCE = 3.0f; // 3미터
+    // 3미터
 
     private FusedLocationProviderClient fusedLocationClient;
     private FusedLocationSource locationSource;
@@ -94,6 +94,50 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     }
 
     /**
+     * 네트워크 연결 테스트를 위한 메서드
+     */
+    private void testNetworkConnection() {
+        new Thread(() -> {
+            try {
+                Log.d(TAG, "네트워크 연결 테스트 시작...");
+
+                // naver.com에 연결 테스트
+                java.net.InetAddress address = java.net.InetAddress.getByName("naveropenapi.apigw.ntruss.com");
+                boolean reachable = address.isReachable(5000); // 5초 타임아웃
+
+                requireActivity().runOnUiThread(() -> {
+                    if (reachable) {
+                        Log.d(TAG, "네이버 API 서버에 연결 가능!");
+                        Toast.makeText(requireContext(), "네이버 API 서버에 연결 가능", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Log.e(TAG, "네이버 API 서버에 연결할 수 없습니다");
+                        Toast.makeText(requireContext(), "네이버 API 서버에 연결할 수 없습니다", Toast.LENGTH_SHORT).show();
+                    }
+                });
+
+                // DNS 조회 테스트
+                String hostAddress = address.getHostAddress();
+                requireActivity().runOnUiThread(() -> {
+                    Log.d(TAG, "DNS 조회 결과: " + hostAddress);
+                    Toast.makeText(requireContext(), "DNS 조회 결과: " + hostAddress, Toast.LENGTH_SHORT).show();
+                });
+
+            } catch (java.net.UnknownHostException e) {
+                requireActivity().runOnUiThread(() -> {
+                    Log.e(TAG, "호스트를 찾을 수 없음: " + e.getMessage());
+                    Toast.makeText(requireContext(), "호스트를 찾을 수 없음: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            } catch (Exception e) {
+                requireActivity().runOnUiThread(() -> {
+                    Log.e(TAG, "네트워크 테스트 오류: " + e.getMessage());
+                    Toast.makeText(requireContext(), "네트워크 테스트 오류: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+
+
+    /**
      * 맵이 준비되었을 때 호출되는 콜백 메서드
      */
     @Override
@@ -101,31 +145,59 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         this.naverMap = naverMap;
 
         try {
+            Log.d(TAG, "지도 준비 완료! NaverMap 인스턴스 정상 생성");
+
+            // 지도 유형 설정 (기본값은 Basic)
+            naverMap.setMapType(NaverMap.MapType.Basic);
+
             // 위치 소스 설정
             naverMap.setLocationSource(locationSource);
 
-            // 위치 추적 모드 설정
-            if (hasLocationPermission()) {
-                naverMap.setLocationTrackingMode(LocationTrackingMode.Follow);
-            }
+            // 로깅 추가 - 지도 초기화 성공 확인
+            Log.d(TAG, "지도 설정 완료: 유형=" + naverMap.getMapType() + ", 위치 소스 설정됨");
 
             // UI 설정
             naverMap.getUiSettings().setZoomControlEnabled(true);
             naverMap.getUiSettings().setCompassEnabled(true);
             naverMap.getUiSettings().setLocationButtonEnabled(true);
+            Log.d(TAG, "UI 설정 완료");
 
-            // 현재 위치 가져오기
-            getCurrentLocation();
+            // 현재 위치 비동기 요청
+            new Thread(() -> {
+                try {
+                    // 위치 정보 가져오기 (비동기 작업)
+                    if (ActivityCompat.checkSelfPermission(requireContext(),
+                            Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
 
-            // 카메라 변경 리스너
-            naverMap.addOnCameraChangeListener((reason, animated) -> {
-                Log.d(TAG, "지도 카메라 변경: " + reason);
-            });
+                        // 메인 스레드로 UI 업데이트
+                        requireActivity().runOnUiThread(() -> {
+                            Log.d(TAG, "위치 권한 확인됨, 현재 위치 표시 활성화");
+
+                            // 위치 추적 모드 설정
+                            naverMap.setLocationTrackingMode(LocationTrackingMode.Follow);
+
+                            // 현재 위치 가져오기
+                            getCurrentLocation();
+                        });
+                    } else {
+                        Log.d(TAG, "위치 권한 없음");
+                        // 권한 요청
+                        requireActivity().runOnUiThread(() -> {
+                            ActivityCompat.requestPermissions(requireActivity(), PERMISSIONS, LOCATION_PERMISSION_REQUEST_CODE);
+                        });
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "위치 정보 가져오기 오류: " + e.getMessage());
+                }
+            }).start();
 
             Log.d(TAG, "네이버 맵 초기화 성공");
+
         } catch (Exception e) {
             Log.e(TAG, "네이버 맵 초기화 오류: " + e.getMessage(), e);
-            Toast.makeText(requireContext(), "지도 초기화 오류: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            requireActivity().runOnUiThread(() -> {
+                Toast.makeText(requireContext(), "지도 초기화 오류: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            });
         }
     }
 
