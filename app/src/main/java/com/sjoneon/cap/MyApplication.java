@@ -3,8 +3,6 @@ package com.sjoneon.cap;
 import android.app.Application;
 import android.util.Log;
 
-import com.naver.maps.map.NaverMapSdk;
-
 /**
  * 애플리케이션 클래스
  * 앱 시작 시 필요한 초기화 작업을 수행합니다.
@@ -12,8 +10,6 @@ import com.naver.maps.map.NaverMapSdk;
 public class MyApplication extends Application {
 
     private static final String TAG = "MyApplication";
-    private static final String CLIENT_ID = "l4dae8ewvg"; // 네이버 맵 API 클라이언트 ID
-    private static final String CLIENT_SECRET = "teM3IEaDFmhkSyYRpm3rU655tnaLXiaOFBMLB83X"; // 네이버 맵 API 클라이언트 시크릿
 
     @Override
     public void onCreate() {
@@ -23,15 +19,10 @@ public class MyApplication extends Application {
             // 초기화 작업 수행
             Log.d(TAG, "애플리케이션 초기화 시작");
 
-            // 네이버 맵 SDK 초기화 - 클라이언트 ID 등록
-            NaverMapSdk.getInstance(this).setClient(
-                    new NaverMapSdk.NaverCloudPlatformClient(CLIENT_ID));
+            // 네이버 맵 헬퍼 초기화 (싱글톤 인스턴스 생성)
+            NaverMapHelper.getInstance(this);
 
-            // 헤더에 시크릿 키 설정을 위한 코드는 각 API 호출 시 추가 필요
-
-            Log.d(TAG, "네이버 맵 SDK 초기화 완료");
-
-            // 위치 서비스, 데이터베이스 등 초기화 작업 (향후 구현)
+            // 위치 서비스, 데이터베이스 등 초기화 작업
             initializeServices();
 
             Log.d(TAG, "애플리케이션 초기화 완료");
