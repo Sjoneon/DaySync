@@ -6,7 +6,6 @@ import android.util.Log;
 import com.naver.maps.map.NaverMap;
 import com.naver.maps.map.NaverMapSdk;
 import com.naver.maps.map.OnMapReadyCallback;
-import com.naver.maps.map.util.FusedLocationSource;
 
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
@@ -18,12 +17,13 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 네이버 지도 인증 및 설정을 관리하는 헬퍼 클래스
+ * 친구의 성공 사례를 기반으로 수정됨
  */
 public class NaverMapHelper {
 
     private static final String TAG = "NaverMapHelper";
 
-    // 네이버 맵 API 키 (값은 문자열 리소스로 이동해야 함)
+    // 네이버 맵 API 키 (기존 키 유지)
     private static final String CLIENT_ID = "l4dae8ewvg";
     private static final String CLIENT_SECRET = "teM3IEaDFmhkSyYRpm3rU655tnaLXiaOFBMLB83X";
 
@@ -81,21 +81,19 @@ public class NaverMapHelper {
     }
 
     /**
-     * 네이버 맵 SDK 초기화
+     * 네이버 맵 SDK 초기화 (친구 방식으로 간소화)
      */
     private void initNaverMapSdk() {
         try {
-            // 네이버 맵 SDK 초기화 - 클라이언트 ID 등록
+            // 네이버 맵 SDK 초기화 - 단순화된 방식
+            Log.d(TAG, "네이버 맵 SDK 초기화 시도...");
+
+            // CLIENT_ID만으로 초기화 (친구 방식과 유사)
             NaverMapSdk.getInstance(context).setClient(
                     new NaverMapSdk.NaverCloudPlatformClient(CLIENT_ID));
 
-            // 인증 실패 리스너 설정
-            NaverMapSdk.getInstance(context).setOnAuthFailedListener(e -> {
-                Log.e(TAG, "네이버 맵 인증 실패: " + e.getMessage());
-                // 인증 실패 시 재시도 또는 다른 조치를 취할 수 있음
-            });
-
             Log.d(TAG, "네이버 맵 SDK 초기화 완료");
+
         } catch (Exception e) {
             Log.e(TAG, "네이버 맵 SDK 초기화 오류: " + e.getMessage(), e);
         }

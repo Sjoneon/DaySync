@@ -50,8 +50,8 @@
             android:textColor="@color/text_primary" />
     </LinearLayout>
 
-    <!-- 네이버 지도 뷰 -->
-    <com.naver.maps.map.MapView
+    <!-- 네이버 지도 프래그먼트 (친구 방식으로 변경) -->
+    <FrameLayout
         android:id="@+id/mapView"
         android:layout_width="0dp"
         android:layout_height="0dp"

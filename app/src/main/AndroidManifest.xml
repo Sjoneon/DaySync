@@ -22,12 +22,11 @@
         android:theme="@style/Theme.Cap"
         android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config"
-        tools:targetApi="35"
-        >
+        tools:targetApi="35">
 
-        <!-- 네이버 맵 API 클라이언트 ID -->
+        <!-- 네이버 맵 API 클라이언트 ID - 친구 방식으로 변경 -->
         <meta-data
-            android:name="com.naver.maps.map.CLIENT_ID"
+            android:name="com.naver.maps.map.NCP_KEY_ID"
             android:value="l4dae8ewvg" />
 
         <!-- 스플래시 액티비티를 첫 화면으로 설정 -->

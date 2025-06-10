@@ -16,10 +16,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // 네이버 지도 SDK 최신 저장소 추가
-        maven {
-            url = uri("https://repository.map.naver.com/archive/maven")
-        }
+        // 네이버 지도 SDK 저장소 추가 (친구 방식으로 수정)
+        maven { url = uri("https://repository.map.naver.com/archive/maven") }
     }
 }
 

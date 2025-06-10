@@ -236,8 +236,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             showFragment(new RouteFragment());
             toolbar.setTitle(R.string.menu_route);
         } else if (id == R.id.nav_map) {
-            // 지도 화면으로 전환
-            showFragment(new MapFragment());
+            // 지도 화면으로 전환 (이름 변경됨)
+            showFragment(new DaySyncMapFragment());
             toolbar.setTitle(R.string.menu_map);
         } else if (id == R.id.nav_notifications) {
             // 알림 목록 화면으로 전환
