@@ -2,13 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- 위치 및 인터넷 권한 설정 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
 
     <application
         android:name=".MyApplication"
@@ -20,16 +19,14 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Cap"
-        android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config"
+        android:enableOnBackInvokedCallback="true"
         tools:targetApi="35">
 
-        <!-- 네이버 맵 API 클라이언트 ID - 친구 방식으로 변경 -->
         <meta-data
-            android:name="com.naver.maps.map.NCP_KEY_ID"
+            android:name="com.naver.maps.map.CLIENT_ID"
             android:value="l4dae8ewvg" />
 
-        <!-- 스플래시 액티비티를 첫 화면으로 설정 -->
         <activity
             android:name=".SplashActivity"
             android:exported="true"
@@ -40,12 +37,10 @@
             </intent-filter>
         </activity>
 
-        <!-- 로그인 액티비티 -->
         <activity
             android:name=".LoginActivity"
             android:exported="false" />
 
-        <!-- 메인 액티비티 -->
         <activity
             android:name=".MainActivity"
             android:exported="false"
