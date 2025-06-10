@@ -1,15 +1,16 @@
-// sjoneon/daysync/DaySync-b73ccfa92173f32b7dd8a3fa39d20ada6a1858fb/app/src/main/java/com/sjoneon/cap/MapFragment.java
-
 package com.sjoneon.cap;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.location.Location;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.FrameLayout;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.FrameLayout; // FrameLayout import 추가
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -17,72 +18,155 @@ import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
 
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
+import com.naver.maps.geometry.LatLng;
+import com.naver.maps.map.CameraUpdate;
 import com.naver.maps.map.LocationTrackingMode;
 import com.naver.maps.map.MapView;
 import com.naver.maps.map.NaverMap;
 import com.naver.maps.map.OnMapReadyCallback;
+import com.naver.maps.map.overlay.Marker;
 import com.naver.maps.map.util.FusedLocationSource;
 
+/**
+ * 지도 기능을 제공하는 프래그먼트 (수정된 최종 버전)
+ * MapView를 동적으로 생성하여 FrameLayout에 추가하는 방식으로 변경했습니다.
+ */
 public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     private static final String TAG = "MapFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1000;
 
-    private MapView mapView;
-    private NaverMap naverMap;
+    private FusedLocationProviderClient fusedLocationClient;
     private FusedLocationSource locationSource;
+    private MapView mapView; // MapView 객체는 그대로 유지
+    private NaverMap naverMap;
+
+    private EditText editStartLocation;
+    private EditText editDestination;
+    private Button buttonSearchRoute;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
+        locationSource = new FusedLocationSource(this, LOCATION_PERMISSION_REQUEST_CODE);
+    }
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_map, container, false);
 
-        // MapView를 코드로 생성
+        // XML에서 FrameLayout 컨테이너를 찾습니다.
+        FrameLayout mapContainer = view.findViewById(R.id.map_container);
+
+        // UI 요소 초기화
+        editStartLocation = view.findViewById(R.id.editStartLocation);
+        editDestination = view.findViewById(R.id.editDestination);
+        buttonSearchRoute = view.findViewById(R.id.buttonSearchRoute);
+        buttonSearchRoute.setOnClickListener(v -> searchRoute());
+
+        // MapView를 동적으로 생성합니다.
         mapView = new MapView(requireContext());
+        mapView.setId(View.generateViewId()); // 동적으로 ID 부여 (필요 시)
+
+        // 생성된 MapView를 FrameLayout에 추가합니다.
+        mapContainer.addView(mapView);
+
+        // MapView 생명주기 관리
         mapView.onCreate(savedInstanceState);
         mapView.getMapAsync(this);
-
-        // XML에 정의된 FrameLayout 컨테이너에 MapView 추가
-        FrameLayout mapContainer = view.findViewById(R.id.map_container);
-        if (mapContainer != null) {
-            mapContainer.addView(mapView);
-        } else {
-            Log.e(TAG, "map_container를 찾을 수 없습니다. 레이아웃 파일을 확인하세요.");
-        }
-
-
-        locationSource = new FusedLocationSource(this, LOCATION_PERMISSION_REQUEST_CODE);
 
         return view;
     }
 
+    /**
+     * NaverMap 객체가 준비되면 호출되는 콜백
+     */
     @Override
     public void onMapReady(@NonNull NaverMap naverMap) {
         this.naverMap = naverMap;
-        Log.d(TAG, "지도 준비 완료!");
+        Log.d(TAG, "onMapReady: 네이버 맵이 준비되었습니다.");
 
+        setupMapUi(naverMap);
         naverMap.setLocationSource(locationSource);
-        naverMap.getUiSettings().setLocationButtonEnabled(true);
-
         checkLocationPermission();
     }
 
+    // ... (이하 코드는 이전 답변과 동일하게 유지) ...
+
+    private void setupMapUi(@NonNull NaverMap map) {
+        map.getUiSettings().setZoomControlEnabled(true);
+        map.getUiSettings().setCompassEnabled(true);
+        map.getUiSettings().setLocationButtonEnabled(true);
+    }
+
     private void checkLocationPermission() {
-        if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST_CODE);
+        if (hasLocationPermission()) {
+            startTracking();
         } else {
-            activateLocationTracking();
+            requestPermissions(
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
+                    LOCATION_PERMISSION_REQUEST_CODE
+            );
         }
+    }
+
+    private void startTracking() {
+        if (naverMap == null) return;
+        naverMap.setLocationTrackingMode(LocationTrackingMode.Follow);
+        fetchCurrentLocation();
+    }
+
+    private void fetchCurrentLocation() {
+        if (!hasLocationPermission()) return;
+        try {
+            fusedLocationClient.getLastLocation()
+                    .addOnSuccessListener(requireActivity(), location -> {
+                        if (location != null) {
+                            LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                            updateStartLocation(currentLatLng, "현재 위치");
+                            moveMapToLocation(currentLatLng);
+                        } else {
+                            setDefaultLocation();
+                        }
+                    })
+                    .addOnFailureListener(requireActivity(), e -> setDefaultLocation());
+        } catch (SecurityException e) {
+            Log.e(TAG, "위치 권한 관련 보안 예외가 발생했습니다.", e);
+        }
+    }
+
+    private void updateStartLocation(LatLng latLng, String name) {
+        editStartLocation.setText(String.format("%s (%.6f, %.6f)", name, latLng.latitude, latLng.longitude));
+    }
+
+    private void moveMapToLocation(LatLng latLng) {
+        if (naverMap == null) return;
+        naverMap.moveCamera(CameraUpdate.scrollTo(latLng));
+        Marker marker = new Marker();
+        marker.setPosition(latLng);
+        marker.setMap(naverMap);
+    }
+
+    private void setDefaultLocation() {
+        LatLng cheongjuCityHall = new LatLng(36.6424, 127.4891);
+        updateStartLocation(cheongjuCityHall, "기본 위치 (청주시청)");
+        moveMapToLocation(cheongjuCityHall);
+    }
+
+    private boolean hasLocationPermission() {
+        return ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         if (locationSource.onRequestPermissionsResult(requestCode, permissions, grantResults)) {
-            if (naverMap == null) return;
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                activateLocationTracking();
+            if (naverMap != null && locationSource.isActivated()) {
+                naverMap.setLocationTrackingMode(LocationTrackingMode.Follow);
             } else {
-                naverMap.setLocationTrackingMode(LocationTrackingMode.None);
                 Toast.makeText(getContext(), "위치 권한이 거부되었습니다.", Toast.LENGTH_SHORT).show();
             }
             return;
@@ -90,13 +174,12 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     }
 
-    private void activateLocationTracking() {
-        if (naverMap == null) return;
-        naverMap.setLocationTrackingMode(LocationTrackingMode.Follow);
-        Log.d(TAG, "현재 위치 추적 시작");
+    private void searchRoute() {
+        // ... (이전과 동일) ...
+        Toast.makeText(getContext(), "경로 검색 기능은 구현 예정입니다.", Toast.LENGTH_SHORT).show();
     }
 
-    // MapView 생명주기 관리
+    // region MapView Lifecycle (필수)
     @Override
     public void onStart() {
         super.onStart();
@@ -123,8 +206,8 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     @Override
     public void onDestroyView() {
-        if (mapView != null) mapView.onDestroy();
         super.onDestroyView();
+        if (mapView != null) mapView.onDestroy();
     }
 
     @Override
@@ -138,4 +221,5 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         super.onLowMemory();
         if (mapView != null) mapView.onLowMemory();
     }
+    // endregion
 }
