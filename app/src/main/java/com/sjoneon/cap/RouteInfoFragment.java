@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -15,14 +16,29 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.naver.maps.map.MapView;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 경로 추천 기능을 제공하는 프래그먼트
+ * 경로 추천과 지도 기능을 통합한 프래그먼트
  */
-public class RouteFragment extends Fragment {
+public class RouteInfoFragment extends Fragment {
 
+    // 탭 상태를 나타내는 열거형
+    private enum TabState {
+        ROUTE_SEARCH,  // 경로 검색
+        MAP_VIEW       // 지도 보기
+    }
+
+    // UI 요소들
+    private Button buttonRouteTab;
+    private Button buttonMapTab;
+    private LinearLayout layoutRouteSearch;
+    private LinearLayout layoutMapView;
+
+    // 경로 검색 관련 UI
     private EditText editStartLocation;
     private EditText editDestination;
     private Button buttonSearchRoute;
@@ -30,20 +46,71 @@ public class RouteFragment extends Fragment {
     private RecyclerView recyclerViewRoutes;
     private RouteAdapter routeAdapter;
 
+    // 지도 관련 UI
+    private MapView mapView;
+
+    // 데이터
     private List<RouteItem> routeList = new ArrayList<>();
+    private TabState currentTab = TabState.ROUTE_SEARCH;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.fragment_route, container, false);
+        View view = inflater.inflate(R.layout.fragment_route_info, container, false);
 
         // 뷰 초기화
+        initializeViews(view);
+
+        // 탭 설정
+        setupTabs();
+
+        // 경로 검색 설정
+        setupRouteSearch();
+
+        // 지도 설정
+        setupMapView(savedInstanceState);
+
+        // 초기 탭 설정
+        switchToTab(TabState.ROUTE_SEARCH);
+
+        return view;
+    }
+
+    /**
+     * 뷰 요소들을 초기화하는 메서드
+     */
+    private void initializeViews(View view) {
+        // 탭 버튼들
+        buttonRouteTab = view.findViewById(R.id.buttonRouteTab);
+        buttonMapTab = view.findViewById(R.id.buttonMapTab);
+
+        // 레이아웃 컨테이너들
+        layoutRouteSearch = view.findViewById(R.id.layoutRouteSearch);
+        layoutMapView = view.findViewById(R.id.layoutMapView);
+
+        // 경로 검색 관련 UI
         editStartLocation = view.findViewById(R.id.editStartLocation);
         editDestination = view.findViewById(R.id.editDestination);
         buttonSearchRoute = view.findViewById(R.id.buttonSearchRoute);
         textNoRoutes = view.findViewById(R.id.textNoRoutes);
         recyclerViewRoutes = view.findViewById(R.id.recyclerViewRoutes);
 
+        // 지도 관련 UI
+        mapView = view.findViewById(R.id.mapView);
+    }
+
+    /**
+     * 탭 기능을 설정하는 메서드
+     */
+    private void setupTabs() {
+        buttonRouteTab.setOnClickListener(v -> switchToTab(TabState.ROUTE_SEARCH));
+        buttonMapTab.setOnClickListener(v -> switchToTab(TabState.MAP_VIEW));
+    }
+
+    /**
+     * 경로 검색 기능을 설정하는 메서드
+     */
+    private void setupRouteSearch() {
         // 리사이클러뷰 설정
         recyclerViewRoutes.setLayoutManager(new LinearLayoutManager(getContext()));
         routeAdapter = new RouteAdapter(routeList);
@@ -51,12 +118,56 @@ public class RouteFragment extends Fragment {
 
         // 검색 버튼 클릭 리스너
         buttonSearchRoute.setOnClickListener(v -> searchRoute());
-
-        return view;
     }
 
     /**
-     * 경로 검색
+     * 지도 뷰를 설정하는 메서드
+     */
+    private void setupMapView(Bundle savedInstanceState) {
+        if (mapView != null) {
+            mapView.onCreate(savedInstanceState);
+            // 실제 지도 초기화는 MapFragment의 코드를 참조
+        }
+    }
+
+    /**
+     * 탭을 전환하는 메서드
+     */
+    private void switchToTab(TabState tabState) {
+        currentTab = tabState;
+
+        // 탭 버튼 상태 업데이트
+        updateTabButtonStates();
+
+        // 레이아웃 표시/숨김 처리
+        switch (tabState) {
+            case ROUTE_SEARCH:
+                layoutRouteSearch.setVisibility(View.VISIBLE);
+                layoutMapView.setVisibility(View.GONE);
+                break;
+            case MAP_VIEW:
+                layoutRouteSearch.setVisibility(View.GONE);
+                layoutMapView.setVisibility(View.VISIBLE);
+                break;
+        }
+    }
+
+    /**
+     * 탭 버튼 상태를 업데이트하는 메서드
+     */
+    private void updateTabButtonStates() {
+        // 선택된 탭과 선택되지 않은 탭의 스타일 변경
+        if (currentTab == TabState.ROUTE_SEARCH) {
+            buttonRouteTab.setBackgroundColor(getResources().getColor(R.color.background_button, null));
+            buttonMapTab.setBackgroundColor(getResources().getColor(R.color.background_input, null));
+        } else {
+            buttonRouteTab.setBackgroundColor(getResources().getColor(R.color.background_input, null));
+            buttonMapTab.setBackgroundColor(getResources().getColor(R.color.background_button, null));
+        }
+    }
+
+    /**
+     * 경로 검색을 수행하는 메서드
      */
     private void searchRoute() {
         String startLocation = editStartLocation.getText().toString().trim();
@@ -213,10 +324,12 @@ public class RouteFragment extends Fragment {
                 notifyItemChanged(position);
             });
 
-            // 길 안내 시작 버튼
-            holder.buttonStartNavigation.setOnClickListener(v -> {
-                Toast.makeText(getContext(), R.string.navigation_not_ready, Toast.LENGTH_SHORT).show();
-                // 실제로는 여기서 네비게이션 기능 실행
+            // 지도에서 보기 버튼 (기존의 길 안내 시작 버튼을 변경)
+            holder.buttonShowOnMap.setText("지도에서 보기");
+            holder.buttonShowOnMap.setOnClickListener(v -> {
+                // 지도 탭으로 전환
+                switchToTab(TabState.MAP_VIEW);
+                Toast.makeText(getContext(), "지도에서 경로를 확인하세요", Toast.LENGTH_SHORT).show();
             });
         }
 
@@ -231,7 +344,7 @@ public class RouteFragment extends Fragment {
             TextView textDepartureTime;
             View layoutRouteDetail;
             Button buttonExpandRoute;
-            Button buttonStartNavigation;
+            Button buttonShowOnMap;
 
             RouteViewHolder(View itemView) {
                 super(itemView);
@@ -240,8 +353,65 @@ public class RouteFragment extends Fragment {
                 textDepartureTime = itemView.findViewById(R.id.textDepartureTime);
                 layoutRouteDetail = itemView.findViewById(R.id.layoutRouteDetail);
                 buttonExpandRoute = itemView.findViewById(R.id.buttonExpandRoute);
-                buttonStartNavigation = itemView.findViewById(R.id.buttonStartNavigation);
+                buttonShowOnMap = itemView.findViewById(R.id.buttonStartNavigation); // 기존 버튼 재사용
             }
+        }
+    }
+
+    // 생명주기 메서드들 - 지도뷰와 동기화
+    @Override
+    public void onStart() {
+        super.onStart();
+        if (mapView != null) {
+            mapView.onStart();
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (mapView != null) {
+            mapView.onResume();
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (mapView != null) {
+            mapView.onPause();
+        }
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        if (mapView != null) {
+            mapView.onStop();
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (mapView != null) {
+            mapView.onDestroy();
+        }
+    }
+
+    @Override
+    public void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (mapView != null) {
+            mapView.onSaveInstanceState(outState);
+        }
+    }
+
+    @Override
+    public void onLowMemory() {
+        super.onLowMemory();
+        if (mapView != null) {
+            mapView.onLowMemory();
         }
     }
 }

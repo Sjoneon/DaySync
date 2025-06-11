@@ -7,6 +7,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -28,7 +29,7 @@ import java.util.List;
 
 /**
  * 앱의 메인 액티비티
- * 네비게이션 드로어와 채팅 인터페이스를 관리합니다.
+ * 네비게이션 드로어와 채팅 인터페이스, 새로운 프로필 기능을 관리합니다.
  */
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
@@ -41,6 +42,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private ImageButton buttonVoice;
     private String userNickname;
     private ChatAdapter chatAdapter;
+
+    // 네비게이션 헤더 요소들
+    private ImageView profileImageView;
+    private TextView textViewUsername;
 
     // 채팅 메시지 목록
     private List<Message> messageList = new ArrayList<>();
@@ -88,10 +93,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         buttonSend = findViewById(R.id.buttonSend);
         buttonVoice = findViewById(R.id.buttonVoice);
 
-        // 네비게이션 헤더에서 사용자 이름 설정
+        // 네비게이션 헤더에서 프로필 요소들 찾기
         View headerView = navigationView.getHeaderView(0);
-        TextView textViewUsername = headerView.findViewById(R.id.textViewUsername);
-        textViewUsername.setText(getString(R.string.welcome_user, userNickname));
+        profileImageView = headerView.findViewById(R.id.profileImageView);
+        textViewUsername = headerView.findViewById(R.id.textViewUsername);
+
+        // 네비게이션 헤더 초기 설정
+        updateNavigationHeader();
+
+        // 프로필 이미지 클릭 리스너 설정
+        setupProfileImageClickListener();
 
         // 리사이클러 뷰 설정
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -100,6 +111,46 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         // 환영 메시지 추가
         addWelcomeMessage();
+    }
+
+    /**
+     * 네비게이션 헤더를 업데이트하는 메서드
+     */
+    public void updateNavigationHeader() {
+        SharedPreferences preferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+        userNickname = preferences.getString("nickname", "사용자");
+
+        if (textViewUsername != null) {
+            textViewUsername.setText(getString(R.string.welcome_user, userNickname));
+        }
+    }
+
+    /**
+     * 프로필 이미지 클릭 리스너를 설정하는 메서드
+     */
+    private void setupProfileImageClickListener() {
+        if (profileImageView != null) {
+            profileImageView.setOnClickListener(v -> {
+                // 네비게이션 드로어 닫기
+                drawerLayout.closeDrawer(GravityCompat.START);
+
+                // 설정 Fragment로 이동
+                showFragment(new SettingsFragment());
+                toolbar.setTitle("개인설정");
+            });
+        }
+
+        // 사용자 이름도 클릭 가능하게 설정
+        if (textViewUsername != null) {
+            textViewUsername.setOnClickListener(v -> {
+                // 네비게이션 드로어 닫기
+                drawerLayout.closeDrawer(GravityCompat.START);
+
+                // 설정 Fragment로 이동
+                showFragment(new SettingsFragment());
+                toolbar.setTitle("개인설정");
+            });
+        }
     }
 
     /**
@@ -231,22 +282,22 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             // 알람 설정 화면으로 전환
             showFragment(new AlarmFragment());
             toolbar.setTitle(R.string.menu_alarm);
-        } else if (id == R.id.nav_route) {
-            // 경로 추천 화면으로 전환
-            showFragment(new RouteFragment());
-            toolbar.setTitle(R.string.menu_route);
-        } else if (id == R.id.nav_map) {
-            // 지도 화면으로 전환 (이름 변경됨)
-            showFragment(new MapFragment());
-            toolbar.setTitle(R.string.menu_map);
+        } else if (id == R.id.nav_route_info) {
+            // 통합된 경로 정보 화면으로 전환 (기존 RouteFragment와 MapFragment 통합)
+            showFragment(new RouteInfoFragment());
+            toolbar.setTitle("추천 경로 정보");
+        } else if (id == R.id.nav_weather) {
+            // 날씨 정보 화면으로 전환
+            showFragment(new WeatherFragment());
+            toolbar.setTitle("날씨 정보");
         } else if (id == R.id.nav_notifications) {
             // 알림 목록 화면으로 전환
             showFragment(new NotificationsFragment());
             toolbar.setTitle(R.string.menu_notifications);
         } else if (id == R.id.nav_settings) {
             // 설정 화면으로 전환
-            Toast.makeText(this, getString(R.string.feature_not_ready, getString(R.string.menu_settings)), Toast.LENGTH_SHORT).show();
-            // 추후 SettingsFragment 구현 예정
+            showFragment(new SettingsFragment());
+            toolbar.setTitle("설정");
         } else if (id == R.id.nav_help) {
             // 도움말 화면으로 전환
             Toast.makeText(this, getString(R.string.feature_not_ready, getString(R.string.menu_help)), Toast.LENGTH_SHORT).show();
@@ -293,7 +344,21 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
             drawerLayout.closeDrawer(GravityCompat.START);
         } else {
-            super.onBackPressed();
+            // 현재 프래그먼트가 있으면 채팅 화면으로 돌아가기
+            Fragment currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+            if (currentFragment != null) {
+                showChatInterface();
+                toolbar.setTitle(R.string.app_name);
+            } else {
+                super.onBackPressed();
+            }
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // 화면이 다시 보여질 때 네비게이션 헤더 업데이트
+        updateNavigationHeader();
     }
 }

@@ -30,6 +30,8 @@
     <string name="menu_calendar">일정 관리</string>
     <string name="menu_alarm">알람 설정</string>
     <string name="menu_route">경로 추천</string>
+    <string name="menu_route_info">추천 경로 정보</string>
+    <string name="menu_weather">날씨 정보</string>
     <string name="menu_map">지도</string>
     <string name="menu_notifications">알림 목록</string>
     <string name="menu_settings">설정</string>
@@ -77,6 +79,16 @@
     <string name="navigation_not_ready">길 안내 기능 준비 중...</string>
     <string name="departure_time_format">%s 출발</string>
 
+    <!-- 날씨 관련 문자열 -->
+    <string name="weather_loading">날씨 정보를 불러오는 중...</string>
+    <string name="weather_error">날씨 정보를 가져올 수 없습니다</string>
+    <string name="weather_permission_required">날씨 정보를 위해 위치 권한이 필요합니다</string>
+    <string name="current_weather">현재 날씨</string>
+    <string name="weekly_forecast">일주일 예보</string>
+    <string name="feels_like">체감온도 %d°C</string>
+    <string name="humidity">습도 %d%%</string>
+    <string name="wind_speed">바람 %.1fm/s</string>
+
     <!-- 지도 관련 문자열 -->
     <string name="geocode_error">주소를 찾을 수 없습니다.</string>
     <string name="current_location">현재 위치</string>
@@ -91,6 +103,25 @@
     <string name="notification_read">알림을 읽음 처리했습니다.</string>
     <string name="notification_deleted">알림이 삭제되었습니다.</string>
     <string name="notification_list">알림 목록</string>
+
+    <!-- 설정 관련 문자열 -->
+    <string name="settings_account">계정 설정</string>
+    <string name="settings_notification">알림 설정</string>
+    <string name="settings_other">기타</string>
+    <string name="settings_username">사용자 이름</string>
+    <string name="settings_location">위치</string>
+    <string name="settings_push_alarm">푸시알림</string>
+    <string name="settings_location_service">위치 서비스</string>
+    <string name="settings_app_info">앱 정보</string>
+    <string name="settings_help">도움말</string>
+    <string name="nickname_change_title">닉네임 변경</string>
+    <string name="nickname_change_hint">새로운 닉네임을 입력하세요</string>
+    <string name="nickname_change_note">* 닉네임은 20자 이하로 입력해주세요</string>
+    <string name="nickname_changed">닉네임이 변경되었습니다</string>
+    <string name="push_alarm_on">푸시 알림이 켜졌습니다</string>
+    <string name="push_alarm_off">푸시 알림이 꺼졌습니다</string>
+    <string name="location_service_on">위치 서비스가 켜졌습니다</string>
+    <string name="location_service_off">위치 서비스가 꺼졌습니다</string>
 
     <!-- 네비게이션 헤더 -->
     <string name="profile_image_desc">프로필 이미지</string>

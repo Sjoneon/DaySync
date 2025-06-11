@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="120dp"
+    android:layout_height="wrap_content"
+    android:layout_margin="@dimen/margin_small"
+    app:cardBackgroundColor="@color/background_card"
+    app:cardCornerRadius="@dimen/corner_radius"
+    app:cardElevation="2dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="@dimen/padding_large">
+
+        <!-- 요일 -->
+        <TextView
+            android:id="@+id/textForecastDay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="오늘"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/text_size_medium"
+            android:textStyle="bold" />
+
+        <!-- 날씨 아이콘 -->
+        <ImageView
+            android:id="@+id/imageForecastIcon"
+            android:layout_width="@dimen/icon_size_medium"
+            android:layout_height="@dimen/icon_size_medium"
+            android:layout_marginTop="@dimen/margin_small"
+            android:layout_marginBottom="@dimen/margin_small"
+            android:contentDescription="날씨 아이콘"
+            android:src="@android:drawable/ic_menu_day"
+            app:tint="@color/text_primary" />
+
+        <!-- 날씨 상태 -->
+        <TextView
+            android:id="@+id/textForecastCondition"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/margin_small"
+            android:text="맑음"
+            android:textColor="@color/text_secondary"
+            android:textSize="@dimen/text_size_small" />
+
+        <!-- 최고 온도 -->
+        <TextView
+            android:id="@+id/textForecastHigh"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="25°"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/text_size_medium"
+            android:textStyle="bold" />
+
+        <!-- 최저 온도 -->
+        <TextView
+            android:id="@+id/textForecastLow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/margin_small"
+            android:text="15°"
+            android:textColor="@color/text_tertiary"
+            android:textSize="@dimen/text_size_medium" />
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>

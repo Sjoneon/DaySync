@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_black"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- 프로필 섹션 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/background_dialog"
+            android:orientation="vertical"
+            android:padding="@dimen/padding_xlarge">
+
+            <ImageView
+                android:id="@+id/imageProfile"
+                android:layout_width="@dimen/profile_icon_size"
+                android:layout_height="@dimen/profile_icon_size"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginBottom="@dimen/margin_medium"
+                android:src="@mipmap/ic_launcher_round"
+                android:contentDescription="@string/profile_image_desc" />
+
+            <TextView
+                android:id="@+id/textUserName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:text="나는북극곰"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_size_xlarge"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <!-- 계정 설정 섹션 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/padding_xlarge">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="@dimen/margin_medium"
+                android:text="계정 설정"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_size_large"
+                android:textStyle="bold" />
+
+            <!-- 사용자 이름 변경 -->
+            <LinearLayout
+                android:id="@+id/layoutNicknameEdit"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:orientation="horizontal"
+                android:padding="@dimen/padding_large">
+
+                <ImageView
+                    android:layout_width="@dimen/button_icon_size"
+                    android:layout_height="@dimen/button_icon_size"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="@dimen/margin_medium"
+                    android:src="@android:drawable/ic_menu_edit"
+                    app:tint="@color/text_primary" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="사용자 이름"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/text_size_medium" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/margin_small"
+                        android:text="나는북극곰"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="@dimen/text_size_small" />
+
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="@dimen/button_icon_size"
+                    android:layout_height="@dimen/button_icon_size"
+                    android:layout_gravity="center_vertical"
+                    android:src="@android:drawable/ic_menu_more"
+                    app:tint="@color/text_tertiary" />
+
+            </LinearLayout>
+
+            <!-- 구분선 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/margin_medium"
+                android:layout_marginBottom="@dimen/margin_medium"
+                android:background="@color/divider_color" />
+
+            <!-- 위치 설정 -->
+            <LinearLayout
+                android:id="@+id/layoutLocationSetting"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:orientation="horizontal"
+                android:padding="@dimen/padding_large">
+
+                <ImageView
+                    android:layout_width="@dimen/button_icon_size"
+                    android:layout_height="@dimen/button_icon_size"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="@dimen/margin_medium"
+                    android:src="@android:drawable/ic_menu_mylocation"
+                    app:tint="@color/text_primary" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="위치"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/text_size_medium" />
+
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="@dimen/button_icon_size"
+                    android:layout_height="@dimen/button_icon_size"
+                    android:layout_gravity="center_vertical"
+                    android:src="@android:drawable/ic_menu_more"
+                    app:tint="@color/text_tertiary" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- 알림 설정 섹션 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/padding_xlarge">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="@dimen/margin_medium"
+                android:text="알림 설정"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_size_large"
+                android:textStyle="bold" />
+
+            <!-- 푸시 알림 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="@dimen/padding_large">
+
+                <ImageView
+                    android:layout_width="@dimen/button_icon_size"
+                    android:layout_height="@dimen/button_icon_size"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="@dimen/margin_medium"
+                    android:src="@android:drawable/ic_popup_reminder"
+                    app:tint="@color/text_primary" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="푸시알림"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/text_size_medium" />
+
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switchPushAlarm"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:checked="true" />
+
+            </LinearLayout>
+
+            <!-- 위치 서비스 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="@dimen/padding_large">
+
+                <ImageView
+                    android:layout_width="@dimen/button_icon_size"
+                    android:layout_height="@dimen/button_icon_size"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="@dimen/margin_medium"
+                    android:src="@android:drawable/ic_menu_mapmode"
+                    app:tint="@color/text_primary" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="위치 서비스"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/text_size_medium" />
+
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switchLocationService"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:checked="true" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- 기타 설정 섹션 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/padding_xlarge">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="@dimen/margin_medium"
+                android:text="기타"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_size_large"
+                android:textStyle="bold" />
+
+            <!-- 앱 정보 -->
+            <LinearLayout
+                android:id="@+id/layoutAbout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:orientation="horizontal"
+                android:padding="@dimen/padding_large">
+
+                <ImageView
+                    android:layout_width="@dimen/button_icon_size"
+                    android:layout_height="@dimen/button_icon_size"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="@dimen/margin_medium"
+                    android:src="@android:drawable/ic_dialog_info"
+                    app:tint="@color/text_primary" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="앱 정보"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/text_size_medium" />
+
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="@dimen/button_icon_size"
+                    android:layout_height="@dimen/button_icon_size"
+                    android:layout_gravity="center_vertical"
+                    android:src="@android:drawable/ic_menu_more"
+                    app:tint="@color/text_tertiary" />
+
+            </LinearLayout>
+
+            <!-- 도움말 -->
+            <LinearLayout
+                android:id="@+id/layoutHelp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:orientation="horizontal"
+                android:padding="@dimen/padding_large">
+
+                <ImageView
+                    android:layout_width="@dimen/button_icon_size"
+                    android:layout_height="@dimen/button_icon_size"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="@dimen/margin_medium"
+                    android:src="@android:drawable/ic_menu_help"
+                    app:tint="@color/text_primary" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="도움말"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/text_size_medium" />
+
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="@dimen/button_icon_size"
+                    android:layout_height="@dimen/button_icon_size"
+                    android:layout_gravity="center_vertical"
+                    android:src="@android:drawable/ic_menu_more"
+                    app:tint="@color/text_tertiary" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</ScrollView>

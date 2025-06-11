@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_black"
+    android:orientation="vertical">
+
+    <!-- 탭 버튼들 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="@dimen/padding_medium">
+
+        <Button
+            android:id="@+id/buttonRouteTab"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="@dimen/margin_small"
+            android:background="@color/background_button"
+            android:text="경로 검색"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/text_size_medium" />
+
+        <Button
+            android:id="@+id/buttonMapTab"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="@dimen/margin_small"
+            android:background="@color/background_input"
+            android:text="지도 보기"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/text_size_medium" />
+
+    </LinearLayout>
+
+    <!-- 경로 검색 레이아웃 -->
+    <LinearLayout
+        android:id="@+id/layoutRouteSearch"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- 검색 입력 영역 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/padding_xlarge">
+
+            <EditText
+                android:id="@+id/editStartLocation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="@dimen/margin_medium"
+                android:background="@drawable/rounded_edittext_background"
+                android:drawableStart="@android:drawable/ic_menu_mylocation"
+                android:drawablePadding="@dimen/padding_medium"
+                android:hint="@string/start_location_hint"
+                android:inputType="text"
+                android:padding="@dimen/padding_large"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_hint" />
+
+            <EditText
+                android:id="@+id/editDestination"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/rounded_edittext_background"
+                android:drawableStart="@android:drawable/ic_menu_directions"
+                android:drawablePadding="@dimen/padding_medium"
+                android:hint="@string/destination_hint"
+                android:inputType="text"
+                android:padding="@dimen/padding_large"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_hint" />
+
+            <Button
+                android:id="@+id/buttonSearchRoute"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/margin_xlarge"
+                android:background="@drawable/rounded_button_background"
+                android:text="@string/search_route"
+                android:textColor="@color/text_primary" />
+
+        </LinearLayout>
+
+        <!-- 경로 결과 영역 -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <TextView
+                android:id="@+id/textNoRoutes"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="@string/no_routes"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_size_large" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerViewRoutes"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:padding="@dimen/padding_xlarge"
+                android:visibility="gone" />
+
+        </FrameLayout>
+
+    </LinearLayout>
+
+    <!-- 지도 레이아웃 -->
+    <LinearLayout
+        android:id="@+id/layoutMapView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <!-- 지도 컨트롤 버튼들 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="@dimen/padding_medium">
+
+            <Button
+                android:id="@+id/buttonCurrentLocation"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="@dimen/margin_small"
+                android:background="@color/background_input"
+                android:text="현재 위치"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_size_small" />
+
+            <Button
+                android:id="@+id/buttonRefreshMap"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="@dimen/margin_small"
+                android:background="@color/background_input"
+                android:text="새로고침"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_size_small" />
+
+        </LinearLayout>
+
+        <!-- 네이버 지도 뷰 -->
+        <com.naver.maps.map.MapView
+            android:id="@+id/mapView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+    </LinearLayout>
+
+</LinearLayout>

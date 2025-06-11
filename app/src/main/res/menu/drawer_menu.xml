@@ -19,15 +19,15 @@
             android:iconTint="@color/text_primary"
             android:title="알람 설정" />
         <item
-            android:id="@+id/nav_route"
+            android:id="@+id/nav_route_info"
             android:icon="@android:drawable/ic_menu_directions"
             android:iconTint="@color/text_primary"
-            android:title="경로 추천" />
+            android:title="추천 경로 정보" />
         <item
-            android:id="@+id/nav_map"
-            android:icon="@android:drawable/ic_menu_mapmode"
+            android:id="@+id/nav_weather"
+            android:icon="@android:drawable/ic_menu_day"
             android:iconTint="@color/text_primary"
-            android:title="지도" />
+            android:title="날씨 정보" />
         <item
             android:id="@+id/nav_notifications"
             android:icon="@android:drawable/ic_popup_reminder"
@@ -35,7 +35,7 @@
             android:title="알림 목록" />
     </group>
 
-    <!-- 기타 카테고리 - 색상 명시적 적용 -->
+    <!-- 기타 카테고리 -->
     <item android:title="기타"
         app:itemTextColor="@color/text_primary"
         android:textColor="@color/text_primary"
