@@ -33,7 +33,7 @@
         android:background="?attr/selectableItemBackground"
         android:clickable="true"
         android:focusable="true"
-        android:padding="@dimen/padding_small" />
+        android:padding="@dimen/padding_small"/>
 
     <TextView
         android:layout_width="wrap_content"
