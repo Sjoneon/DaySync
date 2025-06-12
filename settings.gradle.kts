@@ -1,12 +1,6 @@
 pluginManagement {
     repositories {
-        google {
-            content {
-                includeGroupByRegex("com\\.android.*")
-                includeGroupByRegex("com\\.google.*")
-                includeGroupByRegex("androidx.*")
-            }
-        }
+        google()
         mavenCentral()
         gradlePluginPortal()
     }
@@ -16,7 +10,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // 네이버 지도 SDK 저장소 추가 (친구 방식으로 수정)
+        // 네이버 지도 SDK 저장소 추가
         maven { url = uri("https://repository.map.naver.com/archive/maven") }
     }
 }

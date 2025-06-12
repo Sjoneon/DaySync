@@ -29,7 +29,8 @@ import java.util.List;
 
 /**
  * 앱의 메인 액티비티
- * 네비게이션 드로어와 채팅 인터페이스, 새로운 프로필 기능을 관리합니다.
+ * 네비게이션 드로어와 채팅 인터페이스, 프로필 기능을 관리하며,
+ * 지도 등 다양한 프래그먼트를 호스팅합니다.
  */
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
@@ -188,25 +189,19 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
      */
     private void setupChatInterface() {
         // 메시지 전송 버튼 클릭 리스너
-        buttonSend.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String messageContent = editTextMessage.getText().toString().trim();
-                if (!messageContent.isEmpty()) {
-                    // 사용자 메시지 추가
-                    sendMessage(messageContent);
-                    editTextMessage.setText("");
-                }
+        buttonSend.setOnClickListener(v -> {
+            String messageContent = editTextMessage.getText().toString().trim();
+            if (!messageContent.isEmpty()) {
+                // 사용자 메시지 추가
+                sendMessage(messageContent);
+                editTextMessage.setText("");
             }
         });
 
         // 음성 입력 버튼 클릭 리스너
-        buttonVoice.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // 음성 입력 처리 (Speech-to-Text 구현 필요)
-                Toast.makeText(MainActivity.this, getString(R.string.voice_input_not_ready), Toast.LENGTH_SHORT).show();
-            }
+        buttonVoice.setOnClickListener(v -> {
+            // 음성 입력 처리 (Speech-to-Text 구현 필요)
+            Toast.makeText(MainActivity.this, getString(R.string.voice_input_not_ready), Toast.LENGTH_SHORT).show();
         });
     }
 
@@ -246,13 +241,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         // 실제 구현에서는 여기에 AI 처리 로직 추가
 
         // 약간의 지연 후 AI 응답 표시 (실제 대화처럼 보이게)
-        recyclerView.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                Message aiMessage = new Message(aiResponse, false);
-                chatAdapter.addMessage(aiMessage);
-                scrollToBottom();
-            }
+        recyclerView.postDelayed(() -> {
+            Message aiMessage = new Message(aiResponse, false);
+            chatAdapter.addMessage(aiMessage);
+            scrollToBottom();
         }, 1000); // 1초 지연
     }
 
@@ -283,9 +275,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             showFragment(new AlarmFragment());
             toolbar.setTitle(R.string.menu_alarm);
         } else if (id == R.id.nav_route_info) {
-            // 통합된 경로 정보 화면으로 전환 (기존 RouteFragment와 MapFragment 통합)
-            showFragment(new RouteInfoFragment());
-            toolbar.setTitle("추천 경로 정보");
+            // 지도 화면으로 전환 (수정된 부분)
+            showFragment(new MapFragment());
+            toolbar.setTitle("지도");
         } else if (id == R.id.nav_weather) {
             // 날씨 정보 화면으로 전환
             showFragment(new WeatherFragment());

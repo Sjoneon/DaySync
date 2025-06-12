@@ -16,9 +16,6 @@ public class MyApplication extends Application {
         super.onCreate();
         Log.d(TAG, "애플리케이션 초기화 시작");
 
-        // ★★★ NaverMapHelper.getInstance(this) 호출을 제거합니다. ★★★
-        // SDK가 AndroidManifest.xml을 통해 자동으로 초기화되도록 합니다.
-
         // 기타 서비스 초기화
         initializeServices();
 
