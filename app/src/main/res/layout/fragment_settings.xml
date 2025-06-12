@@ -33,7 +33,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
-                android:text="나는북극곰"
+                android:text="123"
                 android:textColor="@color/text_primary"
                 android:textSize="@dimen/text_size_xlarge"
                 android:textStyle="bold" />
@@ -92,7 +92,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/margin_small"
-                        android:text="나는북극곰"
+                        android:text="123"
                         android:textColor="@color/text_secondary"
                         android:textSize="@dimen/text_size_small" />
 

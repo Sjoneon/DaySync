@@ -54,6 +54,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
+        android:amPmTextColor="#FFFFFF"
         android:background="@color/background_card"
         android:numbersTextColor="@color/text_primary"
         android:timePickerMode="spinner" />

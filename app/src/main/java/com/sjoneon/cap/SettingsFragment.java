@@ -77,7 +77,7 @@ public class SettingsFragment extends Fragment {
      */
     private void loadSettings() {
         // 사용자 닉네임 로드
-        currentNickname = preferences.getString("nickname", "나는북극곰");
+        currentNickname = preferences.getString("nickname", "123"); //이거 수정 필요함.
         textUserName.setText(currentNickname);
 
         // 푸시 알림 설정 로드
@@ -172,7 +172,7 @@ public class SettingsFragment extends Fragment {
                 "개발자: 송재원\n" +
                 "학과: 컴퓨터공학과\n" +
                 "학번: 202010788\n\n" +
-                "© 2025 DaySync Team";
+                "© 2025 DaySync";
 
         builder.setTitle("앱 정보")
                 .setMessage(aboutMessage)
