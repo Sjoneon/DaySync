@@ -1,13 +1,15 @@
 package com.sjoneon.cap;
 
-import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.app.AlertDialog;
 import android.app.PendingIntent;
 import android.app.TimePickerDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -29,7 +31,7 @@ import java.util.Calendar;
 import java.util.List;
 
 /**
- * 알람 설정 및 관리를 위한 프래그먼트
+ * 알람 설정 및 관리를 위한 프래그먼트 (수정본)
  */
 public class AlarmFragment extends Fragment {
 
@@ -38,46 +40,35 @@ public class AlarmFragment extends Fragment {
     private FloatingActionButton fabAddAlarm;
     private AlarmAdapter alarmAdapter;
     private List<AlarmItem> alarmList = new ArrayList<>();
+    private static final int REQUEST_SCHEDULE_EXACT_ALARM = 1;
+
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        // 하드코딩된 레이아웃 리소스를 소프트코딩으로 교체
         View view = inflater.inflate(R.layout.fragment_alarm, container, false);
 
-        // 뷰 초기화
         recyclerViewAlarms = view.findViewById(R.id.recyclerViewAlarms);
         textNoAlarms = view.findViewById(R.id.textNoAlarms);
         fabAddAlarm = view.findViewById(R.id.fabAddAlarm);
 
-        // 리사이클러뷰 설정
         recyclerViewAlarms.setLayoutManager(new LinearLayoutManager(getContext()));
         alarmAdapter = new AlarmAdapter(alarmList);
         recyclerViewAlarms.setAdapter(alarmAdapter);
 
-        // 알람 추가 버튼 클릭 리스너
         fabAddAlarm.setOnClickListener(v -> showTimePickerDialog());
 
-        // 초기 알람 목록 로드 (실제로는 DB에서 가져와야 함)
         loadAlarms();
 
         return view;
     }
 
-    /**
-     * 알람 목록 로드 (실제로는 DB에서 가져와야 함)
-     */
     private void loadAlarms() {
-        // 임시 더미 데이터
+        // 임시 더미 데이터 (실제로는 DB에서 가져와야 함)
         alarmList.clear();
-
-        // 표시할 알람이 있으면 리사이클러뷰 표시, 없으면 메시지 표시
         updateAlarmListVisibility();
     }
 
-    /**
-     * 알람 목록 표시 상태 업데이트
-     */
     private void updateAlarmListVisibility() {
         if (alarmList.isEmpty()) {
             textNoAlarms.setVisibility(View.VISIBLE);
@@ -88,9 +79,6 @@ public class AlarmFragment extends Fragment {
         }
     }
 
-    /**
-     * 시간 선택 다이얼로그 표시
-     */
     private void showTimePickerDialog() {
         Calendar calendar = Calendar.getInstance();
         int hour = calendar.get(Calendar.HOUR_OF_DAY);
@@ -105,84 +93,69 @@ public class AlarmFragment extends Fragment {
                 true
         );
 
-        // 하드코딩된 문자열을 리소스로 변경
         timePickerDialog.setTitle(getString(R.string.alarm_time_setting));
         timePickerDialog.show();
     }
 
-    /**
-     * 알람 레이블 입력 다이얼로그 표시
-     */
     private void showAlarmLabelDialog(int hourOfDay, int minute) {
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext(), R.style.DialogTheme);
         LayoutInflater inflater = requireActivity().getLayoutInflater();
         View dialogView = inflater.inflate(R.layout.dialog_alarm_label, null);
-
         EditText editAlarmLabel = dialogView.findViewById(R.id.editAlarmLabel);
 
         builder.setView(dialogView)
                 .setTitle(R.string.alarm_label_setting)
                 .setPositiveButton(R.string.alarm_set, (dialog, id) -> {
                     String label = editAlarmLabel.getText().toString().trim();
-
-                    // 레이블이 비어있으면 기본값 설정
                     if (label.isEmpty()) {
                         label = getString(R.string.default_alarm_label);
                     }
-
-                    // 알람 추가
                     addAlarm(hourOfDay, minute, label);
                 })
                 .setNegativeButton(R.string.cancel, (dialog, id) -> dialog.cancel());
 
-        AlertDialog dialog = builder.create();
-        dialog.show();
+        builder.create().show();
     }
 
-    /**
-     * 알람 추가
-     */
     private void addAlarm(int hourOfDay, int minute, String label) {
-        // 알람 ID 생성 (실제로는 DB에서 관리)
         int alarmId = (int) System.currentTimeMillis();
-
-        // 시간 문자열 생성
         String timeString = String.format("%02d:%02d", hourOfDay, minute);
-
-        // 알람 아이템 생성 및 목록에 추가
         AlarmItem alarmItem = new AlarmItem(alarmId, timeString, label, true);
         alarmList.add(alarmItem);
         alarmAdapter.notifyDataSetChanged();
-
-        // 리스트 가시성 업데이트
         updateAlarmListVisibility();
 
         // 실제 알람 설정 (AlarmManager 사용)
         scheduleAlarm(alarmId, hourOfDay, minute, label);
-
-        // 하드코딩된 문자열을 리소스로 변경
-        Toast.makeText(getContext(), getString(R.string.alarm_time_set, timeString), Toast.LENGTH_SHORT).show();
     }
 
     /**
-     * 실제 알람 스케줄링 (AlarmManager 사용)
+     * 실제 알람 스케줄링 (AlarmManager 사용) - 수정된 부분
      */
-    @SuppressLint("ScheduleExactAlarm")
     private void scheduleAlarm(int alarmId, int hourOfDay, int minute, String label) {
         AlarmManager alarmManager = (AlarmManager) requireContext().getSystemService(Context.ALARM_SERVICE);
 
-        // 알람 시간 설정
+        // Android 12 이상에서는 SCHEDULE_EXACT_ALARM 권한 확인
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (!alarmManager.canScheduleExactAlarms()) {
+                // 권한이 없는 경우 사용자에게 설정 화면으로 이동하도록 요청
+                Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                        Uri.parse("package:" + requireContext().getPackageName()));
+                startActivityForResult(intent, REQUEST_SCHEDULE_EXACT_ALARM);
+                Toast.makeText(getContext(), "알람 설정을 위해 권한을 허용해주세요.", Toast.LENGTH_LONG).show();
+                return; // 권한이 없으므로 알람 설정 중단
+            }
+        }
+
         Calendar calendar = Calendar.getInstance();
         calendar.set(Calendar.HOUR_OF_DAY, hourOfDay);
         calendar.set(Calendar.MINUTE, minute);
         calendar.set(Calendar.SECOND, 0);
 
-        // 현재 시간보다 이전이면 다음 날로 설정
         if (calendar.getTimeInMillis() <= System.currentTimeMillis()) {
             calendar.add(Calendar.DAY_OF_MONTH, 1);
         }
 
-        // 인텐트 설정 (실제로는 AlarmReceiver 브로드캐스트 리시버를 생성해야 함)
         Intent intent = new Intent(getContext(), MainActivity.class); // 임시로 MainActivity로 설정
         intent.putExtra("ALARM_ID", alarmId);
         intent.putExtra("ALARM_LABEL", label);
@@ -194,11 +167,30 @@ public class AlarmFragment extends Fragment {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
-        // 알람 설정
+        // 권한이 있는 경우 알람 설정
         if (alarmManager != null) {
             alarmManager.setExact(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), pendingIntent);
+            String timeString = String.format("%02d:%02d", hourOfDay, minute);
+            Toast.makeText(getContext(), getString(R.string.alarm_time_set, timeString), Toast.LENGTH_SHORT).show();
         }
     }
+
+    // 사용자가 권한 설정 후 돌아왔을 때 처리
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_SCHEDULE_EXACT_ALARM) {
+            AlarmManager alarmManager = (AlarmManager) requireContext().getSystemService(Context.ALARM_SERVICE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (alarmManager.canScheduleExactAlarms()) {
+                    Toast.makeText(getContext(), "권한이 허용되었습니다. 다시 알람을 설정해주세요.", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(getContext(), "권한이 거부되었습니다. 알람을 설정할 수 없습니다.", Toast.LENGTH_SHORT).show();
+                }
+            }
+        }
+    }
+
 
     /**
      * 알람 데이터 클래스
@@ -216,32 +208,17 @@ public class AlarmFragment extends Fragment {
             this.isEnabled = isEnabled;
         }
 
-        public int getId() {
-            return id;
-        }
-
-        public String getTime() {
-            return time;
-        }
-
-        public String getLabel() {
-            return label;
-        }
-
-        public boolean isEnabled() {
-            return isEnabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            isEnabled = enabled;
-        }
+        public int getId() { return id; }
+        public String getTime() { return time; }
+        public String getLabel() { return label; }
+        public boolean isEnabled() { return isEnabled; }
+        public void setEnabled(boolean enabled) { isEnabled = enabled; }
     }
 
     /**
      * 알람 어댑터
      */
     private class AlarmAdapter extends RecyclerView.Adapter<AlarmAdapter.AlarmViewHolder> {
-
         private List<AlarmItem> alarms;
 
         public AlarmAdapter(List<AlarmItem> alarms) {
@@ -251,8 +228,7 @@ public class AlarmFragment extends Fragment {
         @NonNull
         @Override
         public AlarmViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View view = LayoutInflater.from(parent.getContext())
-                    .inflate(R.layout.item_alarm, parent, false);
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_alarm, parent, false);
             return new AlarmViewHolder(view);
         }
 
@@ -261,27 +237,17 @@ public class AlarmFragment extends Fragment {
             AlarmItem alarm = alarms.get(position);
             holder.textTime.setText(alarm.getTime());
             holder.textLabel.setText(alarm.getLabel());
-
-            // 알람 활성화/비활성화 상태 설정
             holder.switchAlarm.setChecked(alarm.isEnabled());
 
-            // 알람 스위치 리스너
             holder.switchAlarm.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 alarm.setEnabled(isChecked);
-                // 실제로는 여기서 알람 활성화/비활성화 처리
             });
 
-            // 알람 삭제 버튼 리스너
             holder.buttonDelete.setOnClickListener(v -> {
-                // 알람 삭제
                 alarms.remove(position);
                 notifyItemRemoved(position);
                 notifyItemRangeChanged(position, alarms.size());
-
-                // 리스트 가시성 업데이트
                 updateAlarmListVisibility();
-
-                // 실제로는 여기서 AlarmManager에서 알람 취소 처리
                 Toast.makeText(getContext(), R.string.alarm_deleted, Toast.LENGTH_SHORT).show();
             });
         }
