@@ -17,15 +17,16 @@ android {
 
     defaultConfig {
         applicationId = "com.sjoneon.cap"
-        minSdk = 21 // 네이버 지도 SDK 최소 21 (Android 5.0) 이상 필요
+        minSdk = 21
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // ★★★ 이 부분을 삭제합니다. ★★★
-        // manifestPlaceholders["com.naver.maps.map.CLIENT_ID"] = "l4dae8ewvg"
+        // 빌드 설정에 API 키 추가 (선택사항)
+        buildConfigField("String", "NAVER_CLIENT_ID", "\"zda5po4kty\"")
+        buildConfigField("String", "NAVER_CLIENT_SECRET", "\"1i0v9qeEjUd9y9RdsXx8XFjUeQKk4GlY1aaC46Fj\"")
     }
 
     buildTypes {
@@ -37,6 +38,11 @@ android {
             )
         }
     }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -52,7 +58,7 @@ dependencies {
     // CardView 추가 (날씨 UI에서 사용)
     implementation("androidx.cardview:cardview:1.0.0")
 
-    // RecyclerView 추가 (이미 포함되어 있을 수 있지만 명시적으로 추가)
+    // RecyclerView 추가
     implementation("androidx.recyclerview:recyclerview:1.3.2")
 
     // Gson 라이브러리 (JSON 직렬화/역직렬화용)

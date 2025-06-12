@@ -6,8 +6,8 @@ import android.util.Log;
 import com.naver.maps.map.NaverMapSdk;
 
 /**
- * 네이버 지도 인증 및 설정을 관리하는 헬퍼 클래스 (수정된 버전)
- * Client-Side 지도 표시에 필요한 기능에 집중합니다.
+ * 네이버 지도 인증 및 설정을 관리하는 헬퍼 클래스
+ * 네이버 클라우드 플랫폼 API 사용 버전
  */
 public class NaverMapHelper {
 
@@ -39,21 +39,32 @@ public class NaverMapHelper {
 
     /**
      * 네이버 맵 SDK 초기화
-     * 앱 시작 시 한 번만 호출되어야 합니다.
-     * AndroidManifest.xml에 설정된 클라이언트 ID를 자동으로 읽어 초기화합니다.
+     * 네이버 클라우드 플랫폼 API 방식 사용
      */
     private void initNaverMapSdk() {
         try {
-            // setClient를 직접 호출할 필요 없이,
-            // AndroidManifest에 설정된 값을 SDK가 자동으로 읽습니다.
-            // 따라서 해당 부분을 제거합니다.
+            // 네이버 클라우드 플랫폼 API 키 설정
+            // AndroidManifest.xml에 설정된 CLIENT_ID를 사용하지만
+            // 실제로는 X-NCP-APIGW-API-KEY-ID 값을 넣어야 함
 
             // 인증 실패 리스너 설정
-            NaverMapSdk.getInstance(context).setOnAuthFailedListener(e ->
-                    Log.e(TAG, "Naver Maps Auth Failed: " + e.getMessage(), e)
-            );
+            NaverMapSdk.getInstance(context).setOnAuthFailedListener(e -> {
+                Log.e(TAG, "Naver Maps Auth Failed: " + e.getMessage(), e);
+                // 401 에러의 경우 API 키 문제일 가능성이 높음
+                if (e.getMessage() != null && e.getMessage().contains("401")) {
+                    Log.e(TAG, "API 키가 올바르지 않거나 서비스 환경 설정이 잘못되었습니다.");
+                    Log.e(TAG, "네이버 클라우드 플랫폼에서 다음을 확인하세요:");
+                    Log.e(TAG, "1. Application 이름이 'DaySync'로 되어 있는지");
+                    Log.e(TAG, "2. Android 패키지명이 'com.sjoneon.cap'으로 등록되어 있는지");
+                    Log.e(TAG, "3. Web 서비스 URL도 등록되어 있는지 (개발용으로 *)");
+                }
+            });
 
-            Log.d(TAG, "NaverMapSdk 초기화 완료. (AndroidManifest.xml의 CLIENT_ID 사용)");
+            Log.d(TAG, "NaverMapSdk 초기화 완료");
+            Log.d(TAG, "사용 중인 Client ID: " + context.getPackageManager()
+                    .getApplicationInfo(context.getPackageName(),
+                            android.content.pm.PackageManager.GET_META_DATA)
+                    .metaData.getString("com.naver.maps.map.CLIENT_ID"));
 
         } catch (Exception e) {
             Log.e(TAG, "NaverMapSdk 초기화 중 예외 발생: " + e.getMessage(), e);
