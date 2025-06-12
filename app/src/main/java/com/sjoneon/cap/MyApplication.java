@@ -4,7 +4,7 @@ import android.app.Application;
 import android.util.Log;
 
 /**
- * 애플리케이션 클래스 (수정된 버전)
+ * 애플리케이션 클래스
  * 앱 시작 시 필요한 초기화 작업을 수행합니다.
  */
 public class MyApplication extends Application {
@@ -16,9 +16,8 @@ public class MyApplication extends Application {
         super.onCreate();
         Log.d(TAG, "애플리케이션 초기화 시작");
 
-        // 네이버 맵 SDK 초기화를 위해 NaverMapHelper의 인스턴스를 얻습니다.
-        // getInstance() 메서드 호출 시 내부적으로 초기화가 수행됩니다.
-        NaverMapHelper.getInstance(this);
+        // ★★★ NaverMapHelper.getInstance(this) 호출을 제거합니다. ★★★
+        // SDK가 AndroidManifest.xml을 통해 자동으로 초기화되도록 합니다.
 
         // 기타 서비스 초기화
         initializeServices();

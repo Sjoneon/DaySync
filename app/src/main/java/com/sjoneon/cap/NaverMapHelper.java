@@ -13,10 +13,6 @@ public class NaverMapHelper {
 
     private static final String TAG = "NaverMapHelper";
 
-    // 네이버 클라우드 플랫폼에서 발급받은 Client ID
-    // build.gradle 또는 local.properties 등에서 관리하는 것이 더 안전합니다.
-    private static final String NAVER_MAPS_CLIENT_ID = "l4dae8ewvg";
-
     private static NaverMapHelper instance;
     private final Context context;
 
@@ -44,19 +40,20 @@ public class NaverMapHelper {
     /**
      * 네이버 맵 SDK 초기화
      * 앱 시작 시 한 번만 호출되어야 합니다.
+     * AndroidManifest.xml에 설정된 클라이언트 ID를 자동으로 읽어 초기화합니다.
      */
     private void initNaverMapSdk() {
         try {
-            // 네이버 맵 SDK 클라이언트 ID 설정
-            NaverMapSdk.getInstance(context).setClient(
-                    new NaverMapSdk.NaverCloudPlatformClient(NAVER_MAPS_CLIENT_ID));
+            // setClient를 직접 호출할 필요 없이,
+            // AndroidManifest에 설정된 값을 SDK가 자동으로 읽습니다.
+            // 따라서 해당 부분을 제거합니다.
 
             // 인증 실패 리스너 설정
             NaverMapSdk.getInstance(context).setOnAuthFailedListener(e ->
                     Log.e(TAG, "Naver Maps Auth Failed: " + e.getMessage(), e)
             );
 
-            Log.d(TAG, "NaverMapSdk 초기화 완료. Client ID: " + NAVER_MAPS_CLIENT_ID);
+            Log.d(TAG, "NaverMapSdk 초기화 완료. (AndroidManifest.xml의 CLIENT_ID 사용)");
 
         } catch (Exception e) {
             Log.e(TAG, "NaverMapSdk 초기화 중 예외 발생: " + e.getMessage(), e);

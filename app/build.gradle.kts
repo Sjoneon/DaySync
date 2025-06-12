@@ -1,5 +1,14 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
+}
+
+// local.properties 파일 로드
+val properties = Properties()
+val localPropertiesFile = project.rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    properties.load(localPropertiesFile.inputStream())
 }
 
 android {
@@ -15,8 +24,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // 네이버 맵 API 키 설정 - 올바른 메타데이터 형식으로 수정
-        manifestPlaceholders["com.naver.maps.map.CLIENT_ID"] = "l4dae8ewvg"
+        // ★★★ 이 부분을 삭제합니다. ★★★
+        // manifestPlaceholders["com.naver.maps.map.CLIENT_ID"] = "l4dae8ewvg"
     }
 
     buildTypes {
