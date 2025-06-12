@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 텍스트 스타일 -->
     <style name="CustomTextTitle" parent="TextAppearance.AppCompat.Title">
         <item name="android:textColor">@color/text_primary</item>
         <item name="android:textSize">@dimen/text_size_large</item>
@@ -12,7 +11,6 @@
         <item name="android:textSize">@dimen/text_size_medium</item>
     </style>
 
-    <!-- 캘린더 스타일 -->
     <style name="CalendarTheme" parent="ThemeOverlay.MaterialComponents">
         <item name="colorAccent">@color/white</item>
         <item name="colorControlActivated">@color/background_button</item>
@@ -31,7 +29,6 @@
         <item name="android:textSize">@dimen/text_size_small</item>
     </style>
 
-    <!-- Event 아이템 스타일 -->
     <style name="EventItem">
         <item name="android:background">@color/background_card</item>
         <item name="android:padding">@dimen/padding_large</item>
@@ -39,14 +36,13 @@
         <item name="android:layout_marginBottom">@dimen/margin_small</item>
     </style>
 
-    <!-- 다이얼로그 테마 -->
     <style name="DialogTheme" parent="ThemeOverlay.MaterialComponents.Dialog.Alert">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowIsFloating">true</item>
         <item name="android:windowContentOverlay">@null</item>
         <item name="android:colorBackground">@color/background_dialog</item>
         <item name="android:textColorPrimary">@color/text_primary</item>
-        <item name="colorAccent">@color/white</item>
+        <item name="colorPrimary">@color/text_primary</item>
         <item name="buttonBarPositiveButtonStyle">@style/DialogButtonStyle</item>
         <item name="buttonBarNegativeButtonStyle">@style/DialogButtonStyle</item>
     </style>
@@ -55,7 +51,6 @@
         <item name="android:textColor">@color/text_primary</item>
     </style>
 
-    <!-- 입력 필드 스타일 -->
     <style name="EditTextStyle">
         <item name="android:background">@drawable/rounded_edittext_background</item>
         <item name="android:padding">@dimen/padding_large</item>
@@ -63,7 +58,6 @@
         <item name="android:textColorHint">@color/text_hint</item>
     </style>
 
-    <!-- 버튼 스타일 -->
     <style name="ButtonStyle">
         <item name="android:background">@drawable/rounded_button_background</item>
         <item name="android:textColor">@color/text_primary</item>
@@ -73,7 +67,6 @@
         <item name="android:paddingBottom">@dimen/padding_medium</item>
     </style>
 
-    <!-- 메시지 스타일 -->
     <style name="MessageUser">
         <item name="android:background">@drawable/rounded_button_background</item>
         <item name="android:maxWidth">@dimen/max_width_message</item>
@@ -87,7 +80,6 @@
         <item name="android:padding">@dimen/padding_large</item>
         <item name="android:textColor">@color/text_primary</item>
     </style>
-    <!-- 내비게이션 뷰 스타일 -->
     <style name="NavigationViewStyle">
         <item name="android:textColorSecondary">@color/text_primary</item>
         <item name="android:textColorPrimary">@color/text_primary</item>
@@ -95,7 +87,6 @@
         <item name="android:textStyle">bold</item>
     </style>
 
-    <!-- 내비게이션 메뉴 그룹 헤더 스타일 -->
     <style name="NavigationGroupHeader">
         <item name="android:textColor">@color/text_primary</item>
         <item name="android:textSize">@dimen/text_size_large</item>
@@ -104,15 +95,21 @@
         <item name="android:paddingBottom">@dimen/padding_medium</item>
     </style>
 
-    <!-- 내비게이션 아이콘 색상 -->
     <style name="NavigationIconStyle">
         <item name="android:tint">@color/text_primary</item>
     </style>
 
-    <!-- 툴바 스타일 (햄버거 메뉴 아이콘 색상 포함) -->
     <style name="ToolbarStyle" parent="ThemeOverlay.MaterialComponents.ActionBar">
         <item name="colorControlNormal">@color/text_primary</item>
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>
+    </style>
+
+    <style name="CustomTimePicker" parent="@android:style/Theme.Holo.Light.Dialog.NoActionBar">
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:colorControlNormal" >@color/text_secondary</item>
     </style>
 </resources>

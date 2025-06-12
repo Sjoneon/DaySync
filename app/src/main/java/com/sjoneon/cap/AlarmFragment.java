@@ -1,5 +1,6 @@
 package com.sjoneon.cap;
 
+import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.app.AlertDialog;
 import android.app.PendingIntent;
@@ -166,6 +167,7 @@ public class AlarmFragment extends Fragment {
     /**
      * 실제 알람 스케줄링 (AlarmManager 사용)
      */
+    @SuppressLint("ScheduleExactAlarm")
     private void scheduleAlarm(int alarmId, int hourOfDay, int minute, String label) {
         AlarmManager alarmManager = (AlarmManager) requireContext().getSystemService(Context.ALARM_SERVICE);
 
