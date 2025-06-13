@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_black"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/padding_xlarge">
+
+        <!-- 경로 검색 입력 섹션 -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/margin_xlarge"
+            app:cardBackgroundColor="@color/background_card"
+            app:cardCornerRadius="@dimen/corner_radius"
+            app:cardElevation="4dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/padding_xlarge">
+
+                <!-- 경로 검색 & 지도 보기 버튼 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/margin_xlarge"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="경로 검색"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/text_size_xlarge"
+                        android:textStyle="bold" />
+
+                    <Button
+                        android:id="@+id/buttonMapView"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@color/background_input"
+                        android:paddingStart="@dimen/padding_large"
+                        android:paddingEnd="@dimen/padding_large"
+                        android:text="지도 보기"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/text_size_small" />
+
+                </LinearLayout>
+
+                <!-- 출발지 입력 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/margin_medium"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="@dimen/button_icon_size"
+                        android:layout_height="@dimen/button_icon_size"
+                        android:layout_gravity="center_vertical"
+                        android:layout_marginEnd="@dimen/margin_medium"
+                        android:src="@android:drawable/ic_menu_mylocation"
+                        app:tint="@color/text_primary" />
+
+                    <EditText
+                        android:id="@+id/editStartLocation"
+                        style="@style/EditTextStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/start_location_hint"
+                        android:inputType="text"
+                        android:singleLine="true" />
+
+                </LinearLayout>
+
+                <!-- 도착지 입력 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/margin_xlarge"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="@dimen/button_icon_size"
+                        android:layout_height="@dimen/button_icon_size"
+                        android:layout_gravity="center_vertical"
+                        android:layout_marginEnd="@dimen/margin_medium"
+                        android:src="@android:drawable/ic_menu_directions"
+                        app:tint="@color/text_primary" />
+
+                    <EditText
+                        android:id="@+id/editEndLocation"
+                        style="@style/EditTextStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="@string/destination_hint"
+                        android:inputType="text"
+                        android:singleLine="true" />
+
+                </LinearLayout>
+
+                <!-- 경로 검색 버튼 -->
+                <Button
+                    android:id="@+id/buttonSearchRoute"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/rounded_button_background"
+                    android:padding="@dimen/padding_large"
+                    android:text="@string/search_route"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/text_size_large"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- 현재 위치 & 새로고침 버튼 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/margin_medium"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="추천 경로"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_size_large"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="새로고침"
+                android:textColor="@color/text_tertiary"
+                android:textSize="@dimen/text_size_medium"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:padding="@dimen/padding_small" />
+
+        </LinearLayout>
+
+        <!-- 경로 검색 결과가 없을 때 메시지 -->
+        <TextView
+            android:id="@+id/textNoRoutes"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="@dimen/margin_xlarge"
+            android:text="@string/no_routes"
+            android:textColor="@color/text_secondary"
+            android:textSize="@dimen/text_size_large"
+            android:visibility="visible" />
+
+        <!-- 경로 검색 결과 리스트 -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerViewRoutes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipToPadding="false"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+</ScrollView>
