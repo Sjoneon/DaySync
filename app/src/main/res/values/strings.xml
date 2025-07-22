@@ -104,4 +104,26 @@
     <!-- 네비게이션 헤더 -->
     <string name="profile_image_desc">프로필 이미지</string>
     <string name="app_slogan">DaySync와 함께하는 일상</string>
+
+    <!-- 경로 검색 관련 문자열 -->
+    <string name="menu_route_info">추천 경로 정보</string>
+    <string name="route_search_title">경로 검색</string>
+    <string name="map_view_button">지도 보기</string>
+    <string name="current_location_refresh">새로고침</string>
+    <string name="recommended_routes">추천 경로</string>
+
+    <!-- 지도 관련 문자열 -->
+    <string name="map_title">지도</string>
+    <string name="current_location_button">현재 위치</string>
+    <string name="location_tracking_enabled">위치 추적이 시작되었습니다</string>
+    <string name="location_tracking_disabled">위치 추적이 중지되었습니다</string>
+
+    <!-- 경로 마커 관련 -->
+    <string name="departure_marker">출발: %s</string>
+    <string name="arrival_marker">도착: %s</string>
+
+    <!-- 오류 메시지 -->
+    <string name="location_service_error">위치 서비스 오류가 발생했습니다</string>
+    <string name="route_search_error">경로 검색 중 오류가 발생했습니다</string>
+    <string name="map_loading_error">지도 로딩 중 오류가 발생했습니다</string>
 </resources>

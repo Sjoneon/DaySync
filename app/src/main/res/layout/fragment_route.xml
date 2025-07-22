@@ -38,7 +38,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="경로 검색"
+                        android:text="@string/route_search_title"
                         android:textColor="@color/text_primary"
                         android:textSize="@dimen/text_size_xlarge"
                         android:textStyle="bold" />
@@ -50,7 +50,7 @@
                         android:background="@color/background_input"
                         android:paddingStart="@dimen/padding_large"
                         android:paddingEnd="@dimen/padding_large"
-                        android:text="지도 보기"
+                        android:text="@string/map_view_button"
                         android:textColor="@color/text_primary"
                         android:textSize="@dimen/text_size_small" />
 
@@ -135,15 +135,16 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="추천 경로"
+                android:text="@string/recommended_routes"
                 android:textColor="@color/text_primary"
                 android:textSize="@dimen/text_size_large"
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/textRefresh"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="새로고침"
+                android:text="@string/current_location_refresh"
                 android:textColor="@color/text_tertiary"
                 android:textSize="@dimen/text_size_medium"
                 android:background="?attr/selectableItemBackground"

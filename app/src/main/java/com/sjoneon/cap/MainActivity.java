@@ -257,6 +257,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
     }
 
+    // MainActivity.java의 onNavigationItemSelected 메서드 수정
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
         // 네비게이션 메뉴 아이템 선택 처리
@@ -275,9 +276,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             showFragment(new AlarmFragment());
             toolbar.setTitle(R.string.menu_alarm);
         } else if (id == R.id.nav_route_info) {
-            // 지도 화면으로 전환 (수정된 부분)
-            showFragment(new MapFragment());
-            toolbar.setTitle("지도");
+            // 경로 검색 화면으로 전환 (수정된 부분)
+            showFragment(new RouteFragment());
+            toolbar.setTitle("추천 경로 정보");
         } else if (id == R.id.nav_weather) {
             // 날씨 정보 화면으로 전환
             showFragment(new WeatherFragment());
@@ -299,6 +300,37 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         // 네비게이션 드로어 닫기
         drawerLayout.closeDrawer(GravityCompat.START);
         return true;
+    }
+
+    /**
+     * 뒤로 가기 버튼 처리 (수정된 부분)
+     */
+    @Override
+    public void onBackPressed() {
+        // 뒤로 가기 버튼이 눌렸을 때 네비게이션 드로어가 열려있으면 닫기
+        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawer(GravityCompat.START);
+        } else {
+            // 현재 프래그먼트가 있으면 채팅 화면으로 돌아가기
+            Fragment currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+            if (currentFragment != null) {
+                // 백스택에 있는 Fragment가 있으면 이전으로 돌아가기
+                if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
+                    getSupportFragmentManager().popBackStack();
+
+                    // 백스택이 비어있으면 채팅 화면으로
+                    if (getSupportFragmentManager().getBackStackEntryCount() == 0) {
+                        showChatInterface();
+                        toolbar.setTitle(R.string.app_name);
+                    }
+                } else {
+                    showChatInterface();
+                    toolbar.setTitle(R.string.app_name);
+                }
+            } else {
+                super.onBackPressed();
+            }
+        }
     }
 
     /**
@@ -327,23 +359,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             getSupportFragmentManager().beginTransaction()
                     .remove(currentFragment)
                     .commit();
-        }
-    }
-
-    @Override
-    public void onBackPressed() {
-        // 뒤로 가기 버튼이 눌렸을 때 네비게이션 드로어가 열려있으면 닫기
-        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            drawerLayout.closeDrawer(GravityCompat.START);
-        } else {
-            // 현재 프래그먼트가 있으면 채팅 화면으로 돌아가기
-            Fragment currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
-            if (currentFragment != null) {
-                showChatInterface();
-                toolbar.setTitle(R.string.app_name);
-            } else {
-                super.onBackPressed();
-            }
         }
     }
 

@@ -213,7 +213,7 @@ public class RouteFragment extends Fragment {
     private void generateDummyRoutes(String start, String end) {
         routeList.clear();
 
-        // 더미 경로 데이터 생성
+        // 더미 경로 데이터 생성 (이미지의 경로 검색 결과와 유사하게)
         routeList.add(new RouteInfo(
                 "버스 + 지하철",
                 "총 이동 시간: 45분",
@@ -266,13 +266,27 @@ public class RouteFragment extends Fragment {
      * 지도 화면을 여는 메서드
      */
     private void openMapView() {
-        // MapFragment로 전환
+        // MainActivity의 네비게이션 메뉴를 통해 지도로 이동
         if (getActivity() instanceof MainActivity) {
             MainActivity mainActivity = (MainActivity) getActivity();
-            mainActivity.showMapWithRoute(
-                    editStartLocation.getText().toString(),
-                    editEndLocation.getText().toString()
-            );
+
+            // 지도 Fragment로 전환하면서 경로 정보 전달
+            Fragment mapFragment = new MapFragment();
+            Bundle args = new Bundle();
+            args.putString("start_location", editStartLocation.getText().toString());
+            args.putString("end_location", editEndLocation.getText().toString());
+            mapFragment.setArguments(args);
+
+            // Fragment 교체
+            getActivity().getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.fragment_container, mapFragment)
+                    .addToBackStack(null)
+                    .commit();
+
+            // 툴바 제목 변경
+            if (mainActivity.getSupportActionBar() != null) {
+                mainActivity.getSupportActionBar().setTitle("지도");
+            }
         }
     }
 
@@ -350,7 +364,7 @@ public class RouteFragment extends Fragment {
             holder.textRouteSummary.setText(route.getRouteSummary());
             holder.textDepartureTime.setText(route.getDepartureTime());
 
-            // 추천 경로 표시
+            // 추천 경로 표시 (녹색으로 강조)
             if (route.isRecommended()) {
                 holder.textRouteType.setTextColor(getResources().getColor(R.color.notification_unread));
             } else {
