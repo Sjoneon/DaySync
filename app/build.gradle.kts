@@ -23,6 +23,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "KMA_API_KEY", "\"${properties.getProperty("KMA_API_KEY")}\"")
     }
 
     buildTypes {
@@ -38,7 +39,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    // buildFeatures 추가
+    // buildFeatures는 BuildConfig를 사용하기 위해 필요합니다.
     buildFeatures {
         buildConfig = true
     }
@@ -55,6 +56,12 @@ dependencies {
 
     // Google Play 서비스 위치 라이브러리 (현위치 기능)
     implementation("com.google.android.gms:play-services-location:21.3.0")
+
+    // Retrofit (네트워크 통신 라이브러리)
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+
+    // Gson Converter (JSON <-> 객체 변환)
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
