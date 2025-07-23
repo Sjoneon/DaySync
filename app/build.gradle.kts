@@ -63,6 +63,10 @@ dependencies {
     // Gson Converter (JSON <-> 객체 변환)
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
 
+    // Scalars Converter (응답을 String 등 기본 타입으로 받기 위함)
+    implementation("com.squareup.retrofit2:converter-scalars:2.9.0")
+
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)

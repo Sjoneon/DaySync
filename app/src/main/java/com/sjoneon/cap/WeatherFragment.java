@@ -25,12 +25,14 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Collections; // [오류 수정] Collections 클래스 import
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -39,12 +41,12 @@ import java.util.stream.Collectors;
 
 import retrofit2.Call;
 import retrofit2.Callback;
-import retrofit2.Response; // [오류 수정] Response 클래스 import
+import retrofit2.Response;
 import retrofit2.Retrofit;
-import retrofit2.converter.gson.GsonConverterFactory;
+import retrofit2.converter.scalars.ScalarsConverterFactory;
 
 /**
- * 날씨 정보를 표시하는 프래그먼트 (기상청 API 연동 버전)
+ * 날씨 정보를 표시하는 프래그먼트 (기상청 API 연동 최종 수정 버전)
  */
 public class WeatherFragment extends Fragment {
 
@@ -68,11 +70,9 @@ public class WeatherFragment extends Fragment {
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_weather, container, false);
-
         initializeViews(view);
         initializeServices();
         setupForecastRecyclerView();
-
         return view;
     }
 
@@ -82,6 +82,9 @@ public class WeatherFragment extends Fragment {
         checkPermissionAndLoadWeather();
     }
 
+    /**
+     * 뷰 요소들을 초기화하는 메서드
+     */
     private void initializeViews(View view) {
         textCurrentLocation = view.findViewById(R.id.textCurrentLocation);
         textCurrentTemp = view.findViewById(R.id.textCurrentTemp);
@@ -93,23 +96,33 @@ public class WeatherFragment extends Fragment {
         recyclerViewForecast = view.findViewById(R.id.recyclerViewForecast);
     }
 
+    /**
+     * 서비스(API, 위치, 지오코더)를 초기화하는 메서드
+     */
     private void initializeServices() {
+        // [수정] Retrofit이 응답을 String으로 받도록 ScalarsConverterFactory를 사용
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(WEATHER_API_BASE_URL)
-                .addConverterFactory(GsonConverterFactory.create())
+                .addConverterFactory(ScalarsConverterFactory.create())
                 .build();
-        weatherApiService = retrofit.create(WeatherApiService.class);
 
+        weatherApiService = retrofit.create(WeatherApiService.class);
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
         geocoder = new Geocoder(getContext(), Locale.KOREAN);
     }
 
+    /**
+     * 시간별 예보 리사이클러뷰를 설정하는 메서드
+     */
     private void setupForecastRecyclerView() {
         recyclerViewForecast.setLayoutManager(new LinearLayoutManager(getContext(), LinearLayoutManager.HORIZONTAL, false));
         forecastAdapter = new WeatherForecastAdapter(forecastList);
         recyclerViewForecast.setAdapter(forecastAdapter);
     }
 
+    /**
+     * 위치 권한을 확인하고 날씨 정보를 로드하는 메서드
+     */
     private void checkPermissionAndLoadWeather() {
         if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST_CODE);
@@ -118,6 +131,9 @@ public class WeatherFragment extends Fragment {
         }
     }
 
+    /**
+     * 현재 위치를 가져와서 날씨 정보를 요청하는 메서드
+     */
     private void getCurrentLocationAndFetchWeather() {
         if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             return;
@@ -136,6 +152,9 @@ public class WeatherFragment extends Fragment {
         });
     }
 
+    /**
+     * 위경도를 주소 텍스트로 변환하여 UI에 표시하는 메서드
+     */
     private void updateLocationText(Location location) {
         try {
             List<Address> addresses = geocoder.getFromLocation(location.getLatitude(), location.getLongitude(), 1);
@@ -154,33 +173,56 @@ public class WeatherFragment extends Fragment {
         }
     }
 
+    /**
+     * 기상청 API를 호출하여 날씨 정보를 가져오는 메서드
+     */
     private void fetchWeatherData(int nx, int ny) {
         String apiKey = BuildConfig.KMA_API_KEY;
         String baseDate = new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Calendar.getInstance().getTime());
         String baseTime = getBaseTime();
 
         weatherApiService.getVillageForecast(apiKey, 200, 1, "JSON", baseDate, baseTime, nx, ny)
-                .enqueue(new Callback<WeatherResponse>() {
+                .enqueue(new Callback<String>() { // 응답을 String으로 받음
                     @Override
-                    public void onResponse(@NonNull Call<WeatherResponse> call, @NonNull Response<WeatherResponse> response) {
+                    public void onResponse(@NonNull Call<String> call, @NonNull Response<String> response) {
                         if (response.isSuccessful() && response.body() != null) {
-                            parseAndDisplayWeather(response.body());
+                            String responseBody = response.body();
+                            try {
+                                // 응답에서 JSON 시작 부분 찾기
+                                int jsonStartIndex = responseBody.indexOf("{");
+                                if (jsonStartIndex != -1) {
+                                    String jsonResponse = responseBody.substring(jsonStartIndex);
+                                    Gson gson = new GsonBuilder().create();
+                                    WeatherResponse weatherResponse = gson.fromJson(jsonResponse, WeatherResponse.class);
+                                    parseAndDisplayWeather(weatherResponse);
+                                } else {
+                                    Toast.makeText(getContext(), "응답에서 JSON 데이터를 찾을 수 없습니다.", Toast.LENGTH_SHORT).show();
+                                    Log.e(TAG, "Invalid Response: " + responseBody);
+                                }
+                            } catch (Exception e) {
+                                Toast.makeText(getContext(), "데이터 파싱 중 오류가 발생했습니다.", Toast.LENGTH_SHORT).show();
+                                Log.e(TAG, "JSON Parsing Error", e);
+                            }
                         } else {
                             Toast.makeText(getContext(), "날씨 정보를 가져오는 데 실패했습니다 (서버 응답 오류).", Toast.LENGTH_SHORT).show();
                         }
                     }
 
                     @Override
-                    public void onFailure(@NonNull Call<WeatherResponse> call, @NonNull Throwable t) {
+                    public void onFailure(@NonNull Call<String> call, @NonNull Throwable t) {
                         Toast.makeText(getContext(), "네트워크 오류: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                         Log.e(TAG, "네트워크 실패", t);
                     }
                 });
     }
 
+    /**
+     * API 응답 데이터를 파싱하여 UI에 표시하는 메서드
+     */
     private void parseAndDisplayWeather(WeatherResponse weatherResponse) {
-        if (!"00".equals(weatherResponse.response.header.resultCode)) {
-            Toast.makeText(getContext(), "기상청 오류: " + weatherResponse.response.header.resultMsg, Toast.LENGTH_SHORT).show();
+        if (weatherResponse == null || !"00".equals(weatherResponse.response.header.resultCode)) {
+            String errorMsg = weatherResponse != null ? weatherResponse.response.header.resultMsg : "응답 없음";
+            Toast.makeText(getContext(), "기상청 오류: " + errorMsg, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -213,39 +255,41 @@ public class WeatherFragment extends Fragment {
         forecastAdapter.notifyDataSetChanged();
     }
 
+    /**
+     * 현재 날씨 정보를 UI에 표시하는 메서드
+     */
     private void displayCurrentWeather(Map<String, String> data) {
-        String temp = data.getOrDefault("TMP", "N/A");
-        textCurrentTemp.setText(temp + "°");
+        textCurrentTemp.setText(data.getOrDefault("TMP", "N/A") + "°");
         textHumidity.setText("습도 " + data.getOrDefault("REH", "N/A") + "%");
         textWindSpeed.setText("바람 " + data.getOrDefault("WSD", "N/A") + "m/s");
-        String sky = data.getOrDefault("SKY", "0");
-        String pty = data.getOrDefault("PTY", "0");
-        updateWeatherCondition(pty, sky);
+        updateWeatherCondition(data.getOrDefault("PTY", "0"), data.getOrDefault("SKY", "0"));
     }
 
+    /**
+     * 날씨 상태 코드에 따라 아이콘과 텍스트를 설정하는 메서드
+     */
     private void updateWeatherCondition(String pty, String sky) {
         int ptyCode = Integer.parseInt(pty);
         int skyCode = Integer.parseInt(sky);
 
-        if (ptyCode == 0) {
+        if (ptyCode == 0) { // 강수 없음
             switch (skyCode) {
                 case 1:
                     textCurrentCondition.setText("맑음");
-                    // [오류 수정] 임시로 안드로이드 기본 아이콘 사용 (나중에 실제 아이콘으로 교체 필요)
                     imageWeatherIcon.setImageResource(android.R.drawable.ic_menu_day);
                     break;
                 case 3:
                     textCurrentCondition.setText("구름많음");
-                    imageWeatherIcon.setImageResource(android.R.drawable.ic_menu_day);
+                    imageWeatherIcon.setImageResource(android.R.drawable.ic_menu_gallery);
                     break;
                 case 4:
                     textCurrentCondition.setText("흐림");
-                    imageWeatherIcon.setImageResource(android.R.drawable.ic_menu_day);
+                    imageWeatherIcon.setImageResource(android.R.drawable.ic_menu_close_clear_cancel);
                     break;
                 default:
                     textCurrentCondition.setText("정보 없음");
             }
-        } else {
+        } else { // 강수 있음
             switch (ptyCode) {
                 case 1: textCurrentCondition.setText("비"); break;
                 case 2: textCurrentCondition.setText("비/눈"); break;
@@ -254,10 +298,13 @@ public class WeatherFragment extends Fragment {
                 case 6: textCurrentCondition.setText("빗방울/눈날림"); break;
                 case 7: textCurrentCondition.setText("눈날림"); break;
             }
-            imageWeatherIcon.setImageResource(android.R.drawable.ic_menu_day);
+            imageWeatherIcon.setImageResource(android.R.drawable.ic_dialog_info);
         }
     }
 
+    /**
+     * API 명세에 맞는 발표 시각을 계산하는 메서드
+     */
     private String getBaseTime() {
         Calendar cal = Calendar.getInstance();
         int hour = cal.get(Calendar.HOUR_OF_DAY);
@@ -277,6 +324,9 @@ public class WeatherFragment extends Fragment {
         return "2300";
     }
 
+    /**
+     * 위경도를 기상청 격자 좌표로 변환하는 메서드
+     */
     private LatXLngY convertToGrid(double lat, double lng) {
         double RE = 6371.00877;
         double GRID = 5.0;
@@ -371,16 +421,15 @@ public class WeatherFragment extends Fragment {
             switch (skyCode) {
                 case 1:
                     holder.textCondition.setText("맑음");
-                    // [오류 수정] 임시로 안드로이드 기본 아이콘 사용 (나중에 실제 아이콘으로 교체 필요)
                     holder.imageIcon.setImageResource(android.R.drawable.ic_menu_day);
                     break;
                 case 3:
                     holder.textCondition.setText("구름많음");
-                    holder.imageIcon.setImageResource(android.R.drawable.ic_menu_day);
+                    holder.imageIcon.setImageResource(android.R.drawable.ic_menu_gallery);
                     break;
                 case 4:
                     holder.textCondition.setText("흐림");
-                    holder.imageIcon.setImageResource(android.R.drawable.ic_menu_day);
+                    holder.imageIcon.setImageResource(android.R.drawable.ic_menu_close_clear_cancel);
                     break;
                 default:
                     holder.textCondition.setText("-");

@@ -8,7 +8,7 @@ import retrofit2.http.Query;
 
 public interface WeatherApiService {
     @GET("getVilageFcst") // 단기예보 조회 오퍼레이션
-    Call<WeatherResponse> getVillageForecast(
+    Call<String> getVillageForecast(
             @Query("serviceKey") String serviceKey, // 인증키
             @Query("numOfRows") int numOfRows,       // 한 페이지 결과 수
             @Query("pageNo") int pageNo,             // 페이지 번호
