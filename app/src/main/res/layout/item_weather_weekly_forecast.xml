@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginTop="@dimen/margin_medium"
+    android:layout_marginStart="@dimen/margin_medium"
+    android:layout_marginEnd="@dimen/margin_medium"
+    android:layout_marginTop="@dimen/margin_small"
     android:layout_marginBottom="@dimen/margin_small"
     app:cardBackgroundColor="@color/background_card"
     app:cardCornerRadius="@dimen/corner_radius"
@@ -12,121 +15,127 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="@dimen/padding_large">
+        android:padding="@dimen/padding_large"
+        android:gravity="center_vertical">
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1.2"
-            android:gravity="center_horizontal"
+            android:layout_weight="0.8"
             android:orientation="vertical">
 
             <TextView
                 android:id="@+id/textWeeklyDay"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="월요일"
+                tools:text="화요일"
                 android:textColor="@color/text_primary"
                 android:textSize="@dimen/text_size_large"
-                android:textStyle="bold" />
+                android:textStyle="bold"/>
 
             <TextView
                 android:id="@+id/textWeeklyDate"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="7/29"
+                tools:text="7/29"
                 android:textColor="@color/text_secondary"
-                android:textSize="@dimen/text_size_medium" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1.5"
-            android:gravity="center"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="오전"
-                android:textColor="@color/text_tertiary"
                 android:textSize="@dimen/text_size_small"/>
-
-            <ImageView
-                android:id="@+id/imageAmIcon"
-                android:layout_width="@dimen/icon_size_medium"
-                android:layout_height="@dimen/icon_size_medium"
-                android:src="@android:drawable/ic_menu_day"
-                app:tint="@color/text_primary" />
-
-            <TextView
-                android:id="@+id/textAmCondition"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="맑음"
-                android:textColor="@color/text_secondary" />
-
-            <TextView
-                android:id="@+id/textAmPrecip"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="강수: 0%"
-                android:textColor="@color/text_tertiary" />
         </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1.5"
-            android:gravity="center"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="오후"
-                android:textColor="@color/text_tertiary"
-                android:textSize="@dimen/text_size_small"/>
-
-            <ImageView
-                android:id="@+id/imagePmIcon"
-                android:layout_width="@dimen/icon_size_medium"
-                android:layout_height="@dimen/icon_size_medium"
-                android:src="@android:drawable/ic_menu_day"
-                app:tint="@color/text_primary" />
-
-            <TextView
-                android:id="@+id/textPmCondition"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="구름많음"
-                android:textColor="@color/text_secondary" />
-
-            <TextView
-                android:id="@+id/textPmPrecip"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="강수: 20%"
-                android:textColor="@color/text_tertiary" />
-        </LinearLayout>
-
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="오전"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_size_small" />
+
+            <ImageView
+                android:id="@+id/imageAmIcon"
+                android:layout_width="@dimen/icon_size_medium"
+                android:layout_height="@dimen/icon_size_medium"
+                android:layout_marginTop="@dimen/margin_small"
+                tools:src="@android:drawable/ic_menu_day"
+                app:tint="@color/white"/>
+
+            <TextView
+                android:id="@+id/textAmCondition"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/margin_small"
+                tools:text="맑음"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_size_small" />
+
+            <TextView
+                android:id="@+id/textAmRainChance"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                tools:text="강수: 0%"
+                android:textColor="@color/text_tertiary"
+                android:textSize="@dimen/text_size_small" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="오후"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_size_small" />
+
+            <ImageView
+                android:id="@+id/imagePmIcon"
+                android:layout_width="@dimen/icon_size_medium"
+                android:layout_height="@dimen/icon_size_medium"
+                android:layout_marginTop="@dimen/margin_small"
+                tools:src="@android:drawable/ic_menu_day"
+                app:tint="@color/white" />
+
+            <TextView
+                android:id="@+id/textPmCondition"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/margin_small"
+                tools:text="구름많음"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_size_small" />
+
+            <TextView
+                android:id="@+id/textPmRainChance"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                tools:text="강수: 20%"
+                android:textColor="@color/text_tertiary"
+                android:textSize="@dimen/text_size_small" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="end"
+            android:layout_marginStart="@dimen/margin_large">
 
             <TextView
                 android:id="@+id/textWeeklyHigh"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="32°"
-                android:textColor="@color/temp_max_red"
+                tools:text="35°"
+                android:textColor="#E57373"
                 android:textSize="@dimen/text_size_large"
                 android:textStyle="bold" />
 
@@ -134,10 +143,10 @@
                 android:id="@+id/textWeeklyLow"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="24°"
-                android:textColor="@color/temp_min_blue"
+                android:layout_marginTop="@dimen/margin_small"
+                tools:text="25°"
+                android:textColor="#81D4FA"
                 android:textSize="@dimen/text_size_large" />
         </LinearLayout>
-
     </LinearLayout>
 </androidx.cardview.widget.CardView>

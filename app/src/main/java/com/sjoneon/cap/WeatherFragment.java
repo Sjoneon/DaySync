@@ -16,11 +16,9 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -30,14 +28,13 @@ import com.google.android.gms.location.LocationServices;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
 
 import java.io.IOException;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -51,10 +48,7 @@ import retrofit2.Retrofit;
 import retrofit2.converter.scalars.ScalarsConverterFactory;
 
 /**
- * 날씨 정보를 표시하는 프래그먼트 (단기/중기 예보 조합 로직 최종 수정)
- *
- * @author DaySync
- * @version 2.5
+ * 날씨 정보를 표시하는 프래그먼트 (주간예보 1-7일 통합 버전)
  */
 public class WeatherFragment extends Fragment {
 
@@ -74,18 +68,18 @@ public class WeatherFragment extends Fragment {
     private Geocoder geocoder;
     private HourlyForecastAdapter hourlyAdapter;
     private WeeklyForecastAdapter weeklyAdapter;
-    private final List<HourlyForecastItem> hourlyForecastList = new ArrayList<>();
-    private final List<WeeklyForecastItem> weeklyForecastList = new ArrayList<>();
+    private List<WeatherForecastItem> hourlyForecastList = new ArrayList<>();
+    private List<WeeklyForecastItem> weeklyForecastList = new ArrayList<>();
     private Gson lenientGson;
 
     // 위치 정보
     private int currentNx, currentNy;
     private String midTermTempCode, midTermLandCode;
 
-    // API 응답 데이터 저장 변수
+    // API 응답 데이터 임시 저장 변수
+    private JsonObject shortTermData = null;
     private JsonObject weeklyTempData = null;
     private JsonObject weeklyLandData = null;
-    private boolean midTermForecastAppended = false;
 
 
     @Nullable
@@ -108,7 +102,7 @@ public class WeatherFragment extends Fragment {
         textCurrentLocation = view.findViewById(R.id.textCurrentLocation);
         textCurrentTemp = view.findViewById(R.id.textCurrentTemp);
         textCurrentCondition = view.findViewById(R.id.textCurrentCondition);
-        textPrecipitation = view.findViewById(R.id.textFeelsLike);
+        textPrecipitation = view.findViewById(R.id.textFeelsLike); // ID는 그대로 사용
         textHumidity = view.findViewById(R.id.textHumidity);
         textWindSpeed = view.findViewById(R.id.textWindSpeed);
         imageWeatherIcon = view.findViewById(R.id.imageWeatherIcon);
@@ -134,7 +128,6 @@ public class WeatherFragment extends Fragment {
         recyclerViewHourlyForecast.setAdapter(hourlyAdapter);
 
         recyclerViewWeeklyForecast.setLayoutManager(new LinearLayoutManager(getContext()));
-        recyclerViewWeeklyForecast.setNestedScrollingEnabled(false);
         weeklyAdapter = new WeeklyForecastAdapter(weeklyForecastList);
         recyclerViewWeeklyForecast.setAdapter(weeklyAdapter);
     }
@@ -178,7 +171,8 @@ public class WeatherFragment extends Fragment {
                 String adminArea = address.getAdminArea() != null ? address.getAdminArea() : "";
                 String locality = address.getLocality() != null ? address.getLocality() : "";
                 textCurrentLocation.setText(String.format("%s %s", adminArea, locality).trim());
-                setMidTermCodes(adminArea, locality);
+                midTermTempCode = getMidTermTempCode(adminArea);
+                midTermLandCode = getMidTermLandCode(adminArea);
             }
         } catch (IOException e) {
             Log.e(TAG, "지오코딩 실패", e);
@@ -186,44 +180,44 @@ public class WeatherFragment extends Fragment {
         }
     }
 
-    private void setMidTermCodes(String adminArea, String locality) {
-        midTermLandCode = getMidTermLandCode(adminArea);
-        midTermTempCode = getMidTermTempCode(locality);
-    }
-
     private void setFallbackLocation() {
         currentNx = 69;
         currentNy = 107;
-        midTermLandCode = "11C10000"; // 충청북도 (육상)
-        midTermTempCode = "11C10301";  // 청주 (기온)
+        midTermTempCode = "11C10000";
+        midTermLandCode = "11C10101";
         textCurrentLocation.setText("충청북도 청주시");
     }
 
     private void fetchWeatherData() {
         String apiKey = BuildConfig.KMA_API_KEY;
-        // 데이터 로드 시작 시 상태 초기화
+        String currentDate = new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Calendar.getInstance().getTime());
+
+        // 데이터 리셋
+        shortTermData = null;
         weeklyTempData = null;
         weeklyLandData = null;
-        midTermForecastAppended = false;
-        weeklyForecastList.clear();
+        weeklyForecastList.clear(); // 목록 초기화
 
-        fetchVillageForecast(apiKey, 0);
+        fetchVillageForecast(apiKey, currentDate, 0);
         fetchMidTermTemp(apiKey, 0);
         fetchMidLandForecast(apiKey, 0);
     }
 
     // --- API Fetching Methods ---
 
-    private void fetchVillageForecast(String apiKey, int retryCount) {
-        Map<String, String> baseDateTime = getBaseTimeFor("village");
-        weatherApiService.getVillageForecast(apiKey, 1000, 1, "JSON", baseDateTime.get("date"), baseDateTime.get("time"), currentNx, currentNy)
+    private void fetchVillageForecast(String apiKey, String baseDate, int retryCount) {
+        String baseTime = getBaseTimeFor("village");
+        // 단기예보는 더 많은 데이터(1~3일치)를 가져오기 위해 numOfRows 증가
+        weatherApiService.getVillageForecast(apiKey, 1000, 1, "JSON", baseDate, baseTime, currentNx, currentNy)
                 .enqueue(new Callback<String>() {
                     @Override
                     public void onResponse(@NonNull Call<String> call, @NonNull Response<String> response) {
                         if (response.isSuccessful() && response.body() != null) {
-                            parseAndDisplayShortTermWeather(response.body());
+                            shortTermData = lenientGson.fromJson(response.body(), JsonObject.class);
+                            parseAndDisplayShortTermWeather();
+                            combineAndDisplayWeeklyForecast(); // 데이터 도착 후 주간예보 조합 시도
                         } else if (retryCount < MAX_RETRY_COUNT) {
-                            fetchVillageForecast(apiKey, retryCount + 1);
+                            fetchVillageForecast(apiKey, baseDate, retryCount + 1);
                         } else {
                             handleApiError("단기예보", response);
                         }
@@ -231,7 +225,7 @@ public class WeatherFragment extends Fragment {
                     @Override
                     public void onFailure(@NonNull Call<String> call, @NonNull Throwable t) {
                         if (retryCount < MAX_RETRY_COUNT) {
-                            fetchVillageForecast(apiKey, retryCount + 1);
+                            fetchVillageForecast(apiKey, baseDate, retryCount + 1);
                         } else {
                             handleApiFailure("단기예보", t);
                         }
@@ -241,14 +235,15 @@ public class WeatherFragment extends Fragment {
 
     private void fetchMidTermTemp(String apiKey, int retryCount) {
         if (midTermTempCode == null) return;
-        String baseTime = getBaseTimeFor("midterm").get("time");
+        String baseTime = getBaseTimeFor("midterm");
+
         weatherApiService.getMidTermTemperature(apiKey, midTermTempCode, baseTime, "JSON")
                 .enqueue(new Callback<String>() {
                     @Override
                     public void onResponse(@NonNull Call<String> call, @NonNull Response<String> response) {
                         if (response.isSuccessful() && response.body() != null) {
                             weeklyTempData = lenientGson.fromJson(response.body(), JsonObject.class);
-                            appendMidTermForecast();
+                            combineAndDisplayWeeklyForecast(); // 데이터 도착 후 주간예보 조합 시도
                         } else if (retryCount < MAX_RETRY_COUNT) {
                             fetchMidTermTemp(apiKey, retryCount + 1);
                         } else {
@@ -268,14 +263,15 @@ public class WeatherFragment extends Fragment {
 
     private void fetchMidLandForecast(String apiKey, int retryCount) {
         if (midTermLandCode == null) return;
-        String baseTime = getBaseTimeFor("midterm").get("time");
+        String baseTime = getBaseTimeFor("midterm");
+
         weatherApiService.getMidLandForecast(apiKey, midTermLandCode, baseTime, "JSON")
                 .enqueue(new Callback<String>() {
                     @Override
                     public void onResponse(@NonNull Call<String> call, @NonNull Response<String> response) {
                         if (response.isSuccessful() && response.body() != null) {
                             weeklyLandData = lenientGson.fromJson(response.body(), JsonObject.class);
-                            appendMidTermForecast();
+                            combineAndDisplayWeeklyForecast(); // 데이터 도착 후 주간예보 조합 시도
                         } else if (retryCount < MAX_RETRY_COUNT) {
                             fetchMidLandForecast(apiKey, retryCount + 1);
                         } else {
@@ -293,205 +289,223 @@ public class WeatherFragment extends Fragment {
                 });
     }
 
-    // --- Data Parsing and UI Update Methods ---
 
-    private void parseAndDisplayShortTermWeather(String responseBody) {
+    // --- Parsing and Displaying Methods ---
+
+    private void parseAndDisplayShortTermWeather() {
+        if (shortTermData == null) return;
         try {
-            JsonObject responseJson = lenientGson.fromJson(responseBody, JsonObject.class);
-            JsonObject responseObj = responseJson.getAsJsonObject("response");
-            if (responseObj == null || !"00".equals(responseObj.getAsJsonObject("header").get("resultCode").getAsString())) {
-                Toast.makeText(getContext(), "단기예보 정보를 가져오지 못했습니다.", Toast.LENGTH_SHORT).show();
+            JsonObject responseObj = shortTermData.getAsJsonObject("response");
+            if (responseObj == null) throw new IllegalStateException("Response object is null");
+
+            String resultCode = responseObj.getAsJsonObject("header").get("resultCode").getAsString();
+            if (!"00".equals(resultCode)) {
+                String errorMsg = responseObj.getAsJsonObject("header").get("resultMsg").getAsString();
+                Toast.makeText(getContext(), "기상청 오류(단기): " + errorMsg, Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            List<WeatherResponse.WeatherItem> items = lenientGson.fromJson(responseObj.getAsJsonObject("body").getAsJsonObject("items").get("item"), new com.google.gson.reflect.TypeToken<List<WeatherResponse.WeatherItem>>() {}.getType());
+            List<WeatherResponse.WeatherItem> items = lenientGson.fromJson(
+                    responseObj.getAsJsonObject("body").getAsJsonObject("items").get("item"),
+                    new com.google.gson.reflect.TypeToken<List<WeatherResponse.WeatherItem>>() {}.getType()
+            );
 
-            items.stream().min(Comparator.comparing(item -> item.fcstDate + item.fcstTime))
-                    .ifPresent(firstItem -> {
-                        Map<String, String> currentWeatherData = items.stream()
-                                .filter(it -> it.fcstDate.equals(firstItem.fcstDate) && it.fcstTime.equals(firstItem.fcstTime))
-                                .collect(Collectors.toMap(it -> it.category, it -> it.fcstValue, (v1, v2) -> v1));
-                        displayCurrentWeather(currentWeatherData);
-                    });
+            // 현재 날씨 표시
+            String currentFcstTime = items.stream().map(it -> it.fcstTime).findFirst().orElse("");
+            Map<String, String> currentWeatherData = items.stream()
+                    .filter(it -> it.fcstTime.equals(currentFcstTime))
+                    .collect(Collectors.toMap(it -> it.category, it -> it.fcstValue, (v1, v2) -> v1));
+            displayCurrentWeather(currentWeatherData);
 
+            // 시간별 예보 표시
             hourlyForecastList.clear();
             items.stream()
-                    .collect(Collectors.groupingBy(item -> item.fcstDate + item.fcstTime, LinkedHashMap::new, Collectors.toList()))
+                    .collect(Collectors.groupingBy(item -> item.fcstTime))
                     .entrySet().stream()
-                    .filter(entry -> Integer.parseInt(entry.getKey().substring(8, 10)) % 3 == 0)
-                    .limit(8)
+                    .sorted(Map.Entry.comparingByKey())
                     .forEach(entry -> {
-                        Map<String, String> data = entry.getValue().stream().collect(Collectors.toMap(it -> it.category, it -> it.fcstValue, (v1, v2) -> v1));
+                        Map<String, String> data = entry.getValue().stream()
+                                .collect(Collectors.toMap(item -> item.category, item -> item.fcstValue, (v1, v2) -> v1));
                         if (data.containsKey("TMP") && data.containsKey("SKY")) {
-                            hourlyForecastList.add(new HourlyForecastItem(entry.getKey().substring(8), data.get("SKY"), data.get("TMP")));
+                            hourlyForecastList.add(new WeatherForecastItem(entry.getKey(), data.get("SKY"), data.get("TMP")));
                         }
                     });
+            hourlyAdapter.notifyDataSetChanged();
 
-            weeklyForecastList.clear();
-            Map<String, List<WeatherResponse.WeatherItem>> dailyItems = items.stream().collect(Collectors.groupingBy(item -> item.fcstDate));
-            dailyItems.keySet().stream().sorted().limit(3).forEach(date -> {
-                List<WeatherResponse.WeatherItem> dayItems = dailyItems.get(date);
-                Optional<String> minTempOpt = dayItems.stream().filter(it -> "TMN".equals(it.category)).map(it -> it.fcstValue).findFirst();
-                Optional<String> maxTempOpt = dayItems.stream().filter(it -> "TMX".equals(it.category)).map(it -> it.fcstValue).findFirst();
-
-                if (minTempOpt.isPresent() && maxTempOpt.isPresent()) {
-                    String amCond = getWeatherConditionFromHourly(dayItems, "0900");
-                    String pmCond = getWeatherConditionFromHourly(dayItems, "1500");
-                    int amPrecip = getPrecipFromHourly(dayItems, "0900");
-                    int pmPrecip = getPrecipFromHourly(dayItems, "1500");
-
-                    try {
-                        Calendar cal = Calendar.getInstance();
-                        cal.setTime(new SimpleDateFormat("yyyyMMdd", Locale.KOREAN).parse(date));
-                        weeklyForecastList.add(new WeeklyForecastItem(
-                                new SimpleDateFormat("M/d", Locale.KOREAN).format(cal.getTime()),
-                                new SimpleDateFormat("E요일", Locale.KOREAN).format(cal.getTime()),
-                                amCond, pmCond, amPrecip, pmPrecip,
-                                (int) Double.parseDouble(minTempOpt.get()),
-                                (int) Double.parseDouble(maxTempOpt.get())
-                        ));
-                    } catch (ParseException e) {
-                        Log.e(TAG, "단기예보 기반 주간 데이터 파싱 오류", e);
-                    }
-                }
-            });
-
-            if (getActivity() != null) {
-                getActivity().runOnUiThread(() -> {
-                    hourlyAdapter.notifyDataSetChanged();
-                    weeklyAdapter.notifyDataSetChanged();
-                    appendMidTermForecast();
-                });
-            }
-
-        } catch (Exception e) {
-            Log.e(TAG, "단기예보 파싱 에러", e);
+        } catch (JsonSyntaxException | IllegalStateException e) {
+            Log.e(TAG, "단기예보 파싱 에러: " + e.getMessage());
         }
     }
 
-    private void appendMidTermForecast() {
-        if (weeklyTempData == null || weeklyLandData == null || weeklyForecastList.isEmpty() || midTermForecastAppended) {
+    private void combineAndDisplayWeeklyForecast() {
+        // 모든 API 응답이 도착해야 실행
+        if (shortTermData == null || weeklyTempData == null || weeklyLandData == null) {
             return;
         }
 
+        weeklyForecastList.clear();
+
         try {
+            // 1. 단기예보에서 1~2일 후 데이터 추출
+            List<WeatherResponse.WeatherItem> shortTermItems = lenientGson.fromJson(
+                    shortTermData.getAsJsonObject("response").getAsJsonObject("body").getAsJsonObject("items").get("item"),
+                    new com.google.gson.reflect.TypeToken<List<WeatherResponse.WeatherItem>>() {}.getType()
+            );
+
+            Map<String, List<WeatherResponse.WeatherItem>> groupedByDate = shortTermItems.stream()
+                    .collect(Collectors.groupingBy(item -> item.fcstDate));
+
+            // 오늘 날짜 다음, 다다음 날짜 계산
+            Calendar cal = Calendar.getInstance();
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd", Locale.KOREAN);
+            cal.add(Calendar.DATE, 1);
+            String tomorrow = sdf.format(cal.getTime());
+            cal.add(Calendar.DATE, 1);
+            String dayAfterTomorrow = sdf.format(cal.getTime());
+
+            String[] dates = {tomorrow, dayAfterTomorrow};
+            int dayAfterCount = 1;
+
+            for(String date : dates) {
+                if (groupedByDate.containsKey(date)) {
+                    List<WeatherResponse.WeatherItem> dailyItems = groupedByDate.get(date);
+                    // 최고/최저 기온 찾기
+                    int maxTemp = dailyItems.stream().filter(i -> "TMX".equals(i.category)).mapToInt(i -> (int)Double.parseDouble(i.fcstValue)).findFirst().orElse(0);
+                    int minTemp = dailyItems.stream().filter(i -> "TMN".equals(i.category)).mapToInt(i -> (int)Double.parseDouble(i.fcstValue)).findFirst().orElse(0);
+
+                    // 오전/오후 날씨 찾기 (SKY, PTY, POP)
+                    String amCondition = getWeatherConditionFromShortTerm(dailyItems, "0900");
+                    String pmCondition = getWeatherConditionFromShortTerm(dailyItems, "1500");
+                    int amRainChance = getRainChanceFromShortTerm(dailyItems, "0900");
+                    int pmRainChance = getRainChanceFromShortTerm(dailyItems, "1500");
+
+                    weeklyForecastList.add(new WeeklyForecastItem(dayAfterCount, minTemp, maxTemp, amCondition, pmCondition, amRainChance, pmRainChance));
+                }
+                dayAfterCount++;
+            }
+
+            // 2. 중기예보에서 3~7일 후 데이터 추출 및 추가
             JsonObject tempItem = weeklyTempData.getAsJsonObject("response").getAsJsonObject("body").getAsJsonObject("items").getAsJsonArray("item").get(0).getAsJsonObject();
             JsonObject landItem = weeklyLandData.getAsJsonObject("response").getAsJsonObject("body").getAsJsonObject("items").getAsJsonArray("item").get(0).getAsJsonObject();
-            midTermForecastAppended = true;
 
-            for (int i = 3; i < 8; i++) { // 3일부터 7일까지 (총 5일) 추가하여 7일 예보 완성
-                Calendar calendar = Calendar.getInstance();
-                calendar.add(Calendar.DATE, i);
-
-                int minTemp = tempItem.has("taMin" + i) ? tempItem.get("taMin" + i).getAsInt() : 0;
-                int maxTemp = tempItem.has("taMax" + i) ? tempItem.get("taMax" + i).getAsInt() : 0;
-                String amCondition = landItem.has("wf" + i + "Am") ? landItem.get("wf" + i + "Am").getAsString() : "정보 없음";
-                String pmCondition = landItem.has("wf" + i + "Pm") ? landItem.get("wf" + i + "Pm").getAsString() : "정보 없음";
-                int amPrecip = landItem.has("rnSt" + i + "Am") ? landItem.get("rnSt" + i + "Am").getAsInt() : 0;
-                int pmPrecip = landItem.has("rnSt" + i + "Pm") ? landItem.get("rnSt" + i + "Pm").getAsInt() : 0;
-
-                String dateStr = new SimpleDateFormat("M/d", Locale.KOREAN).format(calendar.getTime());
-                if (weeklyForecastList.stream().noneMatch(item -> item.getDate().equals(dateStr))) {
+            for (int i = 3; i <= 7; i++) {
+                if (tempItem.has("taMin" + i) && landItem.has("wf" + i + "Am")) {
                     weeklyForecastList.add(new WeeklyForecastItem(
-                            dateStr,
-                            new SimpleDateFormat("E요일", Locale.KOREAN).format(calendar.getTime()),
-                            amCondition, pmCondition, amPrecip, pmPrecip, minTemp, maxTemp
+                            i,
+                            tempItem.get("taMin" + i).getAsInt(),
+                            tempItem.get("taMax" + i).getAsInt(),
+                            landItem.get("wf" + i + "Am").getAsString(),
+                            landItem.get("wf" + i + "Pm").getAsString(),
+                            landItem.get("rnSt" + i + "Am").getAsInt(),
+                            landItem.get("rnSt" + i + "Pm").getAsInt()
                     ));
                 }
             }
 
+            // 3. 어댑터에 변경 알림
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
+                    // 날짜 순으로 정렬
+                    weeklyForecastList.sort(Comparator.comparingInt(w -> w.dayAfter));
                     weeklyAdapter.notifyDataSetChanged();
-                    Log.d(TAG, "중기 예보 데이터 추가 완료. 총 " + weeklyForecastList.size() + "일 예보.");
+                    Log.d(TAG, "통합 주간 예보 UI 업데이트 완료. " + weeklyForecastList.size() + "개 항목.");
                 });
             }
 
         } catch (Exception e) {
-            Log.e(TAG, "중기예보 데이터 병합/파싱 에러: " + e.getMessage());
+            Log.e(TAG, "주간예보 데이터 통합/파싱 에러: " + e.getMessage());
         }
+    }
+
+    // 단기예보 데이터에서 특정 시간대의 날씨 상태 문자열을 반환하는 헬퍼 메서드
+    private String getWeatherConditionFromShortTerm(List<WeatherResponse.WeatherItem> items, String time) {
+        String sky = items.stream().filter(i -> time.equals(i.fcstTime) && "SKY".equals(i.category)).findFirst().map(i -> i.fcstValue).orElse("1");
+        String pty = items.stream().filter(i -> time.equals(i.fcstTime) && "PTY".equals(i.category)).findFirst().map(i -> i.fcstValue).orElse("0");
+        return convertShortTermCodeToText(pty, sky);
+    }
+
+    // 단기예보 데이터에서 특정 시간대의 강수 확률을 반환하는 헬퍼 메서드
+    private int getRainChanceFromShortTerm(List<WeatherResponse.WeatherItem> items, String time) {
+        return items.stream().filter(i -> time.equals(i.fcstTime) && "POP".equals(i.category)).mapToInt(i -> Integer.parseInt(i.fcstValue)).findFirst().orElse(0);
     }
 
     private void displayCurrentWeather(Map<String, String> data) {
-        textCurrentTemp.setText(String.format("%s°C", data.getOrDefault("TMP", "--")));
-        textPrecipitation.setText(String.format("강수확률 %s%%", data.getOrDefault("POP", "--")));
-        textHumidity.setText(String.format("습도 %s%%", data.getOrDefault("REH", "--")));
-        textWindSpeed.setText(String.format("바람 %sm/s", data.getOrDefault("WSD", "--")));
+        textCurrentTemp.setText(data.getOrDefault("TMP", "--") + "°C");
+        textPrecipitation.setText("강수확률 " + data.getOrDefault("POP", "--") + "%");
+        textHumidity.setText("습도 " + data.getOrDefault("REH", "--") + "%");
+        textWindSpeed.setText("바람 " + data.getOrDefault("WSD", "--") + "m/s");
         updateWeatherConditionAndIcon(data.getOrDefault("PTY", "0"), data.getOrDefault("SKY", "1"), textCurrentCondition, imageWeatherIcon);
     }
 
-    // --- Helper & Util Methods ---
-
-    private String getWeatherConditionFromHourly(List<WeatherResponse.WeatherItem> items, String time) {
-        String pty = items.stream().filter(it -> "PTY".equals(it.category) && time.equals(it.fcstTime)).map(it->it.fcstValue).findFirst().orElse("0");
-        String sky = items.stream().filter(it -> "SKY".equals(it.category) && time.equals(it.fcstTime)).map(it->it.fcstValue).findFirst().orElse("1");
-        return skyPtyToCondition(pty, sky);
-    }
-
-    private int getPrecipFromHourly(List<WeatherResponse.WeatherItem> items, String time) {
-        return items.stream().filter(it -> "POP".equals(it.category) && time.equals(it.fcstTime)).mapToInt(it -> Integer.parseInt(it.fcstValue)).findFirst().orElse(0);
-    }
-
-    private String skyPtyToCondition(String pty, String sky) {
-        int ptyCode = Integer.parseInt(pty);
-        int skyCode = Integer.parseInt(sky);
-        if (ptyCode > 0) {
-            switch (ptyCode) {
-                case 1: return "비";
-                case 2: return "비/눈";
-                case 3: return "눈";
-                case 5: return "빗방울";
-                case 6: return "빗방울눈날림";
-                case 7: return "눈날림";
-            }
-        }
-        switch (skyCode) {
-            case 1: return "맑음";
-            case 3: return "구름많음";
-            case 4: return "흐림";
-        }
-        return "정보 없음";
-    }
-
     private void updateWeatherConditionAndIcon(String pty, String sky, TextView conditionView, ImageView iconView) {
-        String conditionText = skyPtyToCondition(pty, sky);
+        String conditionText = convertShortTermCodeToText(pty, sky);
         conditionView.setText(conditionText);
         iconView.setImageResource(getWeatherIconResource(conditionText));
     }
 
-    private Map<String, String> getBaseTimeFor(String apiType) {
-        Calendar cal = Calendar.getInstance();
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd", Locale.KOREAN);
-        if ("midterm".equals(apiType)) {
-            int hour = cal.get(Calendar.HOUR_OF_DAY);
-            String time;
-            if (hour < 6) {
-                cal.add(Calendar.DATE, -1);
-                time = "1800";
-            } else if (hour < 18) {
-                time = "0600";
-            } else {
-                time = "1800";
+    // --- Helper & Util Methods ---
+
+    private String convertShortTermCodeToText(String pty, String sky) {
+        int ptyCode = Integer.parseInt(pty);
+        int skyCode = Integer.parseInt(sky);
+
+        if (ptyCode == 0) { // 강수 없음
+            switch (skyCode) {
+                case 1: return "맑음";
+                case 3: return "구름많음";
+                case 4: return "흐림";
+                default: return "정보 없음";
             }
-            return Map.of("time", dateFormat.format(cal.getTime()) + time);
-        } else { // village
-            int hour = cal.get(Calendar.HOUR_OF_DAY);
-            String time = "2300";
-            int[] baseTimes = {2, 5, 8, 11, 14, 17, 20, 23};
-            for(int i = baseTimes.length - 1; i >= 0; i--) {
-                if (hour >= baseTimes[i]) {
-                    time = String.format(Locale.KOREAN, "%02d00", baseTimes[i]);
-                    break;
-                }
+        } else { // 강수 있음
+            switch (ptyCode) {
+                case 1: return "비";
+                case 2: return "비/눈";
+                case 3: return "눈";
+                case 5: case 6: case 7: return "진눈깨비";
+                default: return "강수";
             }
-            if (hour < 2) {
-                cal.add(Calendar.DATE, -1);
-            }
-            return Map.of("date", dateFormat.format(cal.getTime()), "time", time);
         }
     }
 
-    private String getMidTermLandCode(String adminArea) {
+    private int getWeatherIconResource(String condition) {
+
+        if (condition == null) return R.drawable.ic_launcher_foreground;
+        if (condition.contains("맑음")) return android.R.drawable.ic_secure;
+        if (condition.contains("구름")) return android.R.drawable.ic_menu_gallery;
+        if (condition.contains("흐림")) return android.R.drawable.ic_menu_close_clear_cancel;
+        if (condition.contains("비")) return android.R.drawable.ic_menu_send;
+        if (condition.contains("눈")) return android.R.drawable.ic_menu_compass;
+
+        return R.drawable.ic_launcher_foreground; // 기본 아이콘
+    }
+
+    private String getBaseTimeFor(String apiType) {
+        Calendar cal = Calendar.getInstance();
+        if ("midterm".equals(apiType)) {
+            int hour = cal.get(Calendar.HOUR_OF_DAY);
+            if (hour < 6) {
+                cal.add(Calendar.DATE, -1);
+                return new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(cal.getTime()) + "1800";
+            } else if (hour < 18) {
+                return new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(cal.getTime()) + "0600";
+            } else {
+                return new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(cal.getTime()) + "1800";
+            }
+        } else { // village
+            int hour = cal.get(Calendar.HOUR_OF_DAY);
+            int minute = cal.get(Calendar.MINUTE);
+            if (hour < 2 || (hour == 2 && minute <= 10)) {
+                cal.add(Calendar.DATE, -1); return "2300";
+            }
+            int[] baseTimes = {2, 5, 8, 11, 14, 17, 20, 23};
+            for (int i = baseTimes.length - 1; i >= 0; i--) {
+                if (hour >= baseTimes[i]) return String.format(Locale.getDefault(), "%02d00", baseTimes[i]);
+            }
+            return "2300";
+        }
+    }
+
+    private String getMidTermTempCode(String adminArea) {
         if (adminArea.contains("서울") || adminArea.contains("경기") || adminArea.contains("인천")) return "11B00000";
         if (adminArea.contains("강원")) return "11D10000";
         if (adminArea.contains("충남") || adminArea.contains("대전") || adminArea.contains("세종")) return "11C20000";
@@ -504,54 +518,141 @@ public class WeatherFragment extends Fragment {
         return "11C10000";
     }
 
-    private String getMidTermTempCode(String locality) {
-        if (locality == null) return "11C10301";
-        if (locality.contains("서울")) return "11B10101";
-        if (locality.contains("인천")) return "11B20201";
-        if (locality.contains("수원")) return "11B20601";
-        if (locality.contains("파주")) return "11B20305";
-        if (locality.contains("춘천")) return "11D10301";
-        if (locality.contains("원주")) return "11D10401";
-        if (locality.contains("강릉")) return "11D20501";
-        if (locality.contains("청주")) return "11C10301";
-        if (locality.contains("대전")) return "11C20401";
-        if (locality.contains("세종")) return "11C20404";
-        if (locality.contains("서산")) return "11C20101";
-        if (locality.contains("전주")) return "11F10201";
-        if (locality.contains("군산")) return "21F10501";
-        if (locality.contains("광주")) return "11F20501";
-        if (locality.contains("목포")) return "21F20801";
-        if (locality.contains("여수")) return "11F20401";
-        if (locality.contains("대구")) return "11H10701";
-        if (locality.contains("안동")) return "11H10501";
-        if (locality.contains("포항")) return "11H10201";
-        if (locality.contains("부산")) return "11H20201";
-        if (locality.contains("울산")) return "11H20101";
-        if (locality.contains("창원")) return "11H20301";
-        if (locality.contains("제주")) return "11G00201";
-        if (locality.contains("서귀포")) return "11G00401";
-        return "11C10301";
+    private String getMidTermLandCode(String adminArea) {
+        if (adminArea.contains("서울")) return "11B10101";
+        if (adminArea.contains("인천")) return "11B20201";
+        if (adminArea.contains("경기")) return "11B20601";
+        if (adminArea.contains("강원")) return "11D10301";
+        if (adminArea.contains("충북")) return "11C10101";
+        if (adminArea.contains("충남")) return "11C20101";
+        if (adminArea.contains("대전")) return "11C20401";
+        if (adminArea.contains("세종")) return "11C20404";
+        if (adminArea.contains("광주")) return "11F20501";
+        if (adminArea.contains("전북")) return "11F10201";
+        if (adminArea.contains("전남")) return "21F20801";
+        if (adminArea.contains("대구")) return "11H10701";
+        if (adminArea.contains("경북")) return "11H10501";
+        if (adminArea.contains("부산")) return "11H20201";
+        if (adminArea.contains("울산")) return "11H20101";
+        if (adminArea.contains("경남")) return "11H20301";
+        if (adminArea.contains("제주")) return "11G00201";
+        return "11C10101";
     }
 
     private void handleApiError(String apiName, Response<?> response) {
         Log.e(TAG, apiName + " API 에러: " + response.code() + " " + response.message());
-        if (isAdded()) Toast.makeText(getContext(), apiName + " 정보를 가져오는 데 실패했습니다.", Toast.LENGTH_SHORT).show();
+        if(isAdded()) Toast.makeText(getContext(), apiName + " 정보를 가져오는 데 실패했습니다.", Toast.LENGTH_SHORT).show();
     }
 
     private void handleApiFailure(String apiName, Throwable t) {
         Log.e(TAG, apiName + " API 네트워크 실패", t);
-        if (isAdded()) Toast.makeText(getContext(), "네트워크 오류로 " + apiName + " 정보를 가져올 수 없습니다.", Toast.LENGTH_SHORT).show();
+        if(isAdded()) Toast.makeText(getContext(), "네트워크 오류로 " + apiName + " 정보를 가져올 수 없습니다.", Toast.LENGTH_SHORT).show();
     }
 
-    @DrawableRes
-    private int getWeatherIconResource(String condition) {
-        if (condition == null) return R.drawable.ic_launcher_foreground;
-        if (condition.contains("비")) return android.R.drawable.ic_secure;
-        if (condition.contains("눈")) return android.R.drawable.stat_sys_warning;
-        if (condition.contains("맑음")) return android.R.drawable.ic_menu_day;
-        if (condition.contains("구름")) return android.R.drawable.ic_menu_gallery;
-        if (condition.contains("흐림")) return android.R.drawable.ic_menu_close_clear_cancel;
-        return R.drawable.ic_launcher_foreground;
+    // --- Data Classes and Adapters ---
+
+    public static class WeatherForecastItem {
+        private String time, skyCondition, temperature;
+        public WeatherForecastItem(String time, String sky, String temp) {
+            this.time = time.substring(0, 2) + "시"; this.skyCondition = sky; this.temperature = temp;
+        }
+        public String getTime() { return time; }
+        public String getSkyCondition() { return skyCondition; }
+        public String getTemperature() { return temperature; }
+    }
+
+    public static class WeeklyForecastItem {
+        int dayAfter; // 정렬을 위한 필드
+        String day, date;
+        int minTemp, maxTemp, amRainChance, pmRainChance;
+        String amCondition, pmCondition;
+
+        public WeeklyForecastItem(int dayAfter, int minTemp, int maxTemp, String amCondition, String pmCondition, int amRainChance, int pmRainChance) {
+            this.dayAfter = dayAfter;
+            Calendar cal = Calendar.getInstance();
+            cal.add(Calendar.DATE, dayAfter);
+            this.day = new SimpleDateFormat("E요일", Locale.KOREAN).format(cal.getTime());
+            this.date = new SimpleDateFormat("M/d", Locale.KOREAN).format(cal.getTime());
+            this.minTemp = minTemp;
+            this.maxTemp = maxTemp;
+            this.amCondition = amCondition;
+            this.pmCondition = pmCondition;
+            this.amRainChance = amRainChance;
+            this.pmRainChance = pmRainChance;
+        }
+    }
+
+    private class HourlyForecastAdapter extends RecyclerView.Adapter<HourlyForecastAdapter.ForecastViewHolder> {
+        private List<WeatherForecastItem> forecasts;
+        public HourlyForecastAdapter(List<WeatherForecastItem> forecasts) { this.forecasts = forecasts; }
+        @NonNull @Override
+        public ForecastViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_weather_forecast, parent, false);
+            return new ForecastViewHolder(view);
+        }
+        @Override
+        public void onBindViewHolder(@NonNull ForecastViewHolder holder, int position) {
+            WeatherForecastItem forecast = forecasts.get(position);
+            holder.textDay.setText(forecast.getTime());
+            holder.textHighTemp.setText(forecast.getTemperature() + "°");
+            holder.textLowTemp.setVisibility(View.GONE);
+            updateWeatherConditionAndIcon("0", forecast.getSkyCondition(), holder.textCondition, holder.imageIcon);
+        }
+        @Override public int getItemCount() { return forecasts.size(); }
+        class ForecastViewHolder extends RecyclerView.ViewHolder {
+            TextView textDay, textCondition, textHighTemp, textLowTemp; ImageView imageIcon;
+            ForecastViewHolder(View itemView) {
+                super(itemView);
+                textDay = itemView.findViewById(R.id.textForecastDay);
+                textCondition = itemView.findViewById(R.id.textForecastCondition);
+                textHighTemp = itemView.findViewById(R.id.textForecastHigh);
+                textLowTemp = itemView.findViewById(R.id.textForecastLow);
+                imageIcon = itemView.findViewById(R.id.imageForecastIcon);
+            }
+        }
+    }
+
+    private class WeeklyForecastAdapter extends RecyclerView.Adapter<WeeklyForecastAdapter.WeeklyForecastViewHolder> {
+        private List<WeeklyForecastItem> forecasts;
+        public WeeklyForecastAdapter(List<WeeklyForecastItem> forecasts) { this.forecasts = forecasts; }
+        @NonNull @Override
+        public WeeklyForecastViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_weather_weekly_forecast, parent, false);
+            return new WeeklyForecastViewHolder(view);
+        }
+        @Override
+        public void onBindViewHolder(@NonNull WeeklyForecastViewHolder holder, int position) {
+            WeeklyForecastItem forecast = forecasts.get(position);
+            holder.textDay.setText(forecast.day);
+            holder.textDate.setText(forecast.date);
+            holder.textLowTemp.setText(forecast.minTemp + "°");
+            holder.textHighTemp.setText(forecast.maxTemp + "°");
+            holder.textAmCondition.setText(forecast.amCondition);
+            holder.textAmRainChance.setText("강수: " + forecast.amRainChance + "%");
+            holder.imageAmIcon.setImageResource(getWeatherIconResource(forecast.amCondition));
+            holder.textPmCondition.setText(forecast.pmCondition);
+            holder.textPmRainChance.setText("강수: " + forecast.pmRainChance + "%");
+            holder.imagePmIcon.setImageResource(getWeatherIconResource(forecast.pmCondition));
+        }
+        @Override public int getItemCount() { return forecasts.size(); }
+        class WeeklyForecastViewHolder extends RecyclerView.ViewHolder {
+            TextView textDay, textDate, textLowTemp, textHighTemp;
+            TextView textAmCondition, textAmRainChance, textPmCondition, textPmRainChance;
+            ImageView imageAmIcon, imagePmIcon;
+            WeeklyForecastViewHolder(View itemView) {
+                super(itemView);
+                textDay = itemView.findViewById(R.id.textWeeklyDay);
+                textDate = itemView.findViewById(R.id.textWeeklyDate);
+                textLowTemp = itemView.findViewById(R.id.textWeeklyLow);
+                textHighTemp = itemView.findViewById(R.id.textWeeklyHigh);
+                textAmCondition = itemView.findViewById(R.id.textAmCondition);
+                textAmRainChance = itemView.findViewById(R.id.textAmRainChance);
+                imageAmIcon = itemView.findViewById(R.id.imageAmIcon);
+                textPmCondition = itemView.findViewById(R.id.textPmCondition);
+                textPmRainChance = itemView.findViewById(R.id.textPmRainChance);
+                imagePmIcon = itemView.findViewById(R.id.imagePmIcon);
+            }
+        }
     }
 
     private LatXLngY convertToGrid(double lat, double lng) {
@@ -578,131 +679,7 @@ public class WeatherFragment extends Fragment {
         return rs;
     }
 
-    // --- Inner Classes ---
-
     private static class LatXLngY { public double lat, lng, x, y; }
-
-    public static class HourlyForecastItem {
-        private final String time;
-        private final String skyCondition;
-        private final String temperature;
-        public HourlyForecastItem(String time, String sky, String temp) {
-            this.time = time.substring(0, 2) + "시";
-            this.skyCondition = sky;
-            this.temperature = temp;
-        }
-        public String getTime() { return time; }
-        public String getSkyCondition() { return skyCondition; }
-        public String getTemperature() { return temperature; }
-    }
-
-    public static class WeeklyForecastItem {
-        private final String date;
-        private final String dayOfWeek;
-        private final String amCondition;
-        private final String pmCondition;
-        private final int amPrecipitation;
-        private final int pmPrecipitation;
-        private final int minTemp;
-        private final int maxTemp;
-
-        public WeeklyForecastItem(String date, String dayOfWeek, String amCondition, String pmCondition,
-                                  int amPrecipitation, int pmPrecipitation, int minTemp, int maxTemp) {
-            this.date = date;
-            this.dayOfWeek = dayOfWeek;
-            this.amCondition = amCondition;
-            this.pmCondition = pmCondition;
-            this.amPrecipitation = amPrecipitation;
-            this.pmPrecipitation = pmPrecipitation;
-            this.minTemp = minTemp;
-            this.maxTemp = maxTemp;
-        }
-
-        public String getDate() { return date; }
-        public String getDayOfWeek() { return dayOfWeek; }
-        public String getAmCondition() { return amCondition; }
-        public String getPmCondition() { return pmCondition; }
-        public int getAmPrecipitation() { return amPrecipitation; }
-        public int getPmPrecipitation() { return pmPrecipitation; }
-        public int getMinTemp() { return minTemp; }
-        public int getMaxTemp() { return maxTemp; }
-    }
-
-
-    private class HourlyForecastAdapter extends RecyclerView.Adapter<HourlyForecastAdapter.ForecastViewHolder> {
-        private final List<HourlyForecastItem> forecasts;
-        public HourlyForecastAdapter(List<HourlyForecastItem> forecasts) { this.forecasts = forecasts; }
-        @NonNull @Override
-        public ForecastViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_weather_forecast, parent, false);
-            return new ForecastViewHolder(view);
-        }
-        @Override
-        public void onBindViewHolder(@NonNull ForecastViewHolder holder, int position) {
-            HourlyForecastItem forecast = forecasts.get(position);
-            holder.textDay.setText(forecast.getTime());
-            holder.textHighTemp.setText(String.format("%s°", forecast.getTemperature()));
-            holder.textLowTemp.setVisibility(View.GONE);
-            updateWeatherConditionAndIcon("0", forecast.getSkyCondition(), holder.textCondition, holder.imageIcon);
-        }
-        @Override public int getItemCount() { return forecasts.size(); }
-        class ForecastViewHolder extends RecyclerView.ViewHolder {
-            TextView textDay, textCondition, textHighTemp, textLowTemp; ImageView imageIcon;
-            ForecastViewHolder(View itemView) {
-                super(itemView);
-                textDay = itemView.findViewById(R.id.textForecastDay);
-                textCondition = itemView.findViewById(R.id.textForecastCondition);
-                textHighTemp = itemView.findViewById(R.id.textForecastHigh);
-                textLowTemp = itemView.findViewById(R.id.textForecastLow);
-                imageIcon = itemView.findViewById(R.id.imageForecastIcon);
-            }
-        }
-    }
-
-    private class WeeklyForecastAdapter extends RecyclerView.Adapter<WeeklyForecastAdapter.WeeklyForecastViewHolder> {
-        private final List<WeeklyForecastItem> forecasts;
-        public WeeklyForecastAdapter(List<WeeklyForecastItem> forecasts) { this.forecasts = forecasts; }
-        @NonNull @Override
-        public WeeklyForecastViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_weather_weekly_forecast, parent, false);
-            return new WeeklyForecastViewHolder(view);
-        }
-        @Override
-        public void onBindViewHolder(@NonNull WeeklyForecastViewHolder holder, int position) {
-            WeeklyForecastItem forecast = forecasts.get(position);
-            holder.textDay.setText(forecast.getDayOfWeek());
-            holder.textDate.setText(forecast.getDate());
-            holder.imageAmIcon.setImageResource(getWeatherIconResource(forecast.getAmCondition()));
-            holder.textAmCondition.setText(forecast.getAmCondition());
-            holder.textAmPrecip.setText(String.format(Locale.KOREAN, "강수: %d%%", forecast.getAmPrecipitation()));
-            holder.imagePmIcon.setImageResource(getWeatherIconResource(forecast.getPmCondition()));
-            holder.textPmCondition.setText(forecast.getPmCondition());
-            holder.textPmPrecip.setText(String.format(Locale.KOREAN, "강수: %d%%", forecast.getPmPrecipitation()));
-            holder.textHighTemp.setText(String.format(Locale.KOREAN, "%d°", forecast.getMaxTemp()));
-            holder.textLowTemp.setText(String.format(Locale.KOREAN, "%d°", forecast.getMinTemp()));
-
-            holder.textHighTemp.setTextColor(ContextCompat.getColor(getContext(), R.color.temp_max_red));
-            holder.textLowTemp.setTextColor(ContextCompat.getColor(getContext(), R.color.temp_min_blue));
-        }
-        @Override public int getItemCount() { return forecasts.size(); }
-        class WeeklyForecastViewHolder extends RecyclerView.ViewHolder {
-            TextView textDay, textDate, textAmCondition, textPmCondition, textAmPrecip, textPmPrecip, textLowTemp, textHighTemp;
-            ImageView imageAmIcon, imagePmIcon;
-            WeeklyForecastViewHolder(View itemView) {
-                super(itemView);
-                textDay = itemView.findViewById(R.id.textWeeklyDay);
-                textDate = itemView.findViewById(R.id.textWeeklyDate);
-                imageAmIcon = itemView.findViewById(R.id.imageAmIcon);
-                textAmCondition = itemView.findViewById(R.id.textAmCondition);
-                textAmPrecip = itemView.findViewById(R.id.textAmPrecip);
-                imagePmIcon = itemView.findViewById(R.id.imagePmIcon);
-                textPmCondition = itemView.findViewById(R.id.textPmCondition);
-                textPmPrecip = itemView.findViewById(R.id.textPmPrecip);
-                textLowTemp = itemView.findViewById(R.id.textWeeklyLow);
-                textHighTemp = itemView.findViewById(R.id.textWeeklyHigh);
-            }
-        }
-    }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
