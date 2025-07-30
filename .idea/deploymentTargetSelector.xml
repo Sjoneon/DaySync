@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-04-23T06:14:08.602062300Z">
+        <DropdownSelection timestamp="2025-07-30T04:27:17.568110400Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\Roneon\.android\avd\DaySync.avd" />
+              <DeviceId pluginId="PhysicalDevice" identifier="serial=R3CR110KMRK" />
             </handle>
           </Target>
         </DropdownSelection>
