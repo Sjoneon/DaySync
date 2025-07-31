@@ -6,6 +6,8 @@ import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -17,7 +19,6 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -31,6 +32,8 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -44,18 +47,18 @@ public class RouteFragment extends Fragment {
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
     private static final String NAVER_API_BASE_URL = "https://naveropenapi.apigw.ntruss.com/";
 
+    // 클래스 멤버 변수 선언부 (누락되지 않도록 주의)
     private EditText editStartLocation, editEndLocation;
     private Button buttonSearchRoute, buttonMapView;
     private TextView textNoRoutes;
     private RecyclerView recyclerViewRoutes;
-
     private FusedLocationProviderClient fusedLocationClient;
     private List<RouteInfo> routeList = new ArrayList<>();
     private RouteAdapter routeAdapter;
     private Geocoder geocoder;
     private NaverApiService naverApiService;
-
     private List<List<Double>> currentPath;
+    private ExecutorService executorService;
 
     @Nullable
     @Override
@@ -81,6 +84,7 @@ public class RouteFragment extends Fragment {
     private void initializeServices() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
         geocoder = new Geocoder(requireContext(), Locale.KOREAN);
+        executorService = Executors.newSingleThreadExecutor(); // 비동기 작업을 위한 ExecutorService
 
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(NAVER_API_BASE_URL)
@@ -107,21 +111,32 @@ public class RouteFragment extends Fragment {
         }
         fusedLocationClient.getLastLocation()
                 .addOnSuccessListener(requireActivity(), location -> {
-                    if (location != null) getAddressFromLocation(location);
+                    if (location != null) {
+                        // 현재 위치를 주소로 변환하는 작업도 비동기로 처리
+                        executorService.execute(() -> {
+                            String address = getAddressFromLocation(location);
+                            new Handler(Looper.getMainLooper()).post(() -> editStartLocation.setText(address));
+                        });
+                    }
                 });
     }
 
-    private void getAddressFromLocation(Location location) {
+    private String getAddressFromLocation(Location location) {
         try {
             List<Address> addresses = geocoder.getFromLocation(location.getLatitude(), location.getLongitude(), 1);
             if (addresses != null && !addresses.isEmpty()) {
-                editStartLocation.setText(addresses.get(0).getAddressLine(0));
+                return addresses.get(0).getAddressLine(0);
             }
         } catch (IOException e) {
             Log.e(TAG, "주소 변환 실패", e);
         }
+        return "";
     }
 
+    /**
+     * 경로 검색 시작 메서드 (수정됨)
+     * 주소 변환을 비동기적으로 처리하고, 그 결과로 길찾기를 요청합니다.
+     */
     private void searchRoutes() {
         String startAddress = editStartLocation.getText().toString().trim();
         String endAddress = editEndLocation.getText().toString().trim();
@@ -131,19 +146,25 @@ public class RouteFragment extends Fragment {
             return;
         }
 
-        Location startLocation = getCoordinatesFromAddress(startAddress);
-        Location endLocation = getCoordinatesFromAddress(endAddress);
+        // ExecutorService를 사용하여 주소 변환을 백그라운드에서 실행
+        executorService.execute(() -> {
+            Location startLocation = getCoordinatesFromAddress(startAddress);
+            Location endLocation = getCoordinatesFromAddress(endAddress);
 
-        if (startLocation == null || endLocation == null) {
-            Toast.makeText(getContext(), getString(R.string.geocode_error), Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        fetchDrivingDirections(startLocation, endLocation);
+            // UI 업데이트는 메인 스레드에서 처리
+            new Handler(Looper.getMainLooper()).post(() -> {
+                if (startLocation == null || endLocation == null) {
+                    Toast.makeText(getContext(), getString(R.string.geocode_error), Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                fetchDrivingDirections(startLocation, endLocation);
+            });
+        });
     }
 
     private Location getCoordinatesFromAddress(String addressString) {
         try {
+            // geocoder.getFromLocationName은 네트워크 통신을 유발할 수 있으므로 백그라운드 스레드에서 호출되어야 함
             List<Address> addresses = geocoder.getFromLocationName(addressString, 1);
             if (addresses != null && !addresses.isEmpty()) {
                 Address address = addresses.get(0);
@@ -158,36 +179,48 @@ public class RouteFragment extends Fragment {
         return null;
     }
 
+// RouteFragment.java 내의 fetchDrivingDirections 메서드를 아래 코드로 교체하세요.
+
+// RouteFragment.java 내의 fetchDrivingDirections 메서드를 아래 코드로 교체하세요.
+
     private void fetchDrivingDirections(Location start, Location end) {
         String startCoords = String.format(Locale.US, "%f,%f", start.getLongitude(), start.getLatitude());
         String endCoords = String.format(Locale.US, "%f,%f", end.getLongitude(), end.getLatitude());
 
-        naverApiService.getDrivingDirections(BuildConfig.NAVER_CLIENT_ID, BuildConfig.NAVER_CLIENT_SECRET, startCoords, endCoords)
+        Log.d(TAG, "API-ID-From-BuildConfig: " + BuildConfig.NAVER_CLIENT_ID);
+        Log.d(TAG, "API-SECRET-From-BuildConfig: " + BuildConfig.NAVER_CLIENT_SECRET);
+
+        naverApiService.getDrivingDirections(
+                        BuildConfig.NAVER_CLIENT_ID,
+                        BuildConfig.NAVER_CLIENT_SECRET,
+                        startCoords,
+                        endCoords)
                 .enqueue(new Callback<NaverDirectionsResponse>() {
                     @Override
                     public void onResponse(@NonNull Call<NaverDirectionsResponse> call, @NonNull Response<NaverDirectionsResponse> response) {
                         if (response.isSuccessful() && response.body() != null) {
                             NaverDirectionsResponse directionsResponse = response.body();
-                            if (directionsResponse.getRoute() != null && !directionsResponse.getRoute().getTraoptimal().isEmpty()) {
+                            if (directionsResponse.getRoute() != null && directionsResponse.getRoute().getTraoptimal() != null && !directionsResponse.getRoute().getTraoptimal().isEmpty()) {
                                 processDrivingRouteData(directionsResponse);
                             } else {
-                                Toast.makeText(getContext(), "경로를 찾을 수 없습니다.", Toast.LENGTH_LONG).show();
+                                Toast.makeText(getContext(), "탐색 가능한 경로가 없습니다.", Toast.LENGTH_LONG).show();
+                                Log.w(TAG, "API 응답 성공, 그러나 경로 데이터 없음: " + new com.google.gson.Gson().toJson(response.body()));
                             }
                         } else {
                             try {
-                                String errorBody = response.errorBody().string();
-                                Log.e(TAG, "API Error: " + errorBody);
-                                Toast.makeText(getContext(), "오류 " + response.code() + ": " + errorBody, Toast.LENGTH_LONG).show();
+                                String errorBody = response.errorBody() != null ? response.errorBody().string() : "Unknown error";
+                                Log.e(TAG, "API Error: " + response.code() + " - " + errorBody);
+                                Toast.makeText(getContext(), "경로 탐색 오류 " + response.code() + ": " + errorBody, Toast.LENGTH_LONG).show();
                             } catch (Exception e) {
-                                Toast.makeText(getContext(), getString(R.string.route_search_error), Toast.LENGTH_SHORT).show();
+                                Log.e(TAG, "에러 응답 처리 중 예외 발생", e);
                             }
                         }
                     }
 
                     @Override
                     public void onFailure(@NonNull Call<NaverDirectionsResponse> call, @NonNull Throwable t) {
-                        Log.e(TAG, "Directions API 호출 실패", t);
-                        Toast.makeText(getContext(), "네트워크 오류: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                        Log.e(TAG, "Directions API 네트워크 호출 실패", t);
+                        Toast.makeText(getContext(), "네트워크 오류가 발생했습니다: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                     }
                 });
     }
@@ -224,7 +257,12 @@ public class RouteFragment extends Fragment {
             args.putString("start_location", editStartLocation.getText().toString());
             args.putString("end_location", editEndLocation.getText().toString());
             if (currentPath != null) {
-                args.putSerializable("route_path", (Serializable) currentPath);
+                // 직렬화 가능한 형태로 변환
+                ArrayList<double[]> serializablePath = new ArrayList<>();
+                for(List<Double> point : currentPath) {
+                    serializablePath.add(new double[]{point.get(0), point.get(1)});
+                }
+                args.putSerializable("route_path_coords", serializablePath);
             }
             mapFragment.setArguments(args);
 
@@ -241,6 +279,7 @@ public class RouteFragment extends Fragment {
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 loadCurrentLocation();
@@ -250,6 +289,17 @@ public class RouteFragment extends Fragment {
         }
     }
 
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        // 프래그먼트가 소멸될 때 ExecutorService를 종료합니다.
+        if (executorService != null && !executorService.isShutdown()) {
+            executorService.shutdown();
+        }
+    }
+
+
+    // RouteInfo, RouteAdapter 클래스는 기존과 동일하게 유지
     public static class RouteInfo {
         private String routeType, routeSummary, departureTime, routeDetail;
         private int duration;

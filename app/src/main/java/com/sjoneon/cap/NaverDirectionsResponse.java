@@ -1,18 +1,26 @@
+// NaverDirectionsResponse.java 파일의 내용을 아래 코드로 교체하세요.
+
 package com.sjoneon.cap;
 
 import com.google.gson.annotations.SerializedName;
 import java.util.List;
 
-// 자동차 길찾기 응답을 위한 데이터 모델
 public class NaverDirectionsResponse {
-    @SerializedName("route")
+
+    @SerializedName("route") // 최상위 'route' 객체 추가
     private Route route;
-    public Route getRoute() { return route; }
+
+    public Route getRoute() {
+        return route;
+    }
 
     public static class Route {
         @SerializedName("traoptimal")
         private List<Traoptimal> traoptimal;
-        public List<Traoptimal> getTraoptimal() { return traoptimal; }
+
+        public List<Traoptimal> getTraoptimal() {
+            return traoptimal;
+        }
     }
 
     public static class Traoptimal {
@@ -20,8 +28,14 @@ public class NaverDirectionsResponse {
         private Summary summary;
         @SerializedName("path")
         private List<List<Double>> path;
-        public Summary getSummary() { return summary; }
-        public List<List<Double>> getPath() { return path; }
+
+        public Summary getSummary() {
+            return summary;
+        }
+
+        public List<List<Double>> getPath() {
+            return path;
+        }
     }
 
     public static class Summary {
@@ -31,8 +45,17 @@ public class NaverDirectionsResponse {
         private int duration;
         @SerializedName("taxiFare")
         private int taxiFare;
-        public int getDistance() { return distance; }
-        public int getDuration() { return duration; }
-        public int getTaxiFare() { return taxiFare; }
+
+        public int getDistance() {
+            return distance;
+        }
+
+        public int getDuration() {
+            return duration;
+        }
+
+        public int getTaxiFare() {
+            return taxiFare;
+        }
     }
 }
