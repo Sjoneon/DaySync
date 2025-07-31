@@ -23,7 +23,13 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // 기존 기상청 API 키
         buildConfigField("String", "KMA_API_KEY", "\"${properties.getProperty("KMA_API_KEY")}\"")
+
+        // [수정] 네이버 API 키 (local.properties의 키 이름과 동일하게 매핑)
+        buildConfigField("String", "NAVER_CLIENT_ID", "\"${properties.getProperty("NAVER_MAPS_CLIENT_ID")}\"")
+        buildConfigField("String", "NAVER_CLIENT_SECRET", "\"${properties.getProperty("NAVER_CLIENT_SECRET")}\"")
     }
 
     buildTypes {
@@ -39,7 +45,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    // buildFeatures는 BuildConfig를 사용하기 위해 필요합니다.
     buildFeatures {
         buildConfig = true
     }
