@@ -69,7 +69,6 @@ public class RouteFragment extends Fragment {
         return view;
     }
 
-    // ... (initializeViews, setupRecyclerView, setupClickListeners 등 다른 메소드는 이전과 동일하게 유지) ...
     private void initializeViews(View view) {
         editStartLocation = view.findViewById(R.id.editStartLocation);
         editEndLocation = view.findViewById(R.id.editEndLocation);
@@ -100,7 +99,6 @@ public class RouteFragment extends Fragment {
         buttonSearchRoute.setOnClickListener(v -> searchRoutes());
         buttonMapView.setOnClickListener(v -> openMapView());
     }
-
 
     private void loadCurrentLocation() {
         if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -212,7 +210,6 @@ public class RouteFragment extends Fragment {
         updateRouteListVisibility();
     }
 
-    // ... (updateRouteListVisibility, openMapView, onRequestPermissionsResult, RouteInfo, RouteAdapter 등 나머지 코드는 이전과 동일) ...
     private void updateRouteListVisibility() {
         textNoRoutes.setVisibility(routeList.isEmpty() ? View.VISIBLE : View.GONE);
         recyclerViewRoutes.setVisibility(routeList.isEmpty() ? View.GONE : View.VISIBLE);
@@ -227,7 +224,6 @@ public class RouteFragment extends Fragment {
             args.putString("start_location", editStartLocation.getText().toString());
             args.putString("end_location", editEndLocation.getText().toString());
             if (currentPath != null) {
-                // List<List<Double>>은 Serializable이므로 그대로 전달
                 args.putSerializable("route_path", (Serializable) currentPath);
             }
             mapFragment.setArguments(args);

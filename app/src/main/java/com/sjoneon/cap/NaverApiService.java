@@ -5,9 +5,9 @@ import retrofit2.http.GET;
 import retrofit2.http.Header;
 import retrofit2.http.Query;
 
-// 자동차 길찾기 API를 호출하도록 수정
+// API 호출 주소를 표준 엔드포인트로 최종 수정
 public interface NaverApiService {
-    @GET("map-direction-15/v1/driving")
+    @GET("map-direction/v1/driving")
     Call<NaverDirectionsResponse> getDrivingDirections(
             @Header("X-NCP-APIGW-API-KEY-ID") String clientId,
             @Header("X-NCP-APIGW-API-KEY") String clientSecret,
