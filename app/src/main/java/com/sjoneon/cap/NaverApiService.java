@@ -10,7 +10,7 @@ import retrofit2.http.Query;
  * GET 방식을 사용하며, 올바른 엔드포인트와 파라미터를 지정합니다.
  */
 public interface NaverApiService {
-    @GET("https://maps.apigw.ntruss.com/map-direction/v1")
+    @GET("https://maps.apigw.ntruss.com/map-direction/v1/driving")
     Call<NaverDirectionsResponse> getDrivingDirections(
             @Header("X-NCP-APIGW-API-KEY-ID") String clientId,
             @Header("X-NCP-APIGW-API-KEY") String clientSecret,
