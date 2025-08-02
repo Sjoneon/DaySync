@@ -27,7 +27,7 @@ android {
         // 기존 기상청 API 키
         buildConfigField("String", "KMA_API_KEY", "\"${properties.getProperty("KMA_API_KEY")}\"")
 
-        // [수정] 네이버 API 키 (local.properties의 키 이름과 동일하게 매핑)
+        // 네이버 API 키
         buildConfigField("String", "NAVER_CLIENT_ID", "\"${properties.getProperty("NAVER_CLIENT_ID")}\"")
         buildConfigField("String", "NAVER_CLIENT_SECRET", "\"${properties.getProperty("NAVER_CLIENT_SECRET")}\"")
     }
@@ -56,8 +56,8 @@ dependencies {
     implementation(libs.activity)
     implementation(libs.constraintlayout)
 
-    // 네이버 지도 SDK
-    implementation("com.naver.maps:map-sdk:3.21.0")
+    // [수정] 네이버 지도 SDK 버전을 3.21.0에서 최신 버전인 3.22.0으로 업데이트합니다.
+    implementation("com.naver.maps:map-sdk:3.22.0")
 
     // Google Play 서비스 위치 라이브러리 (현위치 기능)
     implementation("com.google.android.gms:play-services-location:21.3.0")

@@ -1,9 +1,11 @@
 [versions]
+# [수정] Android Gradle Plugin 버전을 스튜디오 호환 버전인 8.9.0으로 수정합니다.
 agp = "8.9.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
-appcompat = "1.7.0"
+# appcompat은 최신 버전(1.7.1)을 그대로 사용해도 괜찮습니다.
+appcompat = "1.7.1"
 material = "1.12.0"
 activity = "1.10.1"
 constraintlayout = "2.2.1"
@@ -19,4 +21,3 @@ constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayo
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-

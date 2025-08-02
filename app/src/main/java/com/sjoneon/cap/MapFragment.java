@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -29,6 +30,7 @@ import com.naver.maps.map.overlay.Marker;
 import com.naver.maps.map.overlay.PolylineOverlay;
 import com.naver.maps.map.util.FusedLocationSource;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -38,6 +40,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     private MapView mapView;
     private NaverMap naverMap;
+    // [수정] FusedLocationSource 클래스 타입을 그대로 사용합니다.
     private FusedLocationSource locationSource;
     private FusedLocationProviderClient fusedLocationProviderClient;
 
@@ -51,20 +54,40 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(requireActivity());
+        // [수정] FusedLocationSource를 여기서 초기화합니다.
         locationSource = new FusedLocationSource(this, LOCATION_PERMISSION_REQUEST_CODE);
 
         Bundle args = getArguments();
         if (args != null) {
             startLocationName = args.getString("start_location", "");
             endLocationName = args.getString("end_location", "");
-            routePathCoords = (ArrayList<double[]>) args.getSerializable("route_path_coords");
+
+            // Unchecked cast 경고 해결을 위한 버전별 분기 처리
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // Android 13 (API 33) 이상에서는 타입을 지정하여 안전하게 가져옵니다.
+                Serializable serializableExtra = args.getSerializable("route_path_coords", Serializable.class);
+                if (serializableExtra instanceof ArrayList) {
+                    try {
+                        //noinspection unchecked
+                        this.routePathCoords = (ArrayList<double[]>) serializableExtra;
+                    } catch (ClassCastException e) {
+                        this.routePathCoords = new ArrayList<>();
+                    }
+                }
+            } else {
+                // 이전 버전에서는 기존 방식을 사용합니다.
+                //noinspection deprecation,unchecked
+                this.routePathCoords = (ArrayList<double[]>) args.getSerializable("route_path_coords");
+            }
         }
     }
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        mapView = new MapView(requireActivity());
+        if (mapView == null) {
+            mapView = new MapView(requireActivity());
+        }
         return mapView;
     }
 
@@ -106,9 +129,11 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     private void drawRoute() {
         if (naverMap == null || routePathCoords == null || routePathCoords.isEmpty()) {
-            if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return;
+            if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                return;
+            }
             fusedLocationProviderClient.getLastLocation().addOnSuccessListener(location -> {
-                if (location != null) {
+                if (location != null && naverMap != null) {
                     naverMap.moveCamera(CameraUpdate.scrollTo(new LatLng(location.getLatitude(), location.getLongitude())));
                 }
             });
@@ -117,7 +142,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
         List<LatLng> coords = new ArrayList<>();
         for (double[] point : routePathCoords) {
-            coords.add(new LatLng(point[1], point[0])); // 위도(y), 경도(x) 순서
+            coords.add(new LatLng(point[1], point[0])); // 위도(y), 경도(x)
         }
 
         if (coords.isEmpty()) return;
@@ -140,7 +165,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         polylineOverlay = new PolylineOverlay();
         polylineOverlay.setCoords(coords);
         polylineOverlay.setWidth(10);
-        polylineOverlay.setColor(Color.BLUE); // 대중교통은 파란색으로 표시
+        polylineOverlay.setColor(Color.BLUE);
         polylineOverlay.setMap(naverMap);
 
         naverMap.moveCamera(CameraUpdate.fitBounds(new LatLngBounds(startPoint, endPoint), 100));
@@ -148,21 +173,30 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        // [수정] FusedLocationSource의 onRequestPermissionsResult를 호출하여 결과를 처리합니다.
         if (locationSource.onRequestPermissionsResult(requestCode, permissions, grantResults)) {
-            if (locationSource.isActivated()) {
-                enableLocationFeatures();
-            } else {
-                Toast.makeText(getContext(), getString(R.string.location_permission_denied), Toast.LENGTH_LONG).show();
+            if (!locationSource.isActivated()) { // 권한 거부됨
+                if (naverMap != null) {
+                    naverMap.setLocationTrackingMode(com.naver.maps.map.LocationTrackingMode.None);
+                }
             }
+            return;
         }
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     }
 
-    @Override public void onStart() { super.onStart(); mapView.onStart(); }
-    @Override public void onResume() { super.onResume(); mapView.onResume(); }
-    @Override public void onPause() { super.onPause(); mapView.onPause(); }
-    @Override public void onStop() { super.onStop(); mapView.onStop(); }
-    @Override public void onDestroyView() { super.onDestroyView(); mapView.onDestroy(); }
-    @Override public void onSaveInstanceState(@NonNull Bundle outState) { super.onSaveInstanceState(outState); mapView.onSaveInstanceState(outState); }
-    @Override public void onLowMemory() { super.onLowMemory(); mapView.onLowMemory(); }
+    // Fragment 생명주기에 맞춰 MapView의 생명주기 메서드 호출
+    @Override public void onStart() { super.onStart(); if (mapView != null) mapView.onStart(); }
+    @Override public void onResume() { super.onResume(); if (mapView != null) mapView.onResume(); }
+    @Override public void onPause() { super.onPause(); if (mapView != null) mapView.onPause(); }
+    @Override public void onStop() { super.onStop(); if (mapView != null) mapView.onStop(); }
+    @Override public void onDestroyView() {
+        super.onDestroyView();
+        if (mapView != null) {
+            mapView.onDestroy();
+            mapView = null;
+        }
+    }
+    @Override public void onSaveInstanceState(@NonNull Bundle outState) { super.onSaveInstanceState(outState); if (mapView != null) mapView.onSaveInstanceState(outState); }
+    @Override public void onLowMemory() { super.onLowMemory(); if (mapView != null) mapView.onLowMemory(); }
 }
