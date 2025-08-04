@@ -1,3 +1,4 @@
+// TmapPedestrianResponse.java
 package com.sjoneon.cap;
 
 import com.google.gson.annotations.SerializedName;

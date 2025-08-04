@@ -14,6 +14,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -28,10 +30,9 @@ import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.gson.Gson;
 
-
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
@@ -47,21 +48,28 @@ public class RouteFragment extends Fragment {
 
     private static final String TAG = "RouteFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
-    // [수정] 베이스 URL을 명확하게 네이버 클라우드 플랫폼 주소로 변경합니다.
+
+    // API Base URLs
     private static final String NAVER_API_BASE_URL = "https://naveropenapi.apigw.ntruss.com/";
+    private static final String TMAP_API_BASE_URL = "https://apis.openapi.sk.com/";
+    // [수정] TAGO API의 Base URL을 공통된 최상위 경로로 변경합니다.
+    private static final String TAGO_API_BASE_URL = "https://apis.data.go.kr/1613000/ArvlInfoInqireService/";
 
     // 클래스 멤버 변수 선언부
     private EditText editStartLocation, editEndLocation;
     private Button buttonSearchRoute, buttonMapView;
     private TextView textNoRoutes;
     private RecyclerView recyclerViewRoutes;
+    private RadioGroup transportRadioGroup;
     private FusedLocationProviderClient fusedLocationClient;
     private List<RouteInfo> routeList = new ArrayList<>();
     private RouteAdapter routeAdapter;
     private Geocoder geocoder;
     private NaverApiService naverApiService;
-    private List<List<Double>> currentPath;
+    private TmapApiService tmapApiService;
+    private TagoApiService tagoApiService;
     private ExecutorService executorService;
+    private Location startLocation, endLocation;
 
     @Nullable
     @Override
@@ -87,13 +95,26 @@ public class RouteFragment extends Fragment {
     private void initializeServices() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
         geocoder = new Geocoder(requireContext(), Locale.KOREAN);
-        executorService = Executors.newSingleThreadExecutor();
+        executorService = Executors.newFixedThreadPool(3);
 
-        Retrofit retrofit = new Retrofit.Builder()
+        naverApiService = new Retrofit.Builder()
                 .baseUrl(NAVER_API_BASE_URL)
                 .addConverterFactory(GsonConverterFactory.create())
-                .build();
-        naverApiService = retrofit.create(NaverApiService.class);
+                .build()
+                .create(NaverApiService.class);
+
+        tmapApiService = new Retrofit.Builder()
+                .baseUrl(TMAP_API_BASE_URL)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+                .create(TmapApiService.class);
+
+        // [수정] 수정된 TAGO_API_BASE_URL 상수를 사용하여 Retrofit 인스턴스를 생성합니다.
+        tagoApiService = new Retrofit.Builder()
+                .baseUrl(TAGO_API_BASE_URL)
+                .addConverterFactory(GsonConverterFactory.create(new Gson()))
+                .build()
+                .create(TagoApiService.class);
     }
 
     private void setupRecyclerView() {
@@ -115,6 +136,7 @@ public class RouteFragment extends Fragment {
         fusedLocationClient.getLastLocation()
                 .addOnSuccessListener(requireActivity(), location -> {
                     if (location != null) {
+                        this.startLocation = location;
                         executorService.execute(() -> {
                             String address = getAddressFromLocation(location);
                             new Handler(Looper.getMainLooper()).post(() -> editStartLocation.setText(address));
@@ -140,20 +162,22 @@ public class RouteFragment extends Fragment {
         String endAddress = editEndLocation.getText().toString().trim();
 
         if (startAddress.isEmpty() || endAddress.isEmpty()) {
-            Toast.makeText(getContext(), getString(R.string.empty_location_error), Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), "출발지와 도착지를 모두 입력해주세요.", Toast.LENGTH_SHORT).show();
             return;
         }
 
         executorService.execute(() -> {
-            Location startLocation = getCoordinatesFromAddress(startAddress);
-            Location endLocation = getCoordinatesFromAddress(endAddress);
+            if (this.startLocation == null) {
+                this.startLocation = getCoordinatesFromAddress(startAddress);
+            }
+            this.endLocation = getCoordinatesFromAddress(endAddress);
 
             new Handler(Looper.getMainLooper()).post(() -> {
                 if (startLocation == null || endLocation == null) {
-                    Toast.makeText(getContext(), getString(R.string.geocode_error), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), "주소를 좌표로 변환할 수 없습니다.", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                fetchDrivingDirections(startLocation, endLocation);
+                searchPublicTransitRoutes();
             });
         });
     }
@@ -174,94 +198,156 @@ public class RouteFragment extends Fragment {
         return null;
     }
 
-    /**
-     * [수정] 네이버 Directions API를 호출하여 운전 경로를 가져옵니다.
-     * 에러 응답 처리를 강화하여 API 호출 실패 시 원인을 명확히 파악할 수 있도록 수정했습니다.
-     */
-    private void fetchDrivingDirections(Location start, Location end) {
-        String startCoords = String.format(Locale.US, "%f,%f", start.getLongitude(), start.getLatitude());
-        String endCoords = String.format(Locale.US, "%f,%f", end.getLongitude(), end.getLatitude());
+    private void searchPublicTransitRoutes() {
+        routeList.clear();
+        routeAdapter.notifyDataSetChanged();
+        updateRouteListVisibility(false, "대중교통 경로를 탐색 중입니다...");
 
-        // API 키가 BuildConfig를 통해 정상적으로 로드되는지 로그로 확인
-        Log.d(TAG, "Naver Client ID: " + BuildConfig.NAVER_CLIENT_ID);
-
-        naverApiService.getDrivingDirections(
-                        BuildConfig.NAVER_CLIENT_ID,
-                        BuildConfig.NAVER_CLIENT_SECRET,
-                        startCoords,
-                        endCoords)
-                .enqueue(new Callback<NaverDirectionsResponse>() {
+        tagoApiService.getNearbyBusStops(BuildConfig.TAGO_API_KEY_ENCODED, startLocation.getLatitude(), startLocation.getLongitude(), 10, 1, "json")
+                .enqueue(new Callback<TagoBusStopResponse>() {
                     @Override
-                    public void onResponse(@NonNull Call<NaverDirectionsResponse> call, @NonNull Response<NaverDirectionsResponse> response) {
-                        if (response.isSuccessful() && response.body() != null) {
-                            NaverDirectionsResponse directionsResponse = response.body();
-                            // [수정] API 응답 구조에 맞게 경로 데이터 확인
-                            if (directionsResponse.getRoute() != null && directionsResponse.getRoute().getTraoptimal() != null && !directionsResponse.getRoute().getTraoptimal().isEmpty()) {
-                                processDrivingRouteData(directionsResponse);
-                            } else {
-                                String responseBody = new Gson().toJson(response.body());
-                                Log.w(TAG, "API 응답 성공, 그러나 경로 데이터 없음: " + responseBody);
-                                Toast.makeText(getContext(), "탐색 가능한 경로가 없습니다.", Toast.LENGTH_LONG).show();
+                    public void onResponse(@NonNull Call<TagoBusStopResponse> call, @NonNull Response<TagoBusStopResponse> response) {
+                        if (response.isSuccessful() && response.body() != null && response.body().response != null && response.body().response.body != null && response.body().response.body.items != null) {
+                            List<TagoBusStopResponse.BusStop> nearbyStops = response.body().response.body.items.item;
+                            if (nearbyStops == null || nearbyStops.isEmpty()) {
+                                updateRouteListVisibility(true, "주변에 버스 정류장이 없습니다.");
+                                return;
                             }
+                            findAndProcessBusRoutes(nearbyStops);
                         } else {
-                            // [수정] API 에러 응답을 더 상세히 로그로 남김
-                            try {
-                                String errorBody = response.errorBody() != null ? response.errorBody().string() : "Unknown error";
-                                Log.e(TAG, "API Error: " + response.code() + " - " + errorBody);
-                                Toast.makeText(getContext(), "경로 탐색 오류 " + response.code() + ": " + errorBody, Toast.LENGTH_LONG).show();
-                            } catch (Exception e) {
-                                Log.e(TAG, "에러 응답 처리 중 예외 발생", e);
-                            }
+                            handleApiError("주변 정류장 검색", response);
                         }
                     }
 
                     @Override
-                    public void onFailure(@NonNull Call<NaverDirectionsResponse> call, @NonNull Throwable t) {
-                        Log.e(TAG, "Directions API 네트워크 호출 실패", t);
-                        Toast.makeText(getContext(), "네트워크 오류가 발생했습니다: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                    public void onFailure(@NonNull Call<TagoBusStopResponse> call, @NonNull Throwable t) {
+                        handleApiFailure("주변 정류장 검색", t);
                     }
                 });
     }
 
+    private void findAndProcessBusRoutes(List<TagoBusStopResponse.BusStop> nearbyStops) {
+        List<RouteInfo> potentialRoutes = new ArrayList<>();
+        for (TagoBusStopResponse.BusStop stop : nearbyStops) {
+            tagoApiService.getBusArrivalInfo(BuildConfig.TAGO_API_KEY_ENCODED, stop.citycode, stop.nodeid, 20, 1, "json")
+                    .enqueue(new Callback<TagoBusArrivalResponse>() {
+                        @Override
+                        public void onResponse(@NonNull Call<TagoBusArrivalResponse> call, @NonNull Response<TagoBusArrivalResponse> response) {
+                            if (response.isSuccessful() && response.body() != null && response.body().response.body.items != null && response.body().response.body.items.item != null) {
+                                for (TagoBusArrivalResponse.BusArrival bus : response.body().response.body.items.item) {
+                                    checkBusRouteAndCreateRouteInfo(bus, stop, potentialRoutes);
+                                }
+                            }
+                        }
 
-    private void processDrivingRouteData(NaverDirectionsResponse data) {
-        routeList.clear();
-        NaverDirectionsResponse.Traoptimal optimalRoute = data.getRoute().getTraoptimal().get(0);
-        NaverDirectionsResponse.Summary summary = optimalRoute.getSummary();
-
-        int durationMinutes = summary.getDuration() / 1000 / 60;
-        double distanceKm = summary.getDistance() / 1000.0;
-
-        String summaryText = String.format("총 이동 시간: %d분, 거리: %.1fkm", durationMinutes, distanceKm);
-        String detailText = String.format("예상 택시비: %,d원", summary.getTaxiFare());
-
-        routeList.add(new RouteInfo("자동차", summaryText, "지금 출발", detailText, durationMinutes, true));
-        currentPath = optimalRoute.getPath();
-
-        routeAdapter.notifyDataSetChanged();
-        updateRouteListVisibility();
+                        @Override
+                        public void onFailure(@NonNull Call<TagoBusArrivalResponse> call, @NonNull Throwable t) {
+                            Log.w(TAG, "정류장 도착 정보 조회 실패: " + stop.nodenm, t);
+                        }
+                    });
+        }
     }
 
-    private void updateRouteListVisibility() {
-        textNoRoutes.setVisibility(routeList.isEmpty() ? View.VISIBLE : View.GONE);
-        recyclerViewRoutes.setVisibility(routeList.isEmpty() ? View.GONE : View.VISIBLE);
+    private void checkBusRouteAndCreateRouteInfo(TagoBusArrivalResponse.BusArrival bus, TagoBusStopResponse.BusStop startStop, List<RouteInfo> potentialRoutes) {
+        tagoApiService.getBusRouteStationList(BuildConfig.TAGO_API_KEY_ENCODED, startStop.citycode, bus.routeid, 100, 1, "json")
+                .enqueue(new Callback<TagoBusRouteStationResponse>() {
+                    @Override
+                    public void onResponse(@NonNull Call<TagoBusRouteStationResponse> call, @NonNull Response<TagoBusRouteStationResponse> response) {
+                        if (response.isSuccessful() && response.body() != null && response.body().response.body.items != null && response.body().response.body.items.item != null) {
+                            List<TagoBusRouteStationResponse.RouteStation> routeStations = response.body().response.body.items.item;
+                            TagoBusRouteStationResponse.RouteStation endStop = findClosestStopToEndLocation(routeStations);
+                            if (endStop == null) return;
+                            calculateWalkingTimesAndFinalizeRoute(startStop, endStop, bus, potentialRoutes);
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull Call<TagoBusRouteStationResponse> call, @NonNull Throwable t) {
+                        Log.w(TAG, "버스 노선 정보 조회 실패: " + bus.routeno, t);
+                    }
+                });
+    }
+
+    private void calculateWalkingTimesAndFinalizeRoute(TagoBusStopResponse.BusStop startStop, TagoBusRouteStationResponse.RouteStation endStop, TagoBusArrivalResponse.BusArrival bus, List<RouteInfo> potentialRoutes) {
+        final int[] walkToStartStopSec = new int[1];
+        String startX = String.valueOf(startLocation.getLongitude());
+        String startY = String.valueOf(startLocation.getLatitude());
+        String startStopX = String.valueOf(startStop.gpslong);
+        String startStopY = String.valueOf(startStop.gpslati);
+
+        tmapApiService.getPedestrianRoute(BuildConfig.TMAP_API_KEY, startX, startY, startStopX, startStopY, "출발지", startStop.nodenm)
+                .enqueue(new Callback<TmapPedestrianResponse>() {
+                    @Override
+                    public void onResponse(Call<TmapPedestrianResponse> call, Response<TmapPedestrianResponse> response) {
+                        if (response.isSuccessful() && response.body() != null && !response.body().getFeatures().isEmpty()) {
+                            walkToStartStopSec[0] = response.body().getFeatures().get(0).getProperties().getTotalTime();
+                            int walkToEndStopMin = 5;
+                            int waitMin = bus.arrtime / 60;
+                            int busRideMin = 20;
+                            int totalDurationMin = (walkToStartStopSec[0] / 60) + waitMin + busRideMin + walkToEndStopMin;
+
+                            String summary = String.format("총 %d분 소요 (도보 %d분 + 대기 %d분 + 버스 %d분)", totalDurationMin, (walkToStartStopSec[0] / 60) + walkToEndStopMin, waitMin, busRideMin);
+                            String detail = String.format("%s번 버스 (%s 정류장 승차)", bus.routeno, startStop.nodenm);
+
+                            potentialRoutes.add(new RouteInfo("대중교통", summary, "약 " + waitMin + "분 후 도착", detail, totalDurationMin, false));
+                            potentialRoutes.sort(Comparator.comparingInt(RouteInfo::getDuration));
+
+                            routeList.clear();
+                            routeList.addAll(potentialRoutes);
+                            routeAdapter.notifyDataSetChanged();
+                            updateRouteListVisibility(routeList.isEmpty(), "추천 경로가 없습니다.");
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<TmapPedestrianResponse> call, Throwable t) {
+                        Log.e(TAG, "출발지->정류장 도보 경로 탐색 실패", t);
+                    }
+                });
+    }
+
+    private TagoBusRouteStationResponse.RouteStation findClosestStopToEndLocation(List<TagoBusRouteStationResponse.RouteStation> stations) {
+        if (stations != null && stations.size() > 5) {
+            return stations.get(stations.size() - 2);
+        }
+        return null;
+    }
+
+    private void updateRouteListVisibility(boolean noRoutes, String message) {
+        if(getActivity() == null) return;
+        getActivity().runOnUiThread(() -> {
+            if (noRoutes) {
+                textNoRoutes.setText(message);
+                textNoRoutes.setVisibility(View.VISIBLE);
+                recyclerViewRoutes.setVisibility(View.GONE);
+            } else {
+                textNoRoutes.setVisibility(View.GONE);
+                recyclerViewRoutes.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    private void handleApiError(String apiName, Response<?> response) {
+        try {
+            String errorBody = response.errorBody() != null ? response.errorBody().string() : "Unknown error";
+            Log.e(TAG, apiName + " API Error: " + response.code() + " - " + errorBody);
+            updateRouteListVisibility(true, apiName + " API 호출에 실패했습니다.");
+        } catch (Exception e) {
+            Log.e(TAG, "에러 응답 처리 중 예외 발생", e);
+        }
+    }
+
+    private void handleApiFailure(String apiName, Throwable t) {
+        Log.e(TAG, apiName + " API 네트워크 호출 실패", t);
+        updateRouteListVisibility(true, "네트워크 오류로 " + apiName + " 정보를 가져올 수 없습니다.");
     }
 
     private void openMapView() {
         if (getActivity() instanceof MainActivity) {
-            MainActivity mainActivity = (MainActivity) getActivity();
-
             MapFragment mapFragment = new MapFragment();
             Bundle args = new Bundle();
             args.putString("start_location", editStartLocation.getText().toString());
             args.putString("end_location", editEndLocation.getText().toString());
-            if (currentPath != null) {
-                ArrayList<double[]> serializablePath = new ArrayList<>();
-                for(List<Double> point : currentPath) {
-                    serializablePath.add(new double[]{point.get(0), point.get(1)});
-                }
-                args.putSerializable("route_path_coords", serializablePath);
-            }
             mapFragment.setArguments(args);
 
             getActivity().getSupportFragmentManager().beginTransaction()
@@ -269,8 +355,8 @@ public class RouteFragment extends Fragment {
                     .addToBackStack(null)
                     .commit();
 
-            if (mainActivity.getSupportActionBar() != null) {
-                mainActivity.getSupportActionBar().setTitle("지도");
+            if (((MainActivity) getActivity()).getSupportActionBar() != null) {
+                ((MainActivity) getActivity()).getSupportActionBar().setTitle("지도");
             }
         }
     }
@@ -282,7 +368,7 @@ public class RouteFragment extends Fragment {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 loadCurrentLocation();
             } else {
-                Toast.makeText(getContext(), getString(R.string.location_permission_denied), Toast.LENGTH_LONG).show();
+                Toast.makeText(getContext(), "위치 권한이 거부되었습니다. 앱 설정에서 권한을 허용해주세요.", Toast.LENGTH_LONG).show();
             }
         }
     }
@@ -301,8 +387,12 @@ public class RouteFragment extends Fragment {
         private boolean isRecommended;
 
         public RouteInfo(String type, String summary, String departure, String detail, int duration, boolean recommended) {
-            this.routeType = type; this.routeSummary = summary; this.departureTime = departure;
-            this.routeDetail = detail; this.duration = duration; this.isRecommended = recommended;
+            this.routeType = type;
+            this.routeSummary = summary;
+            this.departureTime = departure;
+            this.routeDetail = detail;
+            this.duration = duration;
+            this.isRecommended = recommended;
         }
 
         public String getRouteType() { return routeType; }
@@ -310,13 +400,18 @@ public class RouteFragment extends Fragment {
         public String getDepartureTime() { return departureTime; }
         public String getRouteDetail() { return routeDetail; }
         public boolean isRecommended() { return isRecommended; }
+        public int getDuration() { return duration; }
     }
 
     private class RouteAdapter extends RecyclerView.Adapter<RouteAdapter.RouteViewHolder> {
         private List<RouteInfo> routes;
-        public RouteAdapter(List<RouteInfo> routes) { this.routes = routes; }
 
-        @NonNull @Override
+        public RouteAdapter(List<RouteInfo> routes) {
+            this.routes = routes;
+        }
+
+        @NonNull
+        @Override
         public RouteViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
             return new RouteViewHolder(LayoutInflater.from(parent.getContext()).inflate(R.layout.item_route, parent, false));
         }
@@ -329,11 +424,15 @@ public class RouteFragment extends Fragment {
             holder.textDepartureTime.setText(route.getDepartureTime());
         }
 
-        @Override public int getItemCount() { return routes.size(); }
+        @Override
+        public int getItemCount() {
+            return routes.size();
+        }
 
         class RouteViewHolder extends RecyclerView.ViewHolder {
             TextView textRouteType, textRouteSummary, textDepartureTime;
             Button buttonExpandRoute, buttonStartNavigation;
+            LinearLayout layoutRouteDetail;
 
             RouteViewHolder(View itemView) {
                 super(itemView);
@@ -342,6 +441,7 @@ public class RouteFragment extends Fragment {
                 textDepartureTime = itemView.findViewById(R.id.textDepartureTime);
                 buttonExpandRoute = itemView.findViewById(R.id.buttonExpandRoute);
                 buttonStartNavigation = itemView.findViewById(R.id.buttonStartNavigation);
+                layoutRouteDetail = itemView.findViewById(R.id.layoutRouteDetail);
             }
         }
     }

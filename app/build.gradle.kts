@@ -33,6 +33,10 @@ android {
 
         // TMAP API 키 추가
         buildConfigField("String", "TMAP_API_KEY", "\"${properties.getProperty("TMAP_API_KEY")}\"")
+
+        // 국토교통부(TAGO) API 키 (인코딩/디코딩)
+        buildConfigField("String", "TAGO_API_KEY_ENCODED", "\"${properties.getProperty("TAGO_API_KEY_ENCODED")}\"")
+        buildConfigField("String", "TAGO_API_KEY_DECODED", "\"${properties.getProperty("TAGO_API_KEY_DECODED")}\"")
     }
 
     buildTypes {
@@ -74,7 +78,8 @@ dependencies {
     // Scalars Converter (응답을 String 등 기본 타입으로 받기 위함)
     implementation("com.squareup.retrofit2:converter-scalars:2.9.0")
 
-
+    // [추가] 응답을 String 등 기본 타입으로 받기 위함 (TAGO API 에러 처리 등에 유용)
+    implementation("com.squareup.retrofit2:converter-scalars:2.9.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
