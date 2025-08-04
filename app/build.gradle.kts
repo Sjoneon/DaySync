@@ -30,6 +30,9 @@ android {
         // 네이버 API 키
         buildConfigField("String", "NAVER_CLIENT_ID", "\"${properties.getProperty("NAVER_CLIENT_ID")}\"")
         buildConfigField("String", "NAVER_CLIENT_SECRET", "\"${properties.getProperty("NAVER_CLIENT_SECRET")}\"")
+
+        // TMAP API 키 추가
+        buildConfigField("String", "TMAP_API_KEY", "\"${properties.getProperty("TMAP_API_KEY")}\"")
     }
 
     buildTypes {
