@@ -13,6 +13,5 @@ public class TagoBusRouteStationResponse {
         @SerializedName("nodeid") public String nodeid;
         @SerializedName("nodenm") public String nodenm;
         @SerializedName("ord") public int ord; // 순번
-        // 참고: 이 API 응답에는 좌표 정보가 없어 아쉬운 부분입니다.
     }
 }

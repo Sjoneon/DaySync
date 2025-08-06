@@ -29,6 +29,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -52,8 +53,7 @@ public class RouteFragment extends Fragment {
     // API Base URLs
     private static final String NAVER_API_BASE_URL = "https://naveropenapi.apigw.ntruss.com/";
     private static final String TMAP_API_BASE_URL = "https://apis.openapi.sk.com/";
-    // [수정] TAGO API의 Base URL을 공통된 최상위 경로로 변경합니다.
-    private static final String TAGO_API_BASE_URL = "https://apis.data.go.kr/1613000/ArvlInfoInqireService/";
+    private static final String TAGO_API_BASE_URL = "https://apis.data.go.kr/1613000/";
 
     // 클래스 멤버 변수 선언부
     private EditText editStartLocation, editEndLocation;
@@ -97,22 +97,33 @@ public class RouteFragment extends Fragment {
         geocoder = new Geocoder(requireContext(), Locale.KOREAN);
         executorService = Executors.newFixedThreadPool(3);
 
+        // TagoBusArrivalResponse 처리를 위한 사용자 정의 Deserializer를 등록합니다.
+        Gson tagoGson = new GsonBuilder()
+                .registerTypeAdapter(TagoBusArrivalResponse.Body.class, new TagoBusArrivalDeserializer())
+                .setLenient()
+                .create();
+
+        // 나머지 API를 위한 일반 Gson 객체
+        Gson generalGson = new GsonBuilder()
+                .setLenient()
+                .create();
+
         naverApiService = new Retrofit.Builder()
                 .baseUrl(NAVER_API_BASE_URL)
-                .addConverterFactory(GsonConverterFactory.create())
+                .addConverterFactory(GsonConverterFactory.create(generalGson))
                 .build()
                 .create(NaverApiService.class);
 
         tmapApiService = new Retrofit.Builder()
                 .baseUrl(TMAP_API_BASE_URL)
-                .addConverterFactory(GsonConverterFactory.create())
+                .addConverterFactory(GsonConverterFactory.create(generalGson))
                 .build()
                 .create(TmapApiService.class);
 
-        // [수정] 수정된 TAGO_API_BASE_URL 상수를 사용하여 Retrofit 인스턴스를 생성합니다.
+        // TAGO API는 위에서 만든 tagoGson 객체를 사용합니다.
         tagoApiService = new Retrofit.Builder()
                 .baseUrl(TAGO_API_BASE_URL)
-                .addConverterFactory(GsonConverterFactory.create(new Gson()))
+                .addConverterFactory(GsonConverterFactory.create(tagoGson))
                 .build()
                 .create(TagoApiService.class);
     }
@@ -167,7 +178,7 @@ public class RouteFragment extends Fragment {
         }
 
         executorService.execute(() -> {
-            if (this.startLocation == null) {
+            if (this.startLocation == null || !startAddress.equals(getAddressFromLocation(this.startLocation))) {
                 this.startLocation = getCoordinatesFromAddress(startAddress);
             }
             this.endLocation = getCoordinatesFromAddress(endAddress);
@@ -203,7 +214,7 @@ public class RouteFragment extends Fragment {
         routeAdapter.notifyDataSetChanged();
         updateRouteListVisibility(false, "대중교통 경로를 탐색 중입니다...");
 
-        tagoApiService.getNearbyBusStops(BuildConfig.TAGO_API_KEY_ENCODED, startLocation.getLatitude(), startLocation.getLongitude(), 10, 1, "json")
+        tagoApiService.getNearbyBusStops(BuildConfig.TAGO_API_KEY_DECODED, startLocation.getLatitude(), startLocation.getLongitude(), 10, 1, "json")
                 .enqueue(new Callback<TagoBusStopResponse>() {
                     @Override
                     public void onResponse(@NonNull Call<TagoBusStopResponse> call, @NonNull Response<TagoBusStopResponse> response) {
@@ -229,13 +240,19 @@ public class RouteFragment extends Fragment {
     private void findAndProcessBusRoutes(List<TagoBusStopResponse.BusStop> nearbyStops) {
         List<RouteInfo> potentialRoutes = new ArrayList<>();
         for (TagoBusStopResponse.BusStop stop : nearbyStops) {
-            tagoApiService.getBusArrivalInfo(BuildConfig.TAGO_API_KEY_ENCODED, stop.citycode, stop.nodeid, 20, 1, "json")
+            tagoApiService.getBusArrivalInfo(BuildConfig.TAGO_API_KEY_DECODED, stop.citycode, stop.nodeid, 20, 1, "json")
                     .enqueue(new Callback<TagoBusArrivalResponse>() {
                         @Override
                         public void onResponse(@NonNull Call<TagoBusArrivalResponse> call, @NonNull Response<TagoBusArrivalResponse> response) {
-                            if (response.isSuccessful() && response.body() != null && response.body().response.body.items != null && response.body().response.body.items.item != null) {
-                                for (TagoBusArrivalResponse.BusArrival bus : response.body().response.body.items.item) {
-                                    checkBusRouteAndCreateRouteInfo(bus, stop, potentialRoutes);
+                            // Deserializer를 사용하도록 응답 처리 로직 수정
+                            if (response.isSuccessful() && response.body() != null && response.body().response.body.items != null) {
+                                // Deserializer를 통해 파싱된 ItemsContainer 객체를 가져옵니다.
+                                TagoBusArrivalResponse.ItemsContainer itemsContainer = new Gson().fromJson(response.body().response.body.items, TagoBusArrivalResponse.ItemsContainer.class);
+
+                                if (itemsContainer != null && itemsContainer.item != null) {
+                                    for (TagoBusArrivalResponse.BusArrival bus : itemsContainer.item) {
+                                        checkBusRouteAndCreateRouteInfo(bus, stop, potentialRoutes);
+                                    }
                                 }
                             }
                         }
@@ -249,7 +266,7 @@ public class RouteFragment extends Fragment {
     }
 
     private void checkBusRouteAndCreateRouteInfo(TagoBusArrivalResponse.BusArrival bus, TagoBusStopResponse.BusStop startStop, List<RouteInfo> potentialRoutes) {
-        tagoApiService.getBusRouteStationList(BuildConfig.TAGO_API_KEY_ENCODED, startStop.citycode, bus.routeid, 100, 1, "json")
+        tagoApiService.getBusRouteStationList(BuildConfig.TAGO_API_KEY_DECODED, startStop.citycode, bus.routeid, 100, 1, "json")
                 .enqueue(new Callback<TagoBusRouteStationResponse>() {
                     @Override
                     public void onResponse(@NonNull Call<TagoBusRouteStationResponse> call, @NonNull Response<TagoBusRouteStationResponse> response) {
@@ -338,7 +355,7 @@ public class RouteFragment extends Fragment {
     }
 
     private void handleApiFailure(String apiName, Throwable t) {
-        Log.e(TAG, apiName + " API 네트워크 호출 실패", t);
+        Log.e(TAG, apiName + " API 네트워크 호출 실패 (Ask Gemini)", t);
         updateRouteListVisibility(true, "네트워크 오류로 " + apiName + " 정보를 가져올 수 없습니다.");
     }
 
@@ -385,6 +402,10 @@ public class RouteFragment extends Fragment {
         private String routeType, routeSummary, departureTime, routeDetail;
         private int duration;
         private boolean isRecommended;
+        private int walkingTimeToStartStop;
+        private int busWaitTime;
+        private int busRideTime;
+        private int walkingTimeToDestination;
 
         public RouteInfo(String type, String summary, String departure, String detail, int duration, boolean recommended) {
             this.routeType = type;
@@ -401,6 +422,16 @@ public class RouteFragment extends Fragment {
         public String getRouteDetail() { return routeDetail; }
         public boolean isRecommended() { return isRecommended; }
         public int getDuration() { return duration; }
+        public int getWalkingTimeToStartStop() { return walkingTimeToStartStop; }
+        public int getBusWaitTime() { return busWaitTime; }
+        public int getBusRideTime() { return busRideTime; }
+        public int getWalkingTimeToDestination() { return walkingTimeToDestination; }
+
+        public void setWalkingTimeToStartStop(int walkingTimeToStartStop) { this.walkingTimeToStartStop = walkingTimeToStartStop; }
+        public void setBusWaitTime(int busWaitTime) { this.busWaitTime = busWaitTime; }
+        public void setBusRideTime(int busRideTime) { this.busRideTime = busRideTime; }
+        public void setWalkingTimeToDestination(int walkingTimeToDestination) { this.walkingTimeToDestination = walkingTimeToDestination; }
+
     }
 
     private class RouteAdapter extends RecyclerView.Adapter<RouteAdapter.RouteViewHolder> {
