@@ -3,7 +3,6 @@ package com.sjoneon.cap;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.location.Location;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -17,15 +16,13 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationServices;
 import com.naver.maps.geometry.LatLng;
 import com.naver.maps.geometry.LatLngBounds;
 import com.naver.maps.map.CameraUpdate;
+import com.naver.maps.map.LocationTrackingMode;
 import com.naver.maps.map.MapView;
 import com.naver.maps.map.NaverMap;
 import com.naver.maps.map.OnMapReadyCallback;
-import com.naver.maps.map.overlay.LocationOverlay;
 import com.naver.maps.map.overlay.Marker;
 import com.naver.maps.map.overlay.PolylineOverlay;
 import com.naver.maps.map.util.FusedLocationSource;
@@ -40,44 +37,30 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     private MapView mapView;
     private NaverMap naverMap;
-    // [수정] FusedLocationSource 클래스 타입을 그대로 사용합니다.
     private FusedLocationSource locationSource;
-    private FusedLocationProviderClient fusedLocationProviderClient;
-
-    private Marker startMarker, endMarker;
-    private PolylineOverlay polylineOverlay;
 
     private String startLocationName, endLocationName;
-    private ArrayList<double[]> routePathCoords;
+    private List<List<Double>> routePathCoords;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(requireActivity());
-        // [수정] FusedLocationSource를 여기서 초기화합니다.
         locationSource = new FusedLocationSource(this, LOCATION_PERMISSION_REQUEST_CODE);
 
         Bundle args = getArguments();
         if (args != null) {
-            startLocationName = args.getString("start_location", "");
-            endLocationName = args.getString("end_location", "");
+            startLocationName = args.getString("start_location", "출발지");
+            endLocationName = args.getString("end_location", "도착지");
 
-            // Unchecked cast 경고 해결을 위한 버전별 분기 처리
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                // Android 13 (API 33) 이상에서는 타입을 지정하여 안전하게 가져옵니다.
-                Serializable serializableExtra = args.getSerializable("route_path_coords", Serializable.class);
-                if (serializableExtra instanceof ArrayList) {
-                    try {
-                        //noinspection unchecked
-                        this.routePathCoords = (ArrayList<double[]>) serializableExtra;
-                    } catch (ClassCastException e) {
-                        this.routePathCoords = new ArrayList<>();
-                    }
+            // 직렬화된 경로 좌표 데이터를 안전하게 가져오기
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    routePathCoords = (List<List<Double>>) args.getSerializable("route_path_coords", Serializable.class);
+                } else {
+                    routePathCoords = (List<List<Double>>) args.getSerializable("route_path_coords");
                 }
-            } else {
-                // 이전 버전에서는 기존 방식을 사용합니다.
-                //noinspection deprecation,unchecked
-                this.routePathCoords = (ArrayList<double[]>) args.getSerializable("route_path_coords");
+            } catch (ClassCastException e){
+                routePathCoords = null;
             }
         }
     }
@@ -85,9 +68,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        if (mapView == null) {
-            mapView = new MapView(requireActivity());
-        }
+        mapView = new MapView(requireActivity());
         return mapView;
     }
 
@@ -101,15 +82,15 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     @Override
     public void onMapReady(@NonNull NaverMap naverMap) {
         this.naverMap = naverMap;
-        naverMap.setLocationSource(locationSource);
+        naverMap.setLocationSource(locationSource); // 현재 위치 소스 설정
 
+        // 위치 권한 확인 및 요청
         if (hasLocationPermission()) {
             enableLocationFeatures();
         } else {
-            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST_CODE);
+            ActivityCompat.requestPermissions(requireActivity(), new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST_CODE);
         }
 
-        setupMapUI();
         drawRoute();
     }
 
@@ -117,86 +98,74 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         return ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
+    /**
+     * 위치 권한이 있을 경우, GPS 현위치 추적 및 버튼을 활성화합니다.
+     */
     private void enableLocationFeatures() {
-        naverMap.setLocationTrackingMode(com.naver.maps.map.LocationTrackingMode.Follow);
-        LocationOverlay locationOverlay = naverMap.getLocationOverlay();
-        locationOverlay.setVisible(true);
+        naverMap.setLocationTrackingMode(LocationTrackingMode.Follow); // 위치 추적 모드 활성화
+        naverMap.getUiSettings().setLocationButtonEnabled(true); // 현위치 버튼 표시
     }
 
-    private void setupMapUI() {
-        naverMap.getUiSettings().setLocationButtonEnabled(true);
-    }
-
+    /**
+     * 전달받은 경로 좌표를 지도에 그리고, 출발/도착 마커를 표시합니다.
+     */
     private void drawRoute() {
-        if (naverMap == null || routePathCoords == null || routePathCoords.isEmpty()) {
-            if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                return;
-            }
-            fusedLocationProviderClient.getLastLocation().addOnSuccessListener(location -> {
-                if (location != null && naverMap != null) {
-                    naverMap.moveCamera(CameraUpdate.scrollTo(new LatLng(location.getLatitude(), location.getLongitude())));
-                }
-            });
+        if (routePathCoords == null || routePathCoords.isEmpty()) {
+            Toast.makeText(getContext(), "표시할 경로 정보가 없습니다.", Toast.LENGTH_SHORT).show();
             return;
         }
 
         List<LatLng> coords = new ArrayList<>();
-        for (double[] point : routePathCoords) {
-            coords.add(new LatLng(point[1], point[0])); // 위도(y), 경도(x)
+        for (List<Double> point : routePathCoords) {
+            if (point.size() >= 2) {
+                // TMAP API는 [경도, 위도] 순서로 좌표를 제공합니다.
+                coords.add(new LatLng(point.get(1), point.get(0)));
+            }
         }
 
-        if (coords.isEmpty()) return;
+        if (coords.size() < 2) return;
 
-        LatLng startPoint = coords.get(0);
-        LatLng endPoint = coords.get(coords.size() - 1);
+        // 경로(파란선) 그리기
+        PolylineOverlay polyline = new PolylineOverlay();
+        polyline.setCoords(coords);
+        polyline.setWidth(10);
+        polyline.setColor(Color.BLUE);
+        polyline.setMap(naverMap);
 
-        if (startMarker != null) startMarker.setMap(null);
-        if (endMarker != null) endMarker.setMap(null);
-        if (polylineOverlay != null) polylineOverlay.setMap(null);
-
-        startMarker = new Marker(startPoint);
-        startMarker.setCaptionText("출발: " + startLocationName);
+        // 출발/도착 마커 생성
+        Marker startMarker = new Marker(coords.get(0));
+        startMarker.setCaptionText(startLocationName);
         startMarker.setMap(naverMap);
 
-        endMarker = new Marker(endPoint);
-        endMarker.setCaptionText("도착: " + endLocationName);
+        Marker endMarker = new Marker(coords.get(coords.size() - 1));
+        endMarker.setCaptionText(endLocationName);
         endMarker.setMap(naverMap);
 
-        polylineOverlay = new PolylineOverlay();
-        polylineOverlay.setCoords(coords);
-        polylineOverlay.setWidth(10);
-        polylineOverlay.setColor(Color.BLUE);
-        polylineOverlay.setMap(naverMap);
-
-        naverMap.moveCamera(CameraUpdate.fitBounds(new LatLngBounds(startPoint, endPoint), 100));
+        // 모든 경로와 마커가 보이도록 카메라 위치 조정
+        LatLngBounds bounds = new LatLngBounds(coords.get(0), coords.get(coords.size() - 1));
+        naverMap.moveCamera(CameraUpdate.fitBounds(bounds, 100)); // 100px의 패딩
     }
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        // [수정] FusedLocationSource의 onRequestPermissionsResult를 호출하여 결과를 처리합니다.
         if (locationSource.onRequestPermissionsResult(requestCode, permissions, grantResults)) {
             if (!locationSource.isActivated()) { // 권한 거부됨
-                if (naverMap != null) {
-                    naverMap.setLocationTrackingMode(com.naver.maps.map.LocationTrackingMode.None);
-                }
+                naverMap.setLocationTrackingMode(LocationTrackingMode.None);
+            } else {
+                enableLocationFeatures();
             }
             return;
         }
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     }
 
-    // Fragment 생명주기에 맞춰 MapView의 생명주기 메서드 호출
-    @Override public void onStart() { super.onStart(); if (mapView != null) mapView.onStart(); }
-    @Override public void onResume() { super.onResume(); if (mapView != null) mapView.onResume(); }
-    @Override public void onPause() { super.onPause(); if (mapView != null) mapView.onPause(); }
-    @Override public void onStop() { super.onStop(); if (mapView != null) mapView.onStop(); }
-    @Override public void onDestroyView() {
-        super.onDestroyView();
-        if (mapView != null) {
-            mapView.onDestroy();
-            mapView = null;
-        }
-    }
-    @Override public void onSaveInstanceState(@NonNull Bundle outState) { super.onSaveInstanceState(outState); if (mapView != null) mapView.onSaveInstanceState(outState); }
-    @Override public void onLowMemory() { super.onLowMemory(); if (mapView != null) mapView.onLowMemory(); }
+    // MapView 생명주기 관리
+    @Override public void onStart() { super.onStart(); mapView.onStart(); }
+    @Override public void onResume() { super.onResume(); mapView.onResume(); }
+    @Override public void onPause() { super.onPause(); mapView.onPause(); }
+    @Override public void onSaveInstanceState(@NonNull Bundle outState) { super.onSaveInstanceState(outState); mapView.onSaveInstanceState(outState); }
+    @Override public void onStop() { super.onStop(); mapView.onStop(); }
+    @Override public void onDestroyView() { super.onDestroyView(); mapView.onDestroy(); }
+    @Override public void onLowMemory() { super.onLowMemory(); mapView.onLowMemory(); }
 }
