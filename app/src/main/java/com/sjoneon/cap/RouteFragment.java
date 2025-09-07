@@ -361,7 +361,7 @@ public class RouteFragment extends Fragment {
     }
 
     /**
-     * 완전무결한 방향성 검증 경로 매칭
+     * 버스 방향성 검증 경로 매칭
      * ord 필드가 작동하지 않을 경우 배열 인덱스와 좌표 기반 백업 방법 사용
      */
     private RouteMatchResult findSimpleRouteMatch(TagoBusStopResponse.BusStop startStop,
