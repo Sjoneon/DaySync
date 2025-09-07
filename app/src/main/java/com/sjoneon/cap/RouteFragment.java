@@ -41,6 +41,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -49,7 +50,8 @@ import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
 /**
- * 간단한 버스 경로 탐색 - 방향 체크 없이 노선이 출발지와 도착지를 모두 지나가는지만 확인
+ * 완전한 버스 탐지 시스템 + TMAP API 실제 도보 시간 계산
+ * 412번, 916-2번 등 누락 버스 문제 해결 + 정확한 도보 시간 제공
  */
 public class RouteFragment extends Fragment {
 
@@ -59,9 +61,10 @@ public class RouteFragment extends Fragment {
     private static final String TMAP_API_BASE_URL = "https://apis.openapi.sk.com/";
     private static final String TAGO_API_BASE_URL = "https://apis.data.go.kr/1613000/";
 
-    private static final int MAX_ROUTES_TO_SHOW = 10;
+    private static final int AVERAGE_BUS_SPEED_BETWEEN_STOPS_MIN = 2;
+    private static final int MAX_ROUTES_TO_SHOW = 10; // 더 많은 경로 표시
     private static final int DEFAULT_BUS_RIDE_TIME_MIN = 15;
-    private static final int MAX_API_PAGES = 5;
+    private static final int MAX_API_PAGES = 5; // 여러 페이지 요청
 
     private EditText editStartLocation, editEndLocation;
     private Button buttonSearchRoute, buttonMapView;
@@ -211,6 +214,9 @@ public class RouteFragment extends Fragment {
         return null;
     }
 
+    /**
+     * [수정] 경로 검색 메서드 - 비동기 처리로 변경
+     */
     private void searchRoutes() {
         String startAddress = editStartLocation.getText().toString().trim();
         String endAddress = editEndLocation.getText().toString().trim();
@@ -244,8 +250,21 @@ public class RouteFragment extends Fragment {
                     this.endLocation = end;
                 });
 
-                List<RouteInfo> routes = searchSimpleBusRoutes(start, end);
-                mainHandler.post(() -> finalizeAndDisplayRoutes(routes));
+                // 비동기 경로 검색 실행
+                mainHandler.post(() -> {
+                    searchComprehensiveBusRoutesAsync(start, end, new ComprehensiveRouteCallback() {
+                        @Override
+                        public void onSuccess(List<RouteInfo> routes) {
+                            finalizeAndDisplayRoutes(routes);
+                        }
+
+                        @Override
+                        public void onError(String errorMessage) {
+                            updateRouteListVisibility(true, "경로 탐색 중 오류가 발생했습니다: " + errorMessage);
+                            showToast("경로 탐색에 실패했습니다.");
+                        }
+                    });
+                });
 
             } catch (Exception e) {
                 Log.e(TAG, "경로 탐색 중 예외 발생", e);
@@ -257,304 +276,407 @@ public class RouteFragment extends Fragment {
     }
 
     /**
-     * 간단한 버스 경로 탐색 - 방향 체크 없이 노선이 출발지와 도착지를 모두 지나가는지만 확인
+     * [수정] 포괄적 버스 경로 탐색 - 비동기 도보 시간 계산 지원
      */
-    private List<RouteInfo> searchSimpleBusRoutes(Location startLocation, Location endLocation) {
-        List<RouteInfo> potentialRoutes = new ArrayList<>();
+    private void searchComprehensiveBusRoutesAsync(Location startLocation, Location endLocation,
+                                                   ComprehensiveRouteCallback callback) {
+        executorService.execute(() -> {
+            try {
+                Log.d(TAG, "=== 1단계: 출발지 주변 정류장 검색 ===");
 
-        try {
-            Log.d(TAG, "=== 1단계: 출발지 주변 정류장 검색 ===");
+                Response<TagoBusStopResponse> startStopsResponse = tagoApiService.getNearbyBusStops(
+                        BuildConfig.TAGO_API_KEY_DECODED,
+                        startLocation.getLatitude(),
+                        startLocation.getLongitude(),
+                        30, 1, "json"
+                ).execute();
 
-            Response<TagoBusStopResponse> startStopsResponse = tagoApiService.getNearbyBusStops(
-                    BuildConfig.TAGO_API_KEY_DECODED,
-                    startLocation.getLatitude(),
-                    startLocation.getLongitude(),
-                    30, 1, "json"
-            ).execute();
-
-            if (!isValidResponse(startStopsResponse, "출발지 주변 정류장")) {
-                return potentialRoutes;
-            }
-
-            List<TagoBusStopResponse.BusStop> startStops = startStopsResponse.body().response.body.items.item;
-            Log.i(TAG, "출발지 주변 정류장 " + startStops.size() + "개 발견");
-
-            Log.d(TAG, "=== 2단계: 도착지 주변 정류장 검색 ===");
-
-            Response<TagoBusStopResponse> endStopsResponse = tagoApiService.getNearbyBusStops(
-                    BuildConfig.TAGO_API_KEY_DECODED,
-                    endLocation.getLatitude(),
-                    endLocation.getLongitude(),
-                    30, 1, "json"
-            ).execute();
-
-            if (!isValidResponse(endStopsResponse, "도착지 주변 정류장")) {
-                return potentialRoutes;
-            }
-
-            List<TagoBusStopResponse.BusStop> endStops = endStopsResponse.body().response.body.items.item;
-            Log.i(TAG, "도착지 주변 정류장 " + endStops.size() + "개 발견");
-
-            Set<String> destinationKeywords = extractKeywordsFromStops(endStops);
-            Set<String> processedRoutes = new HashSet<>();
-
-            Log.d(TAG, "=== 3단계: 버스 경로 분석 시작 ===");
-
-            for (TagoBusStopResponse.BusStop startStop : startStops) {
-                if (startStop.citycode == null || startStop.nodeid == null) {
-                    continue;
+                if (!isValidResponse(startStopsResponse, "출발지 주변 정류장")) {
+                    mainHandler.post(() -> callback.onError("출발지 주변 정류장 검색 실패"));
+                    return;
                 }
 
-                Log.d(TAG, "출발 정류장 분석: " + startStop.nodenm + " (ID: " + startStop.nodeid + ")");
+                List<TagoBusStopResponse.BusStop> startStops = startStopsResponse.body().response.body.items.item;
+                Log.i(TAG, "출발지 주변 정류장 " + startStops.size() + "개 발견");
 
-                List<TagoBusArrivalResponse.BusArrival> allBuses = getAllBusesAtStop(startStop);
+                Log.d(TAG, "=== 2단계: 도착지 주변 정류장 검색 ===");
 
-                if (allBuses.isEmpty()) {
-                    Log.d(TAG, "정류장 " + startStop.nodenm + "에 도착 예정 버스 없음");
-                    continue;
+                Response<TagoBusStopResponse> endStopsResponse = tagoApiService.getNearbyBusStops(
+                        BuildConfig.TAGO_API_KEY_DECODED,
+                        endLocation.getLatitude(),
+                        endLocation.getLongitude(),
+                        30, 1, "json"
+                ).execute();
+
+                if (!isValidResponse(endStopsResponse, "도착지 주변 정류장")) {
+                    mainHandler.post(() -> callback.onError("도착지 주변 정류장 검색 실패"));
+                    return;
                 }
 
-                Log.i(TAG, "정류장 " + startStop.nodenm + "에서 총 " + allBuses.size() + "개 버스 발견");
+                List<TagoBusStopResponse.BusStop> endStops = endStopsResponse.body().response.body.items.item;
+                Log.i(TAG, "도착지 주변 정류장 " + endStops.size() + "개 발견");
 
-                for (TagoBusArrivalResponse.BusArrival bus : allBuses) {
-                    if (bus.routeid == null || bus.routeno == null) {
+                Set<String> destinationKeywords = extractKeywordsFromStops(endStops);
+                Log.d(TAG, "=== 도착지 키워드: " + destinationKeywords + " ===");
+
+                // 비동기 경로 처리를 위한 컬렉션
+                List<RouteInfo> potentialRoutes = Collections.synchronizedList(new ArrayList<>());
+                Set<String> processedRoutes = Collections.synchronizedSet(new HashSet<>());
+                AtomicInteger pendingRequests = new AtomicInteger(0);
+                AtomicInteger completedRequests = new AtomicInteger(0);
+
+                Log.d(TAG, "=== 3단계: 포괄적 버스 분석 시작 ===");
+
+                for (TagoBusStopResponse.BusStop startStop : startStops) {
+                    if (startStop.citycode == null || startStop.nodeid == null) {
                         continue;
                     }
 
-                    String routeKey = bus.routeno + "_" + startStop.nodeid;
-                    if (processedRoutes.contains(routeKey)) {
+                    Log.d(TAG, "출발 정류장 분석: " + startStop.nodenm + " (ID: " + startStop.nodeid + ")");
+
+                    List<TagoBusArrivalResponse.BusArrival> allBuses = getAllBusesAtStop(startStop);
+
+                    if (allBuses.isEmpty()) {
+                        Log.d(TAG, "정류장 " + startStop.nodenm + "에 도착 예정 버스 없음");
                         continue;
                     }
 
-                    Log.d(TAG, "버스 노선 분석: " + bus.routeno + "번");
+                    Log.i(TAG, "🚌 정류장 " + startStop.nodenm + "에서 총 " + allBuses.size() + "개 버스 발견");
 
-                    RouteMatchResult matchResult = findSimpleRouteMatch(startStop, endStops, destinationKeywords, bus);
+                    for (TagoBusArrivalResponse.BusArrival bus : allBuses) {
+                        if (bus.routeid == null || bus.routeno == null) {
+                            continue;
+                        }
 
-                    if (matchResult != null) {
-                        Log.i(TAG, "경로 발견: " + bus.routeno + "번 -> " + matchResult.endStopBusStop.nodenm);
+                        String routeKey = bus.routeno + "_" + startStop.nodeid;
+                        if (processedRoutes.contains(routeKey)) {
+                            continue;
+                        }
 
-                        RouteInfo routeInfo = calculateSafeRouteInfo(startLocation, endLocation,
-                                startStop, matchResult.endStopBusStop, bus);
+                        Log.d(TAG, "🔍 버스 노선 상세 분석: " + bus.routeno + "번");
 
-                        if (routeInfo != null && !isDuplicateRoute(potentialRoutes, routeInfo)) {
-                            potentialRoutes.add(routeInfo);
+                        RouteMatchResult matchResult = findAdvancedRouteMatch(startStop, endStops, destinationKeywords, bus);
+
+                        if (matchResult != null) {
+                            Log.i(TAG, "✅ 경로 발견: " + bus.routeno + "번 -> " + matchResult.endStopBusStop.nodenm);
+
+                            // 비동기 도보 시간 계산 요청 수 증가
+                            pendingRequests.incrementAndGet();
                             processedRoutes.add(routeKey);
-                            Log.i(TAG, "경로 추가: " + routeInfo.getBusNumber() + "번 (총 " + routeInfo.getDuration() + "분)");
+
+                            // 메인 스레드에서 비동기 도보 시간 계산 실행
+                            mainHandler.post(() -> {
+                                calculateRouteInfoWithRealWalkingTime(startLocation, endLocation,
+                                        startStop, matchResult.endStopBusStop, bus,
+                                        new RouteInfoCallback() {
+                                            @Override
+                                            public void onSuccess(RouteInfo routeInfo) {
+                                                if (!isDuplicateRoute(potentialRoutes, routeInfo)) {
+                                                    potentialRoutes.add(routeInfo);
+                                                    Log.i(TAG, "🎯 경로 추가: " + routeInfo.getBusNumber() + "번 (총 " + routeInfo.getDuration() + "분)");
+                                                }
+
+                                                // 모든 요청이 완료되었는지 확인
+                                                if (completedRequests.incrementAndGet() == pendingRequests.get()) {
+                                                    finalizeRoutes(potentialRoutes, callback);
+                                                }
+                                            }
+
+                                            @Override
+                                            public void onError() {
+                                                Log.w(TAG, "경로 정보 계산 실패: " + bus.routeno + "번");
+
+                                                // 모든 요청이 완료되었는지 확인
+                                                if (completedRequests.incrementAndGet() == pendingRequests.get()) {
+                                                    finalizeRoutes(potentialRoutes, callback);
+                                                }
+                                            }
+                                        });
+                            });
                         }
-                    } else {
-                        Log.d(TAG, "경로 매칭 실패: " + bus.routeno + "번");
                     }
                 }
+
+                // 요청이 하나도 없으면 바로 완료 처리
+                if (pendingRequests.get() == 0) {
+                    mainHandler.post(() -> callback.onSuccess(new ArrayList<>()));
+                }
+
+            } catch (Exception e) {
+                Log.e(TAG, "포괄적 버스 탐색 중 예외 발생", e);
+                mainHandler.post(() -> callback.onError("경로 탐색 중 오류 발생: " + e.getMessage()));
             }
-
-        } catch (Exception e) {
-            Log.e(TAG, "버스 탐색 중 예외 발생", e);
-        }
-
-        potentialRoutes.sort(Comparator.comparingInt(RouteInfo::getDuration));
-        if (potentialRoutes.size() > MAX_ROUTES_TO_SHOW) {
-            potentialRoutes = potentialRoutes.subList(0, MAX_ROUTES_TO_SHOW);
-        }
-
-        Log.i(TAG, "=== 경로 탐색 완료: " + potentialRoutes.size() + "개 경로 발견 ===");
-        return potentialRoutes;
+        });
     }
 
     /**
-     * 버스 방향성 검증 경로 매칭
-     * ord 필드가 작동하지 않을 경우 배열 인덱스와 좌표 기반 백업 방법 사용
+     * [수정] 실제 RouteInfo 객체를 생성하는 메서드 - API 키 확인 추가
      */
-    private RouteMatchResult findSimpleRouteMatch(TagoBusStopResponse.BusStop startStop,
-                                                  List<TagoBusStopResponse.BusStop> endStops,
-                                                  Set<String> destinationKeywords,
-                                                  TagoBusArrivalResponse.BusArrival bus) {
+    private void calculateRouteInfoWithRealWalkingTime(Location startLocation, Location endLocation,
+                                                       TagoBusStopResponse.BusStop startStop,
+                                                       TagoBusStopResponse.BusStop endStop,
+                                                       TagoBusArrivalResponse.BusArrival bus,
+                                                       RouteInfoCallback callback) {
+
+        // TMAP API 키 확인
+        if (!isValidTmapApiKey()) {
+            Log.w(TAG, "TMAP API 키가 유효하지 않음, 기본값 사용");
+            // 기본값으로 RouteInfo 생성
+            createRouteInfo(startLocation, endLocation, startStop, endStop, bus, 5, 5, callback);
+            return;
+        }
+
+        // 두 개의 도보 시간을 병렬로 계산
+        AtomicInteger completedCalls = new AtomicInteger(0);
+        AtomicInteger walkToStartMin = new AtomicInteger(5); // 기본값
+        AtomicInteger walkToEndMin = new AtomicInteger(5);   // 기본값
+
+        // 1. 출발지 → 출발 정류장 도보 시간
+        calculateWalkingTime(
+                startLocation.getLongitude(), startLocation.getLatitude(),
+                startStop.gpslong, startStop.gpslati,
+                "출발지", startStop.nodenm,
+                new WalkingTimeCallback() {
+                    @Override
+                    public void onSuccess(int walkingTimeMinutes) {
+                        walkToStartMin.set(walkingTimeMinutes);
+                        if (completedCalls.incrementAndGet() == 2) {
+                            createRouteInfo(startLocation, endLocation, startStop, endStop, bus,
+                                    walkToStartMin.get(), walkToEndMin.get(), callback);
+                        }
+                    }
+
+                    @Override
+                    public void onError() {
+                        // 오류 시 기본값 사용
+                        if (completedCalls.incrementAndGet() == 2) {
+                            createRouteInfo(startLocation, endLocation, startStop, endStop, bus,
+                                    walkToStartMin.get(), walkToEndMin.get(), callback);
+                        }
+                    }
+                }
+        );
+
+        // 2. 도착 정류장 → 도착지 도보 시간
+        calculateWalkingTime(
+                endStop.gpslong, endStop.gpslati,
+                endLocation.getLongitude(), endLocation.getLatitude(),
+                endStop.nodenm, "도착지",
+                new WalkingTimeCallback() {
+                    @Override
+                    public void onSuccess(int walkingTimeMinutes) {
+                        walkToEndMin.set(walkingTimeMinutes);
+                        if (completedCalls.incrementAndGet() == 2) {
+                            createRouteInfo(startLocation, endLocation, startStop, endStop, bus,
+                                    walkToStartMin.get(), walkToEndMin.get(), callback);
+                        }
+                    }
+
+                    @Override
+                    public void onError() {
+                        // 오류 시 기본값 사용
+                        if (completedCalls.incrementAndGet() == 2) {
+                            createRouteInfo(startLocation, endLocation, startStop, endStop, bus,
+                                    walkToStartMin.get(), walkToEndMin.get(), callback);
+                        }
+                    }
+                }
+        );
+    }
+
+    /**
+     * [새로 추가] 직선 거리를 기반으로 대략적인 도보 시간 계산
+     * TMAP API 실패 시 백업으로 사용
+     */
+    private int calculateWalkingTimeByDistance(double startLat, double startLng, double endLat, double endLng) {
+        // 두 지점 간의 직선 거리 계산 (Haversine formula)
+        double earthRadius = 6371; // 지구 반지름 (km)
+
+        double dLat = Math.toRadians(endLat - startLat);
+        double dLng = Math.toRadians(endLng - startLng);
+
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(Math.toRadians(startLat)) * Math.cos(Math.toRadians(endLat)) *
+                        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        double distance = earthRadius * c; // km
+
+        // 도보 속도를 4km/h로 가정하고 시간 계산
+        double walkingSpeedKmH = 4.0;
+        double walkingTimeHours = distance / walkingSpeedKmH;
+        int walkingTimeMinutes = (int) Math.ceil(walkingTimeHours * 60);
+
+        // 최소 1분, 최대 30분으로 제한
+        return Math.max(1, Math.min(30, walkingTimeMinutes));
+    }
+
+
+    /**
+     * [수정] TMAP API를 사용하여 두 지점 간의 도보 시간을 계산 - 오류 처리 개선
+     */
+    private void calculateWalkingTime(double startLng, double startLat,
+                                      double endLng, double endLat,
+                                      String startName, String endName,
+                                      WalkingTimeCallback callback) {
+
+        // 직선 거리 기반 대략적인 도보 시간 계산 (백업 방법)
+        int estimatedWalkingTime = calculateWalkingTimeByDistance(startLat, startLng, endLat, endLng);
+
+        Call<TmapPedestrianResponse> call = tmapApiService.getPedestrianRoute(
+                BuildConfig.TMAP_API_KEY,
+                String.valueOf(startLng),
+                String.valueOf(startLat),
+                String.valueOf(endLng),
+                String.valueOf(endLat),
+                startName,
+                endName
+        );
+
+        call.enqueue(new Callback<TmapPedestrianResponse>() {
+            @Override
+            public void onResponse(@NonNull Call<TmapPedestrianResponse> call,
+                                   @NonNull Response<TmapPedestrianResponse> response) {
+
+                if (response.isSuccessful() && response.body() != null) {
+                    try {
+                        TmapPedestrianResponse tmapResponse = response.body();
+                        int walkingTimeMinutes = extractWalkingTimeFromResponse(tmapResponse);
+
+                        if (walkingTimeMinutes > 0) {
+                            Log.d(TAG, String.format("TMAP 도보 시간 계산 성공: %s → %s = %d분",
+                                    startName, endName, walkingTimeMinutes));
+                            callback.onSuccess(walkingTimeMinutes);
+                            return;
+                        }
+                    } catch (Exception e) {
+                        Log.w(TAG, String.format("TMAP 응답 파싱 실패: %s → %s, 거리 기반 계산 사용",
+                                startName, endName), e);
+                    }
+                }
+
+                // TMAP API 실패 시 거리 기반 계산 사용
+                Log.d(TAG, String.format("TMAP API 실패, 거리 기반 도보 시간 사용: %s → %s = %d분",
+                        startName, endName, estimatedWalkingTime));
+                callback.onSuccess(estimatedWalkingTime);
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<TmapPedestrianResponse> call, @NonNull Throwable t) {
+                Log.w(TAG, String.format("TMAP API 네트워크 오류: %s → %s, 거리 기반 계산 사용",
+                        startName, endName), t);
+
+                // 네트워크 오류 시 거리 기반 계산 사용
+                callback.onSuccess(estimatedWalkingTime);
+            }
+        });
+    }
+
+    /**
+     * [수정] TMAP 보행자 경로 응답에서 도보 시간을 추출 - 안전한 파싱
+     */
+    private int extractWalkingTimeFromResponse(TmapPedestrianResponse response) {
         try {
-            Response<TagoBusRouteStationResponse> routeResponse = tagoApiService.getBusRouteStationList(
-                    BuildConfig.TAGO_API_KEY_DECODED,
-                    startStop.citycode,
-                    bus.routeid,
-                    200, 1, "json"
-            ).execute();
-
-            if (!isValidResponse(routeResponse, "버스 노선 정보")) {
-                return null;
+            if (response == null || response.getFeatures() == null) {
+                return 0;
             }
 
-            List<TagoBusRouteStationResponse.RouteStation> routeStations = routeResponse.body().response.body.items.item;
-            Log.v(TAG, bus.routeno + "번 노선 총 " + routeStations.size() + "개 정류장");
+            for (TmapPedestrianResponse.Feature feature : response.getFeatures()) {
+                if (feature != null && feature.getProperties() != null) {
+                    int totalTimeSeconds = feature.getProperties().getTotalTime();
 
-            // 🔥 핵심 개선: 출발지와 도착지의 위치 찾기 (다중 방법 사용)
-            Integer startIndex = null;
-            Integer startOrder = null;
-            Integer endIndex = null;
-            Integer endOrder = null;
-            TagoBusStopResponse.BusStop matchedEndStop = null;
+                    if (totalTimeSeconds > 0) {
+                        int totalTimeMinutes = (int) Math.ceil(totalTimeSeconds / 60.0);
 
-            // 1단계: 출발지 찾기
-            for (int i = 0; i < routeStations.size(); i++) {
-                TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
-                if (station.nodenm != null && startStop.nodenm != null &&
-                        station.nodenm.equals(startStop.nodenm)) {
-                    startIndex = i;
-                    startOrder = station.ord;
-                    Log.d(TAG, "출발 정류장 '" + startStop.nodenm + "' 발견:");
-                    Log.d(TAG, "  - 배열 인덱스: " + startIndex);
-                    Log.d(TAG, "  - API 순서: " + startOrder);
-                    break;
-                }
-            }
-
-            if (startIndex == null) {
-                Log.v(TAG, "출발지 '" + startStop.nodenm + "'가 " + bus.routeno + "번 노선에 없음");
-                return null;
-            }
-
-            // 2단계: 도착지 찾기 및 방향성 검증
-            for (TagoBusStopResponse.BusStop endStop : endStops) {
-                // 2-1: 정확한 이름 매칭
-                for (int i = 0; i < routeStations.size(); i++) {
-                    TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
-                    if (endStop.nodenm != null && station.nodenm != null &&
-                            endStop.nodenm.equals(station.nodenm)) {
-
-                        endIndex = i;
-                        endOrder = station.ord;
-
-                        Log.d(TAG, "도착 정류장 '" + endStop.nodenm + "' 발견:");
-                        Log.d(TAG, "  - 배열 인덱스: " + endIndex);
-                        Log.d(TAG, "  - API 순서: " + endOrder);
-
-                        // 🔥 핵심: 다중 방향성 검증 방법
-                        boolean isValidDirection = checkDirection(startIndex, startOrder, endIndex, endOrder, bus.routeno);
-
-                        if (isValidDirection) {
-                            Log.i(TAG, "✅ 경로 매칭 성공 [정확매칭]: " + bus.routeno + "번");
-                            Log.i(TAG, "   출발: " + startStop.nodenm + " (idx:" + startIndex + ", ord:" + startOrder + ")");
-                            Log.i(TAG, "   도착: " + endStop.nodenm + " (idx:" + endIndex + ", ord:" + endOrder + ")");
-                            return new RouteMatchResult(endStop);
-                        } else {
-                            Log.w(TAG, "❌ 반대 방향: " + bus.routeno + "번");
-                            Log.w(TAG, "   출발: " + startStop.nodenm + " (idx:" + startIndex + ", ord:" + startOrder + ")");
-                            Log.w(TAG, "   도착: " + endStop.nodenm + " (idx:" + endIndex + ", ord:" + endOrder + ")");
-                        }
-                    }
-                }
-
-                // 2-2: 키워드 기반 매칭
-                for (String keyword : destinationKeywords) {
-                    for (int i = 0; i < routeStations.size(); i++) {
-                        TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
-                        if (station.nodenm != null && station.nodenm.contains(keyword) && keyword.length() >= 2) {
-
-                            endIndex = i;
-                            endOrder = station.ord;
-
-                            boolean isValidDirection = checkDirection(startIndex, startOrder, endIndex, endOrder, bus.routeno);
-
-                            if (isValidDirection) {
-                                Log.i(TAG, "✅ 경로 매칭 성공 [키워드매칭]: " + bus.routeno + "번");
-                                Log.i(TAG, "   출발: " + startStop.nodenm + " (idx:" + startIndex + ")");
-                                Log.i(TAG, "   키워드: " + keyword + " (idx:" + endIndex + ")");
-                                return new RouteMatchResult(endStop);
-                            }
-                        }
-                    }
-                }
-
-                // 2-3: 부분 문자열 매칭
-                if (endStop.nodenm != null) {
-                    String endStopSimple = endStop.nodenm.replaceAll("[\\s·.-]", "");
-
-                    for (int i = 0; i < routeStations.size(); i++) {
-                        TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
-                        if (station.nodenm != null) {
-                            String stationSimple = station.nodenm.replaceAll("[\\s·.-]", "");
-
-                            if (endStopSimple.length() >= 3 && stationSimple.length() >= 3 &&
-                                    (endStopSimple.contains(stationSimple) || stationSimple.contains(endStopSimple))) {
-
-                                endIndex = i;
-                                endOrder = station.ord;
-
-                                boolean isValidDirection = checkDirection(startIndex, startOrder, endIndex, endOrder, bus.routeno);
-
-                                if (isValidDirection) {
-                                    Log.i(TAG, "✅ 경로 매칭 성공 [유사매칭]: " + bus.routeno + "번");
-                                    Log.i(TAG, "   출발: " + startStop.nodenm + " (idx:" + startIndex + ")");
-                                    Log.i(TAG, "   유사: " + station.nodenm + " (idx:" + endIndex + ")");
-                                    return new RouteMatchResult(endStop);
-                                }
-                            }
-                        }
+                        // 최소 1분, 최대 30분으로 제한
+                        return Math.max(1, Math.min(30, totalTimeMinutes));
                     }
                 }
             }
+        } catch (Exception e) {
+            Log.e(TAG, "TMAP 응답 파싱 중 예외 발생", e);
+        }
 
-            Log.v(TAG, "경로 매칭 실패: " + bus.routeno + "번 (올바른 방향의 경로 없음)");
+        return 0; // 추출 실패
+    }
+
+    /**
+     * [새로 추가] TMAP API 키 유효성 확인
+     */
+    private boolean isValidTmapApiKey() {
+        try {
+            String apiKey = BuildConfig.TMAP_API_KEY;
+            return apiKey != null && !apiKey.trim().isEmpty() && !apiKey.equals("your_tmap_api_key_here");
+        } catch (Exception e) {
+            Log.e(TAG, "TMAP API 키 확인 중 오류", e);
+            return false;
+        }
+    }
+
+    /**
+     * 실제 RouteInfo 객체를 생성하는 메서드
+     */
+    private void createRouteInfo(Location startLocation, Location endLocation,
+                                 TagoBusStopResponse.BusStop startStop,
+                                 TagoBusStopResponse.BusStop endStop,
+                                 TagoBusArrivalResponse.BusArrival bus,
+                                 int walkToStartMin, int walkToEndMin,
+                                 RouteInfoCallback callback) {
+        try {
+            int busWaitMin = Math.max(1, bus.arrtime / 60);
+            int busRideMin = DEFAULT_BUS_RIDE_TIME_MIN;
+            int totalDurationMin = walkToStartMin + busWaitMin + busRideMin + walkToEndMin;
+
+            RouteInfo routeInfo = new RouteInfo(
+                    "대중교통",
+                    totalDurationMin,
+                    busWaitMin,
+                    bus.routeno,
+                    startStop.nodenm,
+                    endStop.nodenm
+            );
+
+            routeInfo.setWalkingTimeToStartStop(walkToStartMin);
+            routeInfo.setBusRideTime(busRideMin);
+            routeInfo.setWalkingTimeToDestination(walkToEndMin);
+
+            Log.i(TAG, String.format("경로 정보 생성 완료: %s번 버스, 총 %d분 (도보: %d+%d분, 대기: %d분, 버스: %d분)",
+                    bus.routeno, totalDurationMin, walkToStartMin, walkToEndMin, busWaitMin, busRideMin));
+
+            callback.onSuccess(routeInfo);
 
         } catch (Exception e) {
-            Log.e(TAG, "경로 매칭 중 예외: " + bus.routeno + "번", e);
+            Log.e(TAG, "경로 정보 생성 중 예외", e);
+            callback.onError();
         }
-
-        return null;
     }
 
     /**
-     * 다중 방법을 사용한 방향성 검증
-     * 1순위: API ord 필드, 2순위: 배열 인덱스, 3순위: 허용적 매칭
+     * 경로 목록을 정리하고 콜백으로 전달
      */
-    private boolean checkDirection(Integer startIndex, Integer startOrder, Integer endIndex, Integer endOrder, String busNumber) {
+    private void finalizeRoutes(List<RouteInfo> potentialRoutes, ComprehensiveRouteCallback callback) {
+        List<RouteInfo> sortedRoutes = new ArrayList<>(potentialRoutes);
+        sortedRoutes.sort(Comparator.comparingInt(RouteInfo::getDuration));
 
-        // 방법 1: API ord 필드 사용 (ord 값이 의미있는 경우)
-        if (startOrder != null && endOrder != null &&
-                startOrder > 0 && endOrder > 0 && startOrder != endOrder) {
-            boolean ordResult = startOrder < endOrder;
-            Log.d(TAG, "방향 검증 [API ord]: " + busNumber + "번 - " +
-                    (ordResult ? "정방향" : "역방향") + " (시작:" + startOrder + " → 끝:" + endOrder + ")");
-            return ordResult;
+        if (sortedRoutes.size() > MAX_ROUTES_TO_SHOW) {
+            sortedRoutes = sortedRoutes.subList(0, MAX_ROUTES_TO_SHOW);
         }
 
-        // 방법 2: 배열 인덱스 사용 (ord가 안 되는 경우)
-        if (startIndex != null && endIndex != null && !startIndex.equals(endIndex)) {
-            boolean indexResult = startIndex < endIndex;
-            Log.d(TAG, "방향 검증 [배열 idx]: " + busNumber + "번 - " +
-                    (indexResult ? "정방향" : "역방향") + " (시작:" + startIndex + " → 끝:" + endIndex + ")");
-            return indexResult;
-        }
-
-        // 방법 3: 허용적 매칭 (같은 노선에 출발지와 도착지가 모두 있으면 일단 허용)
-        // 이는 최후의 수단으로, 적어도 틀린 버스보다는 나음
-        if (startIndex != null && endIndex != null) {
-            Log.w(TAG, "방향 검증 [허용적]: " + busNumber + "번 - 같은 노선 내 매칭, 일단 허용");
-            Log.w(TAG, "  (시작 idx:" + startIndex + ", ord:" + startOrder +
-                    " / 끝 idx:" + endIndex + ", ord:" + endOrder + ")");
-            return true; // 허용적 매칭
-        }
-
-        Log.e(TAG, "방향 검증 실패: " + busNumber + "번 - 인덱스나 순서 정보 부족");
-        return false;
+        Log.i(TAG, "=== 경로 탐색 완료: " + sortedRoutes.size() + "개 경로 발견 ===");
+        callback.onSuccess(sortedRoutes);
     }
 
     /**
-     * 간단한 경로 매칭 결과
-     */
-    private static class RouteMatchResult {
-        TagoBusStopResponse.BusStop endStopBusStop;
-
-        RouteMatchResult(TagoBusStopResponse.BusStop endStopBusStop) {
-            this.endStopBusStop = endStopBusStop;
-        }
-    }
-
-    /**
-     * 정류장의 모든 버스 정보를 여러 API 호출로 가져오기
+     * [핵심 신규] 정류장의 모든 버스 정보를 여러 API 호출로 가져오기
+     * 412번, 916-2번 등이 누락되는 문제 해결
      */
     private List<TagoBusArrivalResponse.BusArrival> getAllBusesAtStop(TagoBusStopResponse.BusStop stop) {
         List<TagoBusArrivalResponse.BusArrival> allBuses = new ArrayList<>();
-        Set<String> uniqueBusIds = new HashSet<>();
+        Set<String> uniqueBusIds = new HashSet<>(); // 중복 제거용
 
         try {
-            int[] rowCounts = {30, 50, 100};
+            // 여러 페이지와 다양한 numOfRows로 API 호출
+            int[] rowCounts = {30, 50, 100}; // 다양한 수로 요청
 
             for (int numOfRows : rowCounts) {
                 for (int page = 1; page <= MAX_API_PAGES; page++) {
@@ -567,7 +689,7 @@ public class RouteFragment extends Fragment {
                         ).execute();
 
                         if (!isValidArrivalResponse(response)) {
-                            break;
+                            break; // 이 페이지에 데이터 없으면 다음 numOfRows로
                         }
 
                         TagoBusArrivalResponse.ItemsContainer itemsContainer = null;
@@ -582,16 +704,19 @@ public class RouteFragment extends Fragment {
                             break;
                         }
 
+                        // 새로운 버스만 추가 (중복 제거)
                         for (TagoBusArrivalResponse.BusArrival bus : itemsContainer.item) {
                             if (bus.routeid != null && bus.routeno != null) {
                                 String busKey = bus.routeno + "_" + bus.routeid;
                                 if (!uniqueBusIds.contains(busKey)) {
                                     uniqueBusIds.add(busKey);
                                     allBuses.add(bus);
+                                    Log.v(TAG, "새 버스 추가: " + bus.routeno + "번 (페이지: " + page + ", rows: " + numOfRows + ")");
                                 }
                             }
                         }
 
+                        // 마지막 페이지면 중단
                         if (itemsContainer.item.size() < numOfRows) {
                             break;
                         }
@@ -603,7 +728,7 @@ public class RouteFragment extends Fragment {
                 }
             }
 
-            Log.d(TAG, "정류장 " + stop.nodenm + "에서 최종 " + allBuses.size() + "개 고유 버스 수집 완료");
+            Log.d(TAG, "🚌 정류장 " + stop.nodenm + "에서 최종 " + allBuses.size() + "개 고유 버스 수집 완료");
 
         } catch (Exception e) {
             Log.e(TAG, "버스 정보 수집 중 예외 발생", e);
@@ -630,36 +755,77 @@ public class RouteFragment extends Fragment {
         return keywords;
     }
 
-    private RouteInfo calculateSafeRouteInfo(Location startLocation, Location endLocation,
-                                             TagoBusStopResponse.BusStop startStop,
-                                             TagoBusStopResponse.BusStop endStop,
-                                             TagoBusArrivalResponse.BusArrival bus) {
+    private static class RouteMatchResult {
+        TagoBusStopResponse.BusStop endStopBusStop;
+
+        RouteMatchResult(TagoBusStopResponse.BusStop endStopBusStop) {
+            this.endStopBusStop = endStopBusStop;
+        }
+    }
+
+    private RouteMatchResult findAdvancedRouteMatch(TagoBusStopResponse.BusStop startStop,
+                                                    List<TagoBusStopResponse.BusStop> endStops,
+                                                    Set<String> destinationKeywords,
+                                                    TagoBusArrivalResponse.BusArrival bus) {
+
         try {
-            int walkToStartMin = 5;
-            int walkToEndMin = 5;
-            int busWaitMin = Math.max(1, bus.arrtime / 60);
-            int busRideMin = DEFAULT_BUS_RIDE_TIME_MIN;
-            int totalDurationMin = walkToStartMin + busWaitMin + busRideMin + walkToEndMin;
+            Response<TagoBusRouteStationResponse> routeResponse = tagoApiService.getBusRouteStationList(
+                    BuildConfig.TAGO_API_KEY_DECODED,
+                    startStop.citycode,
+                    bus.routeid,
+                    200, 1, "json"
+            ).execute();
 
-            RouteInfo routeInfo = new RouteInfo(
-                    "대중교통",
-                    totalDurationMin,
-                    busWaitMin,
-                    bus.routeno,
-                    startStop.nodenm,
-                    endStop.nodenm
-            );
+            if (!isValidResponse(routeResponse, "버스 노선 정보")) {
+                return null;
+            }
 
-            routeInfo.setWalkingTimeToStartStop(walkToStartMin);
-            routeInfo.setBusRideTime(busRideMin);
-            routeInfo.setWalkingTimeToDestination(walkToEndMin);
+            List<TagoBusRouteStationResponse.RouteStation> routeStations = routeResponse.body().response.body.items.item;
 
-            return routeInfo;
+            // 1. 정확한 이름 매칭
+            for (TagoBusStopResponse.BusStop endStop : endStops) {
+                for (TagoBusRouteStationResponse.RouteStation routeStation : routeStations) {
+                    if (endStop.nodenm != null && routeStation.nodenm != null &&
+                            endStop.nodenm.equals(routeStation.nodenm)) {
+                        return new RouteMatchResult(endStop);
+                    }
+                }
+            }
+
+            // 2. 키워드 기반 매칭
+            for (TagoBusStopResponse.BusStop endStop : endStops) {
+                for (TagoBusRouteStationResponse.RouteStation routeStation : routeStations) {
+                    if (routeStation.nodenm != null) {
+                        for (String keyword : destinationKeywords) {
+                            if (routeStation.nodenm.contains(keyword) && keyword.length() >= 2) {
+                                return new RouteMatchResult(endStop);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. 부분 문자열 매칭
+            for (TagoBusStopResponse.BusStop endStop : endStops) {
+                for (TagoBusRouteStationResponse.RouteStation routeStation : routeStations) {
+                    if (endStop.nodenm != null && routeStation.nodenm != null) {
+                        String endStopSimple = endStop.nodenm.replaceAll("[\\s·.-]", "");
+                        String routeStationSimple = routeStation.nodenm.replaceAll("[\\s·.-]", "");
+
+                        if (endStopSimple.length() >= 3 && routeStationSimple.length() >= 3) {
+                            if (endStopSimple.contains(routeStationSimple) || routeStationSimple.contains(endStopSimple)) {
+                                return new RouteMatchResult(endStop);
+                            }
+                        }
+                    }
+                }
+            }
 
         } catch (Exception e) {
-            Log.e(TAG, "경로 정보 계산 중 예외", e);
-            return null;
+            Log.e(TAG, "경로 매칭 중 예외: " + bus.routeno + "번", e);
         }
+
+        return null;
     }
 
     private boolean isDuplicateRoute(List<RouteInfo> existingRoutes, RouteInfo newRoute) {
@@ -785,6 +951,22 @@ public class RouteFragment extends Fragment {
         if (executorService != null && !executorService.isShutdown()) {
             executorService.shutdown();
         }
+    }
+
+    // 콜백 인터페이스들
+    interface WalkingTimeCallback {
+        void onSuccess(int walkingTimeMinutes);
+        void onError();
+    }
+
+    interface RouteInfoCallback {
+        void onSuccess(RouteInfo routeInfo);
+        void onError();
+    }
+
+    interface ComprehensiveRouteCallback {
+        void onSuccess(List<RouteInfo> routes);
+        void onError(String errorMessage);
     }
 
     // RouteInfo, 어댑터 등 나머지 클래스들...
