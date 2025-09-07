@@ -49,8 +49,7 @@ import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
 /**
- * 완전한 버스 탐지 시스템
- * 412번, 916-2번 등 누락 버스 문제 해결
+ * 간단한 버스 경로 탐색 - 방향 체크 없이 노선이 출발지와 도착지를 모두 지나가는지만 확인
  */
 public class RouteFragment extends Fragment {
 
@@ -60,10 +59,9 @@ public class RouteFragment extends Fragment {
     private static final String TMAP_API_BASE_URL = "https://apis.openapi.sk.com/";
     private static final String TAGO_API_BASE_URL = "https://apis.data.go.kr/1613000/";
 
-    private static final int AVERAGE_BUS_SPEED_BETWEEN_STOPS_MIN = 2;
-    private static final int MAX_ROUTES_TO_SHOW = 10; // 더 많은 경로 표시
+    private static final int MAX_ROUTES_TO_SHOW = 10;
     private static final int DEFAULT_BUS_RIDE_TIME_MIN = 15;
-    private static final int MAX_API_PAGES = 5; // 여러 페이지 요청
+    private static final int MAX_API_PAGES = 5;
 
     private EditText editStartLocation, editEndLocation;
     private Button buttonSearchRoute, buttonMapView;
@@ -246,7 +244,7 @@ public class RouteFragment extends Fragment {
                     this.endLocation = end;
                 });
 
-                List<RouteInfo> routes = searchComprehensiveBusRoutes(start, end);
+                List<RouteInfo> routes = searchSimpleBusRoutes(start, end);
                 mainHandler.post(() -> finalizeAndDisplayRoutes(routes));
 
             } catch (Exception e) {
@@ -259,10 +257,9 @@ public class RouteFragment extends Fragment {
     }
 
     /**
-     * [핵심 개선] 포괄적 버스 경로 탐색
-     * 412번, 916-2번 등 누락 버스 문제 해결
+     * 간단한 버스 경로 탐색 - 방향 체크 없이 노선이 출발지와 도착지를 모두 지나가는지만 확인
      */
-    private List<RouteInfo> searchComprehensiveBusRoutes(Location startLocation, Location endLocation) {
+    private List<RouteInfo> searchSimpleBusRoutes(Location startLocation, Location endLocation) {
         List<RouteInfo> potentialRoutes = new ArrayList<>();
 
         try {
@@ -299,11 +296,9 @@ public class RouteFragment extends Fragment {
             Log.i(TAG, "도착지 주변 정류장 " + endStops.size() + "개 발견");
 
             Set<String> destinationKeywords = extractKeywordsFromStops(endStops);
-            Log.d(TAG, "=== 도착지 키워드: " + destinationKeywords + " ===");
-
             Set<String> processedRoutes = new HashSet<>();
 
-            Log.d(TAG, "=== 3단계: 포괄적 버스 분석 시작 ===");
+            Log.d(TAG, "=== 3단계: 버스 경로 분석 시작 ===");
 
             for (TagoBusStopResponse.BusStop startStop : startStops) {
                 if (startStop.citycode == null || startStop.nodeid == null) {
@@ -312,7 +307,6 @@ public class RouteFragment extends Fragment {
 
                 Log.d(TAG, "출발 정류장 분석: " + startStop.nodenm + " (ID: " + startStop.nodeid + ")");
 
-                // [핵심 개선] 모든 버스 정보를 여러 페이지로 가져오기
                 List<TagoBusArrivalResponse.BusArrival> allBuses = getAllBusesAtStop(startStop);
 
                 if (allBuses.isEmpty()) {
@@ -320,12 +314,7 @@ public class RouteFragment extends Fragment {
                     continue;
                 }
 
-                Log.i(TAG, "🚌 정류장 " + startStop.nodenm + "에서 총 " + allBuses.size() + "개 버스 발견");
-
-                // [핵심 개선] 모든 버스 정보 로깅
-                for (TagoBusArrivalResponse.BusArrival bus : allBuses) {
-                    Log.d(TAG, "🚌 발견된 버스: " + bus.routeno + "번 (ID: " + bus.routeid + "), 도착: " + (bus.arrtime/60) + "분후");
-                }
+                Log.i(TAG, "정류장 " + startStop.nodenm + "에서 총 " + allBuses.size() + "개 버스 발견");
 
                 for (TagoBusArrivalResponse.BusArrival bus : allBuses) {
                     if (bus.routeid == null || bus.routeno == null) {
@@ -337,12 +326,12 @@ public class RouteFragment extends Fragment {
                         continue;
                     }
 
-                    Log.d(TAG, "🔍 버스 노선 상세 분석: " + bus.routeno + "번");
+                    Log.d(TAG, "버스 노선 분석: " + bus.routeno + "번");
 
-                    RouteMatchResult matchResult = findAdvancedRouteMatch(startStop, endStops, destinationKeywords, bus);
+                    RouteMatchResult matchResult = findSimpleRouteMatch(startStop, endStops, destinationKeywords, bus);
 
                     if (matchResult != null) {
-                        Log.i(TAG, "✅ 경로 발견: " + bus.routeno + "번 -> " + matchResult.endStopBusStop.nodenm);
+                        Log.i(TAG, "경로 발견: " + bus.routeno + "번 -> " + matchResult.endStopBusStop.nodenm);
 
                         RouteInfo routeInfo = calculateSafeRouteInfo(startLocation, endLocation,
                                 startStop, matchResult.endStopBusStop, bus);
@@ -350,14 +339,16 @@ public class RouteFragment extends Fragment {
                         if (routeInfo != null && !isDuplicateRoute(potentialRoutes, routeInfo)) {
                             potentialRoutes.add(routeInfo);
                             processedRoutes.add(routeKey);
-                            Log.i(TAG, "🎯 경로 추가: " + routeInfo.getBusNumber() + "번 (총 " + routeInfo.getDuration() + "분)");
+                            Log.i(TAG, "경로 추가: " + routeInfo.getBusNumber() + "번 (총 " + routeInfo.getDuration() + "분)");
                         }
+                    } else {
+                        Log.d(TAG, "경로 매칭 실패: " + bus.routeno + "번");
                     }
                 }
             }
 
         } catch (Exception e) {
-            Log.e(TAG, "포괄적 버스 탐색 중 예외 발생", e);
+            Log.e(TAG, "버스 탐색 중 예외 발생", e);
         }
 
         potentialRoutes.sort(Comparator.comparingInt(RouteInfo::getDuration));
@@ -370,16 +361,117 @@ public class RouteFragment extends Fragment {
     }
 
     /**
-     * [핵심 신규] 정류장의 모든 버스 정보를 여러 API 호출로 가져오기
-     * 412번, 916-2번 등이 누락되는 문제 해결
+     * 간단한 경로 매칭 - 방향 체크 없이 노선이 출발지와 도착지를 모두 지나가는지만 확인
+     */
+    private RouteMatchResult findSimpleRouteMatch(TagoBusStopResponse.BusStop startStop,
+                                                  List<TagoBusStopResponse.BusStop> endStops,
+                                                  Set<String> destinationKeywords,
+                                                  TagoBusArrivalResponse.BusArrival bus) {
+        try {
+            Response<TagoBusRouteStationResponse> routeResponse = tagoApiService.getBusRouteStationList(
+                    BuildConfig.TAGO_API_KEY_DECODED,
+                    startStop.citycode,
+                    bus.routeid,
+                    200, 1, "json"
+            ).execute();
+
+            if (!isValidResponse(routeResponse, "버스 노선 정보")) {
+                return null;
+            }
+
+            List<TagoBusRouteStationResponse.RouteStation> routeStations = routeResponse.body().response.body.items.item;
+            Log.v(TAG, bus.routeno + "번 노선 총 " + routeStations.size() + "개 정류장");
+
+            // 출발지가 노선에 있는지 확인
+            boolean hasStartStop = routeStations.stream()
+                    .anyMatch(station -> startStop.nodenm != null && startStop.nodenm.equals(station.nodenm));
+
+            if (!hasStartStop) {
+                Log.v(TAG, "출발지 '" + startStop.nodenm + "'가 " + bus.routeno + "번 노선에 없음");
+                return null;
+            }
+
+            // 1. 정확한 이름 매칭
+            for (TagoBusStopResponse.BusStop endStop : endStops) {
+                boolean hasEndStop = routeStations.stream()
+                        .anyMatch(station -> endStop.nodenm != null && endStop.nodenm.equals(station.nodenm));
+
+                if (hasEndStop) {
+                    Log.i(TAG, "경로 매칭 성공 [정확매칭]: " + bus.routeno + "번");
+                    Log.i(TAG, "   출발: " + startStop.nodenm);
+                    Log.i(TAG, "   도착: " + endStop.nodenm);
+                    return new RouteMatchResult(endStop);
+                }
+            }
+
+            // 2. 키워드 기반 매칭
+            for (TagoBusStopResponse.BusStop endStop : endStops) {
+                for (String keyword : destinationKeywords) {
+                    boolean hasKeywordStop = routeStations.stream()
+                            .anyMatch(station -> station.nodenm != null && station.nodenm.contains(keyword) && keyword.length() >= 2);
+
+                    if (hasKeywordStop) {
+                        Log.i(TAG, "경로 매칭 성공 [키워드매칭]: " + bus.routeno + "번");
+                        Log.i(TAG, "   출발: " + startStop.nodenm);
+                        Log.i(TAG, "   키워드: " + keyword);
+                        return new RouteMatchResult(endStop);
+                    }
+                }
+            }
+
+            // 3. 부분 문자열 매칭
+            for (TagoBusStopResponse.BusStop endStop : endStops) {
+                if (endStop.nodenm != null) {
+                    String endStopSimple = endStop.nodenm.replaceAll("[\\s·.-]", "");
+
+                    boolean hasSimilarStop = routeStations.stream()
+                            .anyMatch(station -> {
+                                if (station.nodenm != null) {
+                                    String stationSimple = station.nodenm.replaceAll("[\\s·.-]", "");
+                                    return endStopSimple.length() >= 3 && stationSimple.length() >= 3 &&
+                                            (endStopSimple.contains(stationSimple) || stationSimple.contains(endStopSimple));
+                                }
+                                return false;
+                            });
+
+                    if (hasSimilarStop) {
+                        Log.i(TAG, "경로 매칭 성공 [유사매칭]: " + bus.routeno + "번");
+                        Log.i(TAG, "   출발: " + startStop.nodenm);
+                        Log.i(TAG, "   유사 도착지: " + endStop.nodenm);
+                        return new RouteMatchResult(endStop);
+                    }
+                }
+            }
+
+            Log.v(TAG, "경로 매칭 실패: " + bus.routeno + "번 (도착지를 지나가지 않음)");
+
+        } catch (Exception e) {
+            Log.e(TAG, "경로 매칭 중 예외: " + bus.routeno + "번", e);
+        }
+
+        return null;
+    }
+
+    /**
+     * 간단한 경로 매칭 결과
+     */
+    private static class RouteMatchResult {
+        TagoBusStopResponse.BusStop endStopBusStop;
+
+        RouteMatchResult(TagoBusStopResponse.BusStop endStopBusStop) {
+            this.endStopBusStop = endStopBusStop;
+        }
+    }
+
+    /**
+     * 정류장의 모든 버스 정보를 여러 API 호출로 가져오기
      */
     private List<TagoBusArrivalResponse.BusArrival> getAllBusesAtStop(TagoBusStopResponse.BusStop stop) {
         List<TagoBusArrivalResponse.BusArrival> allBuses = new ArrayList<>();
-        Set<String> uniqueBusIds = new HashSet<>(); // 중복 제거용
+        Set<String> uniqueBusIds = new HashSet<>();
 
         try {
-            // 여러 페이지와 다양한 numOfRows로 API 호출
-            int[] rowCounts = {30, 50, 100}; // 다양한 수로 요청
+            int[] rowCounts = {30, 50, 100};
 
             for (int numOfRows : rowCounts) {
                 for (int page = 1; page <= MAX_API_PAGES; page++) {
@@ -392,7 +484,7 @@ public class RouteFragment extends Fragment {
                         ).execute();
 
                         if (!isValidArrivalResponse(response)) {
-                            break; // 이 페이지에 데이터 없으면 다음 numOfRows로
+                            break;
                         }
 
                         TagoBusArrivalResponse.ItemsContainer itemsContainer = null;
@@ -407,19 +499,16 @@ public class RouteFragment extends Fragment {
                             break;
                         }
 
-                        // 새로운 버스만 추가 (중복 제거)
                         for (TagoBusArrivalResponse.BusArrival bus : itemsContainer.item) {
                             if (bus.routeid != null && bus.routeno != null) {
                                 String busKey = bus.routeno + "_" + bus.routeid;
                                 if (!uniqueBusIds.contains(busKey)) {
                                     uniqueBusIds.add(busKey);
                                     allBuses.add(bus);
-                                    Log.v(TAG, "새 버스 추가: " + bus.routeno + "번 (페이지: " + page + ", rows: " + numOfRows + ")");
                                 }
                             }
                         }
 
-                        // 마지막 페이지면 중단
                         if (itemsContainer.item.size() < numOfRows) {
                             break;
                         }
@@ -431,7 +520,7 @@ public class RouteFragment extends Fragment {
                 }
             }
 
-            Log.d(TAG, "🚌 정류장 " + stop.nodenm + "에서 최종 " + allBuses.size() + "개 고유 버스 수집 완료");
+            Log.d(TAG, "정류장 " + stop.nodenm + "에서 최종 " + allBuses.size() + "개 고유 버스 수집 완료");
 
         } catch (Exception e) {
             Log.e(TAG, "버스 정보 수집 중 예외 발생", e);
@@ -456,79 +545,6 @@ public class RouteFragment extends Fragment {
         }
 
         return keywords;
-    }
-
-    private static class RouteMatchResult {
-        TagoBusStopResponse.BusStop endStopBusStop;
-
-        RouteMatchResult(TagoBusStopResponse.BusStop endStopBusStop) {
-            this.endStopBusStop = endStopBusStop;
-        }
-    }
-
-    private RouteMatchResult findAdvancedRouteMatch(TagoBusStopResponse.BusStop startStop,
-                                                    List<TagoBusStopResponse.BusStop> endStops,
-                                                    Set<String> destinationKeywords,
-                                                    TagoBusArrivalResponse.BusArrival bus) {
-
-        try {
-            Response<TagoBusRouteStationResponse> routeResponse = tagoApiService.getBusRouteStationList(
-                    BuildConfig.TAGO_API_KEY_DECODED,
-                    startStop.citycode,
-                    bus.routeid,
-                    200, 1, "json"
-            ).execute();
-
-            if (!isValidResponse(routeResponse, "버스 노선 정보")) {
-                return null;
-            }
-
-            List<TagoBusRouteStationResponse.RouteStation> routeStations = routeResponse.body().response.body.items.item;
-
-            // 1. 정확한 이름 매칭
-            for (TagoBusStopResponse.BusStop endStop : endStops) {
-                for (TagoBusRouteStationResponse.RouteStation routeStation : routeStations) {
-                    if (endStop.nodenm != null && routeStation.nodenm != null &&
-                            endStop.nodenm.equals(routeStation.nodenm)) {
-                        return new RouteMatchResult(endStop);
-                    }
-                }
-            }
-
-            // 2. 키워드 기반 매칭
-            for (TagoBusStopResponse.BusStop endStop : endStops) {
-                for (TagoBusRouteStationResponse.RouteStation routeStation : routeStations) {
-                    if (routeStation.nodenm != null) {
-                        for (String keyword : destinationKeywords) {
-                            if (routeStation.nodenm.contains(keyword) && keyword.length() >= 2) {
-                                return new RouteMatchResult(endStop);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 3. 부분 문자열 매칭
-            for (TagoBusStopResponse.BusStop endStop : endStops) {
-                for (TagoBusRouteStationResponse.RouteStation routeStation : routeStations) {
-                    if (endStop.nodenm != null && routeStation.nodenm != null) {
-                        String endStopSimple = endStop.nodenm.replaceAll("[\\s·.-]", "");
-                        String routeStationSimple = routeStation.nodenm.replaceAll("[\\s·.-]", "");
-
-                        if (endStopSimple.length() >= 3 && routeStationSimple.length() >= 3) {
-                            if (endStopSimple.contains(routeStationSimple) || routeStationSimple.contains(endStopSimple)) {
-                                return new RouteMatchResult(endStop);
-                            }
-                        }
-                    }
-                }
-            }
-
-        } catch (Exception e) {
-            Log.e(TAG, "경로 매칭 중 예외: " + bus.routeno + "번", e);
-        }
-
-        return null;
     }
 
     private RouteInfo calculateSafeRouteInfo(Location startLocation, Location endLocation,
