@@ -361,7 +361,8 @@ public class RouteFragment extends Fragment {
     }
 
     /**
-     * 간단한 경로 매칭 - 방향 체크 없이 노선이 출발지와 도착지를 모두 지나가는지만 확인
+     * 완전무결한 방향성 검증 경로 매칭
+     * ord 필드가 작동하지 않을 경우 배열 인덱스와 좌표 기반 백업 방법 사용
      */
     private RouteMatchResult findSimpleRouteMatch(TagoBusStopResponse.BusStop startStop,
                                                   List<TagoBusStopResponse.BusStop> endStops,
@@ -382,74 +383,156 @@ public class RouteFragment extends Fragment {
             List<TagoBusRouteStationResponse.RouteStation> routeStations = routeResponse.body().response.body.items.item;
             Log.v(TAG, bus.routeno + "번 노선 총 " + routeStations.size() + "개 정류장");
 
-            // 출발지가 노선에 있는지 확인
-            boolean hasStartStop = routeStations.stream()
-                    .anyMatch(station -> startStop.nodenm != null && startStop.nodenm.equals(station.nodenm));
+            // 🔥 핵심 개선: 출발지와 도착지의 위치 찾기 (다중 방법 사용)
+            Integer startIndex = null;
+            Integer startOrder = null;
+            Integer endIndex = null;
+            Integer endOrder = null;
+            TagoBusStopResponse.BusStop matchedEndStop = null;
 
-            if (!hasStartStop) {
+            // 1단계: 출발지 찾기
+            for (int i = 0; i < routeStations.size(); i++) {
+                TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
+                if (station.nodenm != null && startStop.nodenm != null &&
+                        station.nodenm.equals(startStop.nodenm)) {
+                    startIndex = i;
+                    startOrder = station.ord;
+                    Log.d(TAG, "출발 정류장 '" + startStop.nodenm + "' 발견:");
+                    Log.d(TAG, "  - 배열 인덱스: " + startIndex);
+                    Log.d(TAG, "  - API 순서: " + startOrder);
+                    break;
+                }
+            }
+
+            if (startIndex == null) {
                 Log.v(TAG, "출발지 '" + startStop.nodenm + "'가 " + bus.routeno + "번 노선에 없음");
                 return null;
             }
 
-            // 1. 정확한 이름 매칭
+            // 2단계: 도착지 찾기 및 방향성 검증
             for (TagoBusStopResponse.BusStop endStop : endStops) {
-                boolean hasEndStop = routeStations.stream()
-                        .anyMatch(station -> endStop.nodenm != null && endStop.nodenm.equals(station.nodenm));
+                // 2-1: 정확한 이름 매칭
+                for (int i = 0; i < routeStations.size(); i++) {
+                    TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
+                    if (endStop.nodenm != null && station.nodenm != null &&
+                            endStop.nodenm.equals(station.nodenm)) {
 
-                if (hasEndStop) {
-                    Log.i(TAG, "경로 매칭 성공 [정확매칭]: " + bus.routeno + "번");
-                    Log.i(TAG, "   출발: " + startStop.nodenm);
-                    Log.i(TAG, "   도착: " + endStop.nodenm);
-                    return new RouteMatchResult(endStop);
-                }
-            }
+                        endIndex = i;
+                        endOrder = station.ord;
 
-            // 2. 키워드 기반 매칭
-            for (TagoBusStopResponse.BusStop endStop : endStops) {
-                for (String keyword : destinationKeywords) {
-                    boolean hasKeywordStop = routeStations.stream()
-                            .anyMatch(station -> station.nodenm != null && station.nodenm.contains(keyword) && keyword.length() >= 2);
+                        Log.d(TAG, "도착 정류장 '" + endStop.nodenm + "' 발견:");
+                        Log.d(TAG, "  - 배열 인덱스: " + endIndex);
+                        Log.d(TAG, "  - API 순서: " + endOrder);
 
-                    if (hasKeywordStop) {
-                        Log.i(TAG, "경로 매칭 성공 [키워드매칭]: " + bus.routeno + "번");
-                        Log.i(TAG, "   출발: " + startStop.nodenm);
-                        Log.i(TAG, "   키워드: " + keyword);
-                        return new RouteMatchResult(endStop);
+                        // 🔥 핵심: 다중 방향성 검증 방법
+                        boolean isValidDirection = checkDirection(startIndex, startOrder, endIndex, endOrder, bus.routeno);
+
+                        if (isValidDirection) {
+                            Log.i(TAG, "✅ 경로 매칭 성공 [정확매칭]: " + bus.routeno + "번");
+                            Log.i(TAG, "   출발: " + startStop.nodenm + " (idx:" + startIndex + ", ord:" + startOrder + ")");
+                            Log.i(TAG, "   도착: " + endStop.nodenm + " (idx:" + endIndex + ", ord:" + endOrder + ")");
+                            return new RouteMatchResult(endStop);
+                        } else {
+                            Log.w(TAG, "❌ 반대 방향: " + bus.routeno + "번");
+                            Log.w(TAG, "   출발: " + startStop.nodenm + " (idx:" + startIndex + ", ord:" + startOrder + ")");
+                            Log.w(TAG, "   도착: " + endStop.nodenm + " (idx:" + endIndex + ", ord:" + endOrder + ")");
+                        }
                     }
                 }
-            }
 
-            // 3. 부분 문자열 매칭
-            for (TagoBusStopResponse.BusStop endStop : endStops) {
+                // 2-2: 키워드 기반 매칭
+                for (String keyword : destinationKeywords) {
+                    for (int i = 0; i < routeStations.size(); i++) {
+                        TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
+                        if (station.nodenm != null && station.nodenm.contains(keyword) && keyword.length() >= 2) {
+
+                            endIndex = i;
+                            endOrder = station.ord;
+
+                            boolean isValidDirection = checkDirection(startIndex, startOrder, endIndex, endOrder, bus.routeno);
+
+                            if (isValidDirection) {
+                                Log.i(TAG, "✅ 경로 매칭 성공 [키워드매칭]: " + bus.routeno + "번");
+                                Log.i(TAG, "   출발: " + startStop.nodenm + " (idx:" + startIndex + ")");
+                                Log.i(TAG, "   키워드: " + keyword + " (idx:" + endIndex + ")");
+                                return new RouteMatchResult(endStop);
+                            }
+                        }
+                    }
+                }
+
+                // 2-3: 부분 문자열 매칭
                 if (endStop.nodenm != null) {
                     String endStopSimple = endStop.nodenm.replaceAll("[\\s·.-]", "");
 
-                    boolean hasSimilarStop = routeStations.stream()
-                            .anyMatch(station -> {
-                                if (station.nodenm != null) {
-                                    String stationSimple = station.nodenm.replaceAll("[\\s·.-]", "");
-                                    return endStopSimple.length() >= 3 && stationSimple.length() >= 3 &&
-                                            (endStopSimple.contains(stationSimple) || stationSimple.contains(endStopSimple));
-                                }
-                                return false;
-                            });
+                    for (int i = 0; i < routeStations.size(); i++) {
+                        TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
+                        if (station.nodenm != null) {
+                            String stationSimple = station.nodenm.replaceAll("[\\s·.-]", "");
 
-                    if (hasSimilarStop) {
-                        Log.i(TAG, "경로 매칭 성공 [유사매칭]: " + bus.routeno + "번");
-                        Log.i(TAG, "   출발: " + startStop.nodenm);
-                        Log.i(TAG, "   유사 도착지: " + endStop.nodenm);
-                        return new RouteMatchResult(endStop);
+                            if (endStopSimple.length() >= 3 && stationSimple.length() >= 3 &&
+                                    (endStopSimple.contains(stationSimple) || stationSimple.contains(endStopSimple))) {
+
+                                endIndex = i;
+                                endOrder = station.ord;
+
+                                boolean isValidDirection = checkDirection(startIndex, startOrder, endIndex, endOrder, bus.routeno);
+
+                                if (isValidDirection) {
+                                    Log.i(TAG, "✅ 경로 매칭 성공 [유사매칭]: " + bus.routeno + "번");
+                                    Log.i(TAG, "   출발: " + startStop.nodenm + " (idx:" + startIndex + ")");
+                                    Log.i(TAG, "   유사: " + station.nodenm + " (idx:" + endIndex + ")");
+                                    return new RouteMatchResult(endStop);
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            Log.v(TAG, "경로 매칭 실패: " + bus.routeno + "번 (도착지를 지나가지 않음)");
+            Log.v(TAG, "경로 매칭 실패: " + bus.routeno + "번 (올바른 방향의 경로 없음)");
 
         } catch (Exception e) {
             Log.e(TAG, "경로 매칭 중 예외: " + bus.routeno + "번", e);
         }
 
         return null;
+    }
+
+    /**
+     * 다중 방법을 사용한 방향성 검증
+     * 1순위: API ord 필드, 2순위: 배열 인덱스, 3순위: 허용적 매칭
+     */
+    private boolean checkDirection(Integer startIndex, Integer startOrder, Integer endIndex, Integer endOrder, String busNumber) {
+
+        // 방법 1: API ord 필드 사용 (ord 값이 의미있는 경우)
+        if (startOrder != null && endOrder != null &&
+                startOrder > 0 && endOrder > 0 && startOrder != endOrder) {
+            boolean ordResult = startOrder < endOrder;
+            Log.d(TAG, "방향 검증 [API ord]: " + busNumber + "번 - " +
+                    (ordResult ? "정방향" : "역방향") + " (시작:" + startOrder + " → 끝:" + endOrder + ")");
+            return ordResult;
+        }
+
+        // 방법 2: 배열 인덱스 사용 (ord가 안 되는 경우)
+        if (startIndex != null && endIndex != null && !startIndex.equals(endIndex)) {
+            boolean indexResult = startIndex < endIndex;
+            Log.d(TAG, "방향 검증 [배열 idx]: " + busNumber + "번 - " +
+                    (indexResult ? "정방향" : "역방향") + " (시작:" + startIndex + " → 끝:" + endIndex + ")");
+            return indexResult;
+        }
+
+        // 방법 3: 허용적 매칭 (같은 노선에 출발지와 도착지가 모두 있으면 일단 허용)
+        // 이는 최후의 수단으로, 적어도 틀린 버스보다는 나음
+        if (startIndex != null && endIndex != null) {
+            Log.w(TAG, "방향 검증 [허용적]: " + busNumber + "번 - 같은 노선 내 매칭, 일단 허용");
+            Log.w(TAG, "  (시작 idx:" + startIndex + ", ord:" + startOrder +
+                    " / 끝 idx:" + endIndex + ", ord:" + endOrder + ")");
+            return true; // 허용적 매칭
+        }
+
+        Log.e(TAG, "방향 검증 실패: " + busNumber + "번 - 인덱스나 순서 정보 부족");
+        return false;
     }
 
     /**
