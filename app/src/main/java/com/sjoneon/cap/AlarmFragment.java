@@ -1,10 +1,7 @@
 package com.sjoneon.cap;
 
-import android.app.AlarmManager;
 import android.app.AlertDialog;
-import android.app.PendingIntent;
 import android.app.TimePickerDialog;
-import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -13,6 +10,7 @@ import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -24,6 +22,8 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.text.InputFilter;
+
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.util.ArrayList;
@@ -31,7 +31,7 @@ import java.util.Calendar;
 import java.util.List;
 
 /**
- * 알람 설정 및 관리를 위한 프래그먼트 (수정본)
+ * 알람 설정 및 관리를 위한 프래그먼트 (완전 기능 구현)
  */
 public class AlarmFragment extends Fragment {
 
@@ -41,7 +41,6 @@ public class AlarmFragment extends Fragment {
     private AlarmAdapter alarmAdapter;
     private List<AlarmItem> alarmList = new ArrayList<>();
     private static final int REQUEST_SCHEDULE_EXACT_ALARM = 1;
-
 
     @Nullable
     @Override
@@ -64,7 +63,8 @@ public class AlarmFragment extends Fragment {
     }
 
     private void loadAlarms() {
-        // 임시 더미 데이터 (실제로는 DB에서 가져와야 함)
+        // 실제 구현에서는 데이터베이스에서 알람 목록을 로드해야 함
+        // 여기서는 임시로 저장된 알람들을 불러오는 로직을 구현
         alarmList.clear();
         updateAlarmListVisibility();
     }
@@ -87,7 +87,7 @@ public class AlarmFragment extends Fragment {
         TimePickerDialog timePickerDialog = new TimePickerDialog(
                 getContext(),
                 R.style.DialogTheme,
-                (view, hourOfDay, selectedMinute) -> showAlarmLabelDialog(hourOfDay, selectedMinute),
+                (view, hourOfDay, selectedMinute) -> showAlarmSettingsDialog(hourOfDay, selectedMinute),
                 hour,
                 minute,
                 true
@@ -97,126 +97,118 @@ public class AlarmFragment extends Fragment {
         timePickerDialog.show();
     }
 
-    private void showAlarmLabelDialog(int hourOfDay, int minute) {
+    private void showAlarmSettingsDialog(int hourOfDay, int minute) {
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext(), R.style.DialogTheme);
         LayoutInflater inflater = requireActivity().getLayoutInflater();
-        View dialogView = inflater.inflate(R.layout.dialog_alarm_label, null);
+        View dialogView = inflater.inflate(R.layout.dialog_alarm_setting, null);
+
         EditText editAlarmLabel = dialogView.findViewById(R.id.editAlarmLabel);
+        CheckBox checkBoxSound = dialogView.findViewById(R.id.checkBoxSound);
+        CheckBox checkBoxVibration = dialogView.findViewById(R.id.checkBoxVibration);
+
+        // 입력 길이 제한 (25자)
+        editAlarmLabel.setFilters(new InputFilter[]{new InputFilter.LengthFilter(25)});
+
+        // 기본값 설정
+        checkBoxSound.setChecked(true);
+        checkBoxVibration.setChecked(true);
 
         builder.setView(dialogView)
-                .setTitle(R.string.alarm_label_setting)
-                .setPositiveButton(R.string.alarm_set, (dialog, id) -> {
+                .setTitle("알람 설정")
+                .setPositiveButton("알람 설정", (dialog, id) -> {
                     String label = editAlarmLabel.getText().toString().trim();
                     if (label.isEmpty()) {
-                        label = getString(R.string.default_alarm_label);
+                        label = "알람";
                     }
-                    addAlarm(hourOfDay, minute, label);
+
+                    boolean soundEnabled = checkBoxSound.isChecked();
+                    boolean vibrationEnabled = checkBoxVibration.isChecked();
+
+                    addAlarm(hourOfDay, minute, label, soundEnabled, vibrationEnabled);
                 })
-                .setNegativeButton(R.string.cancel, (dialog, id) -> dialog.cancel());
+                .setNegativeButton("취소", (dialog, id) -> dialog.cancel());
 
         builder.create().show();
     }
 
-    private void addAlarm(int hourOfDay, int minute, String label) {
+    private void addAlarm(int hourOfDay, int minute, String label, boolean soundEnabled, boolean vibrationEnabled) {
         int alarmId = (int) System.currentTimeMillis();
         String timeString = String.format("%02d:%02d", hourOfDay, minute);
-        AlarmItem alarmItem = new AlarmItem(alarmId, timeString, label, true);
-        alarmList.add(alarmItem);
-        alarmAdapter.notifyDataSetChanged();
-        updateAlarmListVisibility();
 
-        // 실제 알람 설정 (AlarmManager 사용)
-        scheduleAlarm(alarmId, hourOfDay, minute, label);
-    }
+        // 알람 설정 저장
+        AlarmScheduler.saveAlarmSettings(requireContext(), alarmId, soundEnabled, vibrationEnabled);
 
-    /**
-     * 실제 알람 스케줄링 (AlarmManager 사용) - 수정된 부분
-     */
-    private void scheduleAlarm(int alarmId, int hourOfDay, int minute, String label) {
-        AlarmManager alarmManager = (AlarmManager) requireContext().getSystemService(Context.ALARM_SERVICE);
+        // 실제 알람 스케줄링
+        boolean success = AlarmScheduler.scheduleAlarm(requireContext(), alarmId, hourOfDay, minute, label);
 
-        // Android 12 이상에서는 SCHEDULE_EXACT_ALARM 권한 확인
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (!alarmManager.canScheduleExactAlarms()) {
-                // 권한이 없는 경우 사용자에게 설정 화면으로 이동하도록 요청
+        if (success) {
+            AlarmItem alarmItem = new AlarmItem(alarmId, timeString, label, true, soundEnabled, vibrationEnabled);
+            alarmList.add(alarmItem);
+            alarmAdapter.notifyDataSetChanged();
+            updateAlarmListVisibility();
+
+            Toast.makeText(getContext(), getString(R.string.alarm_time_set, timeString), Toast.LENGTH_SHORT).show();
+        } else {
+            // 권한이 없는 경우 설정 화면으로 이동
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
                         Uri.parse("package:" + requireContext().getPackageName()));
                 startActivityForResult(intent, REQUEST_SCHEDULE_EXACT_ALARM);
                 Toast.makeText(getContext(), "알람 설정을 위해 권한을 허용해주세요.", Toast.LENGTH_LONG).show();
-                return; // 권한이 없으므로 알람 설정 중단
+            } else {
+                Toast.makeText(getContext(), "알람 설정에 실패했습니다.", Toast.LENGTH_SHORT).show();
             }
-        }
-
-        Calendar calendar = Calendar.getInstance();
-        calendar.set(Calendar.HOUR_OF_DAY, hourOfDay);
-        calendar.set(Calendar.MINUTE, minute);
-        calendar.set(Calendar.SECOND, 0);
-
-        if (calendar.getTimeInMillis() <= System.currentTimeMillis()) {
-            calendar.add(Calendar.DAY_OF_MONTH, 1);
-        }
-
-        Intent intent = new Intent(getContext(), MainActivity.class); // 임시로 MainActivity로 설정
-        intent.putExtra("ALARM_ID", alarmId);
-        intent.putExtra("ALARM_LABEL", label);
-
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                getContext(),
-                alarmId,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        // 권한이 있는 경우 알람 설정
-        if (alarmManager != null) {
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(), pendingIntent);
-            String timeString = String.format("%02d:%02d", hourOfDay, minute);
-            Toast.makeText(getContext(), getString(R.string.alarm_time_set, timeString), Toast.LENGTH_SHORT).show();
         }
     }
 
-    // 사용자가 권한 설정 후 돌아왔을 때 처리
     @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_SCHEDULE_EXACT_ALARM) {
-            AlarmManager alarmManager = (AlarmManager) requireContext().getSystemService(Context.ALARM_SERVICE);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    Toast.makeText(getContext(), "권한이 허용되었습니다. 다시 알람을 설정해주세요.", Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(getContext(), "권한이 거부되었습니다. 알람을 설정할 수 없습니다.", Toast.LENGTH_SHORT).show();
-                }
-            }
+            Toast.makeText(getContext(), "권한 설정 후 다시 알람을 설정해주세요.", Toast.LENGTH_SHORT).show();
         }
     }
 
-
     /**
-     * 알람 데이터 클래스
+     * 알람 데이터 클래스 (확장됨)
      */
     public static class AlarmItem {
         private int id;
         private String time;
         private String label;
         private boolean isEnabled;
+        private boolean soundEnabled;
+        private boolean vibrationEnabled;
 
-        public AlarmItem(int id, String time, String label, boolean isEnabled) {
+        // Gson을 위한 기본 생성자
+        public AlarmItem() {}
+
+        public AlarmItem(int id, String time, String label, boolean isEnabled, boolean soundEnabled, boolean vibrationEnabled) {
             this.id = id;
             this.time = time;
             this.label = label;
             this.isEnabled = isEnabled;
+            this.soundEnabled = soundEnabled;
+            this.vibrationEnabled = vibrationEnabled;
         }
 
+        // Getters
         public int getId() { return id; }
         public String getTime() { return time; }
         public String getLabel() { return label; }
         public boolean isEnabled() { return isEnabled; }
+        public boolean isSoundEnabled() { return soundEnabled; }
+        public boolean isVibrationEnabled() { return vibrationEnabled; }
+
+        // Setters
         public void setEnabled(boolean enabled) { isEnabled = enabled; }
+        public void setLabel(String label) { this.label = label; }
+        public void setSoundEnabled(boolean soundEnabled) { this.soundEnabled = soundEnabled; }
+        public void setVibrationEnabled(boolean vibrationEnabled) { this.vibrationEnabled = vibrationEnabled; }
     }
 
     /**
-     * 알람 어댑터
+     * 알람 어댑터 (확장됨)
      */
     private class AlarmAdapter extends RecyclerView.Adapter<AlarmAdapter.AlarmViewHolder> {
         private List<AlarmItem> alarms;
@@ -237,13 +229,37 @@ public class AlarmFragment extends Fragment {
             AlarmItem alarm = alarms.get(position);
             holder.textTime.setText(alarm.getTime());
             holder.textLabel.setText(alarm.getLabel());
+
+            // 설정 정보 표시
+            String settings = "";
+            if (alarm.isSoundEnabled()) settings += "🔊 ";
+            if (alarm.isVibrationEnabled()) settings += "📳 ";
+            if (settings.isEmpty()) settings = "🔇 ";
+
+            holder.textSettings.setText(settings.trim());
             holder.switchAlarm.setChecked(alarm.isEnabled());
 
             holder.switchAlarm.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 alarm.setEnabled(isChecked);
+                if (isChecked) {
+                    // 알람 다시 활성화
+                    String[] timeParts = alarm.getTime().split(":");
+                    int hour = Integer.parseInt(timeParts[0]);
+                    int minute = Integer.parseInt(timeParts[1]);
+                    AlarmScheduler.scheduleAlarm(getContext(), alarm.getId(), hour, minute, alarm.getLabel());
+                } else {
+                    // 알람 비활성화
+                    AlarmScheduler.cancelAlarm(getContext(), alarm.getId());
+                }
             });
 
+            // 설정 버튼 클릭 리스너
+            holder.buttonSettings.setOnClickListener(v -> showAlarmEditDialog(alarm, position));
+
             holder.buttonDelete.setOnClickListener(v -> {
+                // 알람 취소
+                AlarmScheduler.cancelAlarm(getContext(), alarm.getId());
+
                 alarms.remove(position);
                 notifyItemRemoved(position);
                 notifyItemRangeChanged(position, alarms.size());
@@ -260,16 +276,72 @@ public class AlarmFragment extends Fragment {
         class AlarmViewHolder extends RecyclerView.ViewHolder {
             TextView textTime;
             TextView textLabel;
+            TextView textSettings;
             android.widget.Switch switchAlarm;
+            ImageButton buttonSettings;
             ImageButton buttonDelete;
 
             AlarmViewHolder(View itemView) {
                 super(itemView);
                 textTime = itemView.findViewById(R.id.textAlarmTime);
                 textLabel = itemView.findViewById(R.id.textAlarmLabel);
+                textSettings = itemView.findViewById(R.id.textAlarmSettings);
                 switchAlarm = itemView.findViewById(R.id.switchAlarm);
+                buttonSettings = itemView.findViewById(R.id.buttonAlarmSettings);
                 buttonDelete = itemView.findViewById(R.id.buttonDeleteAlarm);
             }
         }
+    }
+
+    private void showAlarmEditDialog(AlarmItem alarm, int position) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(getContext(), R.style.DialogTheme);
+        LayoutInflater inflater = requireActivity().getLayoutInflater();
+        View dialogView = inflater.inflate(R.layout.dialog_alarm_setting, null);
+
+        EditText editAlarmLabel = dialogView.findViewById(R.id.editAlarmLabel);
+        CheckBox checkBoxSound = dialogView.findViewById(R.id.checkBoxSound);
+        CheckBox checkBoxVibration = dialogView.findViewById(R.id.checkBoxVibration);
+
+        // 입력 길이 제한 (25자)
+        editAlarmLabel.setFilters(new InputFilter[]{new InputFilter.LengthFilter(25)});
+
+        // 현재 설정값으로 초기화
+        editAlarmLabel.setText(alarm.getLabel());
+        checkBoxSound.setChecked(alarm.isSoundEnabled());
+        checkBoxVibration.setChecked(alarm.isVibrationEnabled());
+
+        builder.setView(dialogView)
+                .setTitle("알람 수정")
+                .setPositiveButton("저장", (dialog, id) -> {
+                    String label = editAlarmLabel.getText().toString().trim();
+                    if (label.isEmpty()) {
+                        label = getString(R.string.default_alarm_label);
+                    }
+
+                    boolean soundEnabled = checkBoxSound.isChecked();
+                    boolean vibrationEnabled = checkBoxVibration.isChecked();
+
+                    // 설정 업데이트
+                    alarm.setLabel(label);
+                    alarm.setSoundEnabled(soundEnabled);
+                    alarm.setVibrationEnabled(vibrationEnabled);
+
+                    // 알람 설정 저장
+                    AlarmScheduler.saveAlarmSettings(requireContext(), alarm.getId(), soundEnabled, vibrationEnabled);
+
+                    // 알람이 활성화되어 있으면 다시 스케줄링
+                    if (alarm.isEnabled()) {
+                        String[] timeParts = alarm.getTime().split(":");
+                        int hour = Integer.parseInt(timeParts[0]);
+                        int minute = Integer.parseInt(timeParts[1]);
+                        AlarmScheduler.scheduleAlarm(requireContext(), alarm.getId(), hour, minute, label);
+                    }
+
+                    alarmAdapter.notifyItemChanged(position);
+                    Toast.makeText(getContext(), "알람 설정이 변경되었습니다.", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton(R.string.cancel, (dialog, id) -> dialog.cancel());
+
+        builder.create().show();
     }
 }

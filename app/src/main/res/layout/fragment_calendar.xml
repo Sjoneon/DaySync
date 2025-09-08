@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background_black"
-    android:orientation="vertical">
+    android:background="@color/background_black">
 
     <CalendarView
         android:id="@+id/calendarView"
@@ -13,27 +12,54 @@
         android:background="@color/background_dialog"
         android:dateTextAppearance="@style/CalendarDateText"
         android:theme="@style/CalendarTheme"
-        android:weekDayTextAppearance="@style/CalendarWeekText" />
+        android:weekDayTextAppearance="@style/CalendarWeekText"
+        app:layout_constraintTop_toTopOf="parent" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerViewEvents"
+    <!-- 일정 목록 컨테이너 -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:paddingStart="@dimen/padding_xlarge"
-        android:paddingTop="@dimen/padding_medium"
-        android:paddingEnd="@dimen/padding_xlarge"
-        android:paddingBottom="@dimen/padding_medium" />
+        android:layout_marginTop="@dimen/margin_medium"
+        app:layout_constraintTop_toBottomOf="@+id/calendarView"
+        app:layout_constraintBottom_toBottomOf="parent">
 
+        <!-- 일정이 없을 때 표시되는 메시지 -->
+        <TextView
+            android:id="@+id/textNoEvents"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="@string/no_events"
+            android:textColor="@color/text_secondary"
+            android:textSize="@dimen/text_size_large"
+            android:visibility="gone"
+            android:drawableTop="@android:drawable/ic_menu_my_calendar"
+            android:drawablePadding="@dimen/padding_medium"
+            android:drawableTint="@color/text_tertiary" />
+
+        <!-- 일정 목록 -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerViewEvents"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingStart="@dimen/padding_medium"
+            android:paddingEnd="@dimen/padding_medium"
+            android:paddingBottom="@dimen/padding_medium"
+            android:clipToPadding="false" />
+
+    </FrameLayout>
+
+    <!-- 일정 추가 플로팅 액션 버튼 -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabAddEvent"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="end|bottom"
         android:layout_margin="@dimen/margin_xlarge"
         android:contentDescription="@string/add_event"
         android:src="@android:drawable/ic_input_add"
         app:backgroundTint="@color/background_button"
-        app:tint="@color/text_primary" />
+        app:tint="@color/text_primary"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-</LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

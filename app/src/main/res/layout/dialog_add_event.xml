@@ -1,60 +1,124 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@color/background_dialog"
-    android:orientation="vertical"
-    android:padding="@dimen/padding_xlarge">
+    android:fillViewport="true">
 
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/margin_medium"
-        android:text="@string/event_title"
-        android:textColor="@color/text_primary"
-        android:textSize="@dimen/text_size_large" />
+        android:orientation="vertical"
+        android:padding="@dimen/padding_xlarge">
 
-    <EditText
-        android:id="@+id/editEventTitle"
-        style="@style/EditTextStyle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/margin_xlarge"
-        android:hint="@string/event_title_hint"
-        android:inputType="text" />
+        <!-- 일정 제목 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/margin_medium"
+            android:text="@string/event_title"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/text_size_large"
+            android:textStyle="bold" />
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/margin_medium"
-        android:text="@string/event_description"
-        android:textColor="@color/text_primary"
-        android:textSize="@dimen/text_size_large" />
+        <EditText
+            android:id="@+id/editEventTitle"
+            style="@style/EditTextStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/margin_xlarge"
+            android:hint="@string/event_title_hint"
+            android:inputType="text"
+            android:maxLines="1" />
 
-    <EditText
-        android:id="@+id/editEventDescription"
-        style="@style/EditTextStyle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/margin_xlarge"
-        android:hint="@string/event_description_hint"
-        android:inputType="textMultiLine"
-        android:minLines="2" />
+        <!-- 일정 설명 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/margin_medium"
+            android:text="@string/event_description"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/text_size_large"
+            android:textStyle="bold" />
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/margin_medium"
-        android:text="@string/event_time"
-        android:textColor="@color/text_primary"
-        android:textSize="@dimen/text_size_large" />
+        <EditText
+            android:id="@+id/editEventDescription"
+            style="@style/EditTextStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/margin_xlarge"
+            android:hint="@string/event_description_hint"
+            android:inputType="textMultiLine"
+            android:minLines="2"
+            android:maxLines="4" />
 
-    <TimePicker
-        android:id="@+id/timePickerEvent"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:timePickerMode="spinner"
-        android:theme="@style/CustomTimePicker" />
+        <!-- 날짜 및 시간 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/margin_medium"
+            android:text="일정 날짜 및 시간"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/text_size_large"
+            android:textStyle="bold" />
 
-</LinearLayout>
+        <TextView
+            android:id="@+id/textSelectedDateTime"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/margin_xlarge"
+            android:background="@drawable/rounded_edittext_background"
+            android:padding="@dimen/padding_large"
+            android:text="날짜와 시간을 선택하세요"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/text_size_medium"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:drawableEnd="@android:drawable/ic_menu_recent_history"
+            android:drawablePadding="@dimen/padding_medium" />
+
+        <!-- 알림 설정 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/margin_medium"
+            android:text="알림 설정"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/text_size_large"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/margin_medium"
+            android:text="일정 시작 전에 알림을 받을 시간을 선택하세요"
+            android:textColor="@color/text_secondary"
+            android:textSize="@dimen/text_size_small" />
+
+        <!-- 알림 설정 체크박스들이 동적으로 추가될 컨테이너 -->
+        <LinearLayout
+            android:id="@+id/layoutNotificationSettings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/rounded_edittext_background"
+            android:padding="@dimen/padding_large"
+            android:layout_marginBottom="@dimen/margin_medium">
+
+            <!-- 체크박스들이 프로그래밍적으로 추가됩니다 -->
+
+        </LinearLayout>
+
+        <!-- 알림 설정 도움말 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="💡 선택한 알림은 일정 시작 시간을 기준으로 설정됩니다."
+            android:textColor="@color/text_tertiary"
+            android:textSize="@dimen/text_size_small"
+            android:layout_marginTop="@dimen/margin_small" />
+
+    </LinearLayout>
+
+</ScrollView>

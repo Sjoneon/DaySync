@@ -14,6 +14,7 @@
         android:orientation="horizontal"
         android:padding="@dimen/padding_xlarge">
 
+        <!-- 알람 정보 -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -37,23 +38,60 @@
                 android:text="@string/default_alarm_label"
                 android:textColor="@color/text_secondary"
                 android:textSize="@dimen/text_size_medium" />
+
+            <!-- 알람 설정 표시 (소리, 진동) -->
+            <TextView
+                android:id="@+id/textAlarmSettings"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/margin_small"
+                android:text="🔊 📳"
+                android:textColor="@color/text_tertiary"
+                android:textSize="@dimen/text_size_small" />
         </LinearLayout>
 
-        <Switch
-            android:id="@+id/switchAlarm"
+        <!-- 컨트롤 버튼들 -->
+        <LinearLayout
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_vertical"
-            android:layout_marginEnd="@dimen/margin_xlarge" />
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
 
-        <ImageButton
-            android:id="@+id/buttonDeleteAlarm"
-            android:layout_width="@dimen/icon_size_large"
-            android:layout_height="@dimen/icon_size_large"
-            android:layout_gravity="center_vertical"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/delete"
-            android:src="@android:drawable/ic_menu_delete"
-            app:tint="@color/text_secondary" />
+            <!-- 알람 활성화/비활성화 스위치 -->
+            <Switch
+                android:id="@+id/switchAlarm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginBottom="@dimen/margin_medium" />
+
+            <!-- 설정 및 삭제 버튼 -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <!-- 설정 버튼 -->
+                <ImageButton
+                    android:id="@+id/buttonAlarmSettings"
+                    android:layout_width="@dimen/icon_size_large"
+                    android:layout_height="@dimen/icon_size_large"
+                    android:layout_marginEnd="@dimen/margin_small"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="설정"
+                    android:src="@android:drawable/ic_menu_preferences"
+                    app:tint="@color/text_secondary" />
+
+                <!-- 삭제 버튼 -->
+                <ImageButton
+                    android:id="@+id/buttonDeleteAlarm"
+                    android:layout_width="@dimen/icon_size_large"
+                    android:layout_height="@dimen/icon_size_large"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/delete"
+                    android:src="@android:drawable/ic_menu_delete"
+                    app:tint="@color/text_secondary" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 </androidx.cardview.widget.CardView>

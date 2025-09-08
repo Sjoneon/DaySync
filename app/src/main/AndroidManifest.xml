@@ -2,9 +2,22 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- 기존 권한 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- 알림 관련 권한 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- 부팅 완료 감지 권한 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- 알람 관련 권한 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:name=".MyApplication"
@@ -17,7 +30,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Cap"
         android:usesCleartextTraffic="true"
-        android:networkSecurityConfig="@xml/network_security_config"  tools:targetApi="31">
+        android:networkSecurityConfig="@xml/network_security_config"
+        tools:targetApi="31">
 
         <!-- 네이버 지도 API 키 -->
         <meta-data
@@ -46,6 +60,12 @@
             android:name=".MainActivity"
             android:exported="false"
             android:theme="@style/Theme.Cap" />
+
+        <!-- 일정 알림 BroadcastReceiver -->
+        <receiver
+            android:name=".EventAlarmManager$EventNotificationReceiver"
+            android:enabled="true"
+            android:exported="false" />
 
     </application>
 

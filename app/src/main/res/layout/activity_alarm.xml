@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_black"
+    android:keepScreenOn="true">
+
+    <!-- 배경 직사각형들 -->   <!--android:background="@drawable/rounded_background"-->
+<!--위에 코드 잠시 ui 수정 때문에 빼 놓음-->
+    <View
+        android:id="@+id/animationRect1"
+        android:layout_width="320dp"
+        android:layout_height="180dp"
+        android:alpha="0.1"
+
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+<!--android:background="@drawable/rounded_background"-->
+    <View
+        android:id="@+id/animationRect2"
+        android:layout_width="400dp"
+        android:layout_height="220dp"
+        android:alpha="0.05"
+
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- 날짜 표시 (최상단, 작은 크기, 한 줄) -->
+    <TextView
+        android:id="@+id/textCurrentDate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/margin_xlarge"
+        android:gravity="center"
+        android:text="2025년 9월 8일 월요일"
+        android:textColor="@color/text_secondary"
+        android:textSize="16sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- 시간 표시 (날짜 밑) -->
+    <TextView
+        android:id="@+id/textCurrentTime"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/margin_medium"
+        android:gravity="center"
+        android:text="02:20"
+        android:textColor="@color/text_primary"
+        android:textSize="48sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/textCurrentDate" />
+
+    <!-- 알람 라벨 (화면 중앙, 큰 글씨) -->
+    <TextView
+        android:id="@+id/textAlarmLabel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/margin_xlarge"
+        android:layout_marginEnd="@dimen/margin_xlarge"
+        android:gravity="center"
+        android:text="알람"
+        android:textColor="@color/text_primary"
+        android:textSize="40sp"
+        android:textStyle="bold"
+        android:maxLines="3"
+        android:ellipsize="end"
+        app:layout_constraintBottom_toTopOf="@+id/buttonStopAlarm"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/textCurrentTime" />
+
+    <!-- 알람 정지 버튼 -->
+    <Button
+        android:id="@+id/buttonStopAlarm"
+        android:layout_width="200dp"
+        android:layout_height="60dp"
+        android:layout_marginBottom="@dimen/margin_large"
+        android:background="@drawable/rounded_button_background"
+        android:backgroundTint="#E53E3E"
+        android:text="알람 끄기"
+        android:textColor="@color/white"
+        android:textSize="@dimen/text_size_xlarge"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toTopOf="@+id/buttonSnooze"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- 다시 울림 버튼 -->
+    <Button
+        android:id="@+id/buttonSnooze"
+        android:layout_width="200dp"
+        android:layout_height="60dp"
+        android:layout_marginBottom="@dimen/margin_xlarge"
+        android:background="@drawable/rounded_button_background"
+        android:backgroundTint="@color/background_input"
+        android:text="5분 후 다시"
+        android:textColor="@color/text_primary"
+        android:textSize="@dimen/text_size_large"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
