@@ -62,11 +62,37 @@
             android:exported="false"
             android:theme="@style/Theme.Cap" />
 
-        <!-- 일정 알림 BroadcastReceiver -->
+        <!-- 알람 액티비티 -->
+        <activity
+            android:name=".AlarmActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Cap"
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true" />
+
+        <!-- 일반 알림 BroadcastReceiver -->
+        <receiver
+            android:name=".AlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- 일정 알림 BroadcastReceiver (추가됨) -->
         <receiver
             android:name=".EventAlarmManager$EventNotificationReceiver"
             android:enabled="true"
             android:exported="false" />
+
+        <!-- 부팅 완료 감지 리시버 (선택사항) -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

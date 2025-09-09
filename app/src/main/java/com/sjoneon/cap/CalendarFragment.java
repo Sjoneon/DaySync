@@ -36,6 +36,7 @@ import java.util.Locale;
  * - 데이터 영구 저장
  * - 알림 설정 기능
  * - UI 업데이트 문제 해결
+ * - 권한 관리 추가
  */
 public class CalendarFragment extends Fragment {
 
@@ -406,13 +407,19 @@ public class CalendarFragment extends Fragment {
     }
 
     /**
-     * 개선된 새 일정 생성
+     * 개선된 새 일정 생성 (권한 체크 및 로깅 강화)
      */
     private void createNewEvent(String title, String description, long dateTime,
                                 List<CalendarEvent.NotificationSetting> notificationSettings) {
         Log.d(TAG, "새 이벤트 생성 시작");
         Log.d(TAG, "이벤트 날짜: " + new Date(dateTime));
         Log.d(TAG, "현재 선택된 날짜: " + new Date(selectedDate));
+        Log.d(TAG, "알림 설정 개수: " + notificationSettings.size());
+
+        // 권한 상태 체크 및 로깅
+        if (alarmManager != null) {
+            alarmManager.logPermissionStatus();
+        }
 
         CalendarEvent newEvent = new CalendarEvent(title, description, dateTime);
         newEvent.setNotificationSettings(notificationSettings);
@@ -422,8 +429,35 @@ public class CalendarFragment extends Fragment {
 
         Log.d(TAG, "이벤트 저장 완료, ID: " + eventId);
 
-        // 알림 스케줄링
-        alarmManager.scheduleEventNotifications(newEvent);
+        // 알림 설정이 있는 경우에만 스케줄링
+        if (!notificationSettings.isEmpty()) {
+            Log.d(TAG, "알림 스케줄링 시작...");
+
+            // 권한 체크
+            if (!PermissionHelper.hasNotificationPermission(getContext()) ||
+                    !PermissionHelper.hasExactAlarmPermission(getContext())) {
+
+                Log.w(TAG, "필요한 권한이 없습니다. 권한 요청을 표시합니다.");
+                PermissionHelper.checkAndRequestAllPermissions(getActivity());
+
+                // 권한이 없어도 일정은 저장하고, 사용자에게 안내
+                Toast.makeText(getContext(),
+                        "일정이 저장되었습니다. 알림을 받으려면 권한을 허용해주세요.",
+                        Toast.LENGTH_LONG).show();
+            } else {
+                // 알림 스케줄링
+                alarmManager.scheduleEventNotifications(newEvent);
+            }
+
+            // 스케줄링 후 상태 확인을 위한 로그
+            for (CalendarEvent.NotificationSetting setting : notificationSettings) {
+                long notificationTime = setting.getNotificationTime(dateTime);
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+                Log.d(TAG, "알림 예정 시간: " + setting.getType().getDisplayName() + " - " + sdf.format(new Date(notificationTime)));
+            }
+        } else {
+            Log.d(TAG, "설정된 알림이 없어 스케줄링을 건너뜁니다.");
+        }
 
         // 이벤트가 생성된 날짜로 캘린더 이동 및 UI 업데이트
         Calendar eventCalendar = Calendar.getInstance();
@@ -446,7 +480,13 @@ public class CalendarFragment extends Fragment {
 
         // UI 업데이트
         loadEventsForDate(selectedDate);
-        Toast.makeText(getContext(), R.string.event_added, Toast.LENGTH_SHORT).show();
+
+        // 성공 메시지
+        String successMessage = getString(R.string.event_added);
+        if (!notificationSettings.isEmpty()) {
+            successMessage += " (" + notificationSettings.size() + "개 알림 설정됨)";
+        }
+        Toast.makeText(getContext(), successMessage, Toast.LENGTH_SHORT).show();
     }
 
     /**
@@ -466,8 +506,17 @@ public class CalendarFragment extends Fragment {
         // 저장소에 업데이트
         eventRepository.updateEvent(event);
 
-        // 새로운 알림 스케줄링
-        alarmManager.scheduleEventNotifications(event);
+        // 새로운 알림 스케줄링 (권한 체크 포함)
+        if (!notificationSettings.isEmpty()) {
+            if (PermissionHelper.hasNotificationPermission(getContext()) &&
+                    PermissionHelper.hasExactAlarmPermission(getContext())) {
+                alarmManager.scheduleEventNotifications(event);
+            } else {
+                Toast.makeText(getContext(),
+                        "일정이 수정되었습니다. 알림을 받으려면 권한을 허용해주세요.",
+                        Toast.LENGTH_LONG).show();
+            }
+        }
 
         // UI 업데이트
         loadEventsForDate(selectedDate);

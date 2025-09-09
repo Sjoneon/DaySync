@@ -1,8 +1,12 @@
 package com.sjoneon.cap;
 
+import android.app.AlertDialog;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
@@ -12,6 +16,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -31,8 +36,11 @@ import java.util.List;
  * 앱의 메인 액티비티
  * 네비게이션 드로어와 채팅 인터페이스, 프로필 기능을 관리하며,
  * 지도 등 다양한 프래그먼트를 호스팅합니다.
+ * 권한 관리 기능 추가됨.
  */
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
+
+    private static final String TAG = "MainActivity";
 
     private DrawerLayout drawerLayout;
     private NavigationView navigationView;
@@ -56,6 +64,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        Log.d(TAG, "MainActivity 생성 시작");
+
         // 사용자 닉네임 가져오기
         SharedPreferences preferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
         userNickname = preferences.getString("nickname", getString(R.string.app_name));
@@ -77,6 +87,88 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         // 채팅 입력 및 버튼 리스너 설정
         setupChatInterface();
+
+        // 권한 체크 (약간의 지연 후 실행)
+        checkPermissionsAfterDelay();
+
+        Log.d(TAG, "MainActivity 생성 완료");
+    }
+
+    /**
+     * 권한 체크 (지연 실행)
+     */
+    private void checkPermissionsAfterDelay() {
+        // UI가 완전히 로드된 후 권한 체크 (3초 후)
+        new android.os.Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!isFinishing() && !isDestroyed()) {
+                    Log.d(TAG, "권한 상태 체크 시작");
+                    PermissionHelper.logPermissionStatus(MainActivity.this);
+
+                    // 권한이 없는 경우에만 다이얼로그 표시
+                    if (!PermissionHelper.hasNotificationPermission(MainActivity.this) ||
+                            !PermissionHelper.hasExactAlarmPermission(MainActivity.this)) {
+                        showPermissionInfoDialog();
+                    }
+                }
+            }
+        }, 3000); // 3초 후 실행
+    }
+
+    /**
+     * 권한 안내 다이얼로그 표시
+     */
+    private void showPermissionInfoDialog() {
+        new AlertDialog.Builder(this, R.style.DialogTheme)
+                .setTitle("알림 기능 안내")
+                .setMessage("DaySync의 일정 알림 기능을 완전히 사용하려면 알림 권한이 필요합니다.\n\n" +
+                        "지금 설정하지 않아도 나중에 설정 메뉴에서 권한을 허용할 수 있습니다.")
+                .setPositiveButton("지금 설정", (dialog, which) -> {
+                    PermissionHelper.checkAndRequestAllPermissions(this);
+                })
+                .setNegativeButton("나중에", null)
+                .setCancelable(true)
+                .show();
+    }
+
+    /**
+     * 권한 요청 결과 처리
+     */
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == PermissionHelper.REQUEST_NOTIFICATION_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "알림 권한이 허용되었습니다");
+                Toast.makeText(this, "알림 권한이 허용되었습니다", Toast.LENGTH_SHORT).show();
+
+                // 정확한 알람 권한도 체크
+                if (!PermissionHelper.hasExactAlarmPermission(this)) {
+                    PermissionHelper.requestExactAlarmPermission(this);
+                }
+            } else {
+                Log.d(TAG, "알림 권한이 거부되었습니다");
+                Toast.makeText(this, "알림 권한이 거부되었습니다. 설정에서 수동으로 허용할 수 있습니다.", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    /**
+     * 액티비티 결과 처리
+     */
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == PermissionHelper.REQUEST_EXACT_ALARM_PERMISSION) {
+            if (PermissionHelper.hasExactAlarmPermission(this)) {
+                Toast.makeText(this, "정확한 알람 권한이 허용되었습니다", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "정확한 알람 권한이 필요합니다", Toast.LENGTH_LONG).show();
+            }
+        }
     }
 
     /**
@@ -257,7 +349,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
     }
 
-    // MainActivity.java의 onNavigationItemSelected 메서드 수정
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
         // 네비게이션 메뉴 아이템 선택 처리
