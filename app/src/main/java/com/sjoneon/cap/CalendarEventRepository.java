@@ -2,6 +2,7 @@ package com.sjoneon.cap;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Log;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -11,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -65,13 +67,15 @@ public class CalendarEventRepository {
     }
 
     /**
-     * 특정 날짜의 일정 가져오기
+     * 특정 날짜의 일정 가져오기 (수정된 버전)
      */
     public List<CalendarEvent> getEventsForDate(long date) {
         List<CalendarEvent> eventsForDate = new ArrayList<>();
 
         Calendar calendar = Calendar.getInstance();
         calendar.setTimeInMillis(date);
+
+        // 해당 날짜의 시작과 끝을 정확히 설정
         calendar.set(Calendar.HOUR_OF_DAY, 0);
         calendar.set(Calendar.MINUTE, 0);
         calendar.set(Calendar.SECOND, 0);
@@ -84,9 +88,16 @@ public class CalendarEventRepository {
         calendar.set(Calendar.MILLISECOND, 999);
         long endOfDay = calendar.getTimeInMillis();
 
+        Log.d("CalendarRepository", "검색 날짜 범위: " +
+                new Date(startOfDay) + " ~ " + new Date(endOfDay));
+
         for (CalendarEvent event : events) {
+            Log.d("CalendarRepository", "이벤트 시간: " + new Date(event.getDateTime()) +
+                    ", 제목: " + event.getTitle());
+
             if (event.getDateTime() >= startOfDay && event.getDateTime() <= endOfDay) {
                 eventsForDate.add(event);
+                Log.d("CalendarRepository", "이벤트 매칭됨: " + event.getTitle());
             }
         }
 
@@ -97,6 +108,7 @@ public class CalendarEventRepository {
             }
         });
 
+        Log.d("CalendarRepository", "총 " + eventsForDate.size() + "개 이벤트 발견");
         return eventsForDate;
     }
 

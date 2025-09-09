@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -34,8 +35,11 @@ import java.util.Locale;
  * - 완전한 CRUD 기능
  * - 데이터 영구 저장
  * - 알림 설정 기능
+ * - UI 업데이트 문제 해결
  */
 public class CalendarFragment extends Fragment {
+
+    private static final String TAG = "CalendarFragment";
 
     private CalendarView calendarView;
     private RecyclerView recyclerViewEvents;
@@ -55,7 +59,7 @@ public class CalendarFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_calendar, container, false);
 
-        android.util.Log.d("CalendarFragment", "onCreateView called");
+        Log.d(TAG, "onCreateView called");
 
         // 뷰 초기화
         calendarView = view.findViewById(R.id.calendarView);
@@ -63,53 +67,76 @@ public class CalendarFragment extends Fragment {
         fabAddEvent = view.findViewById(R.id.fabAddEvent);
         textNoEvents = view.findViewById(R.id.textNoEvents);
 
-        android.util.Log.d("CalendarFragment", "Views initialized");
+        Log.d(TAG, "Views initialized");
 
         // 저장소 및 알림 매니저 초기화
         eventRepository = CalendarEventRepository.getInstance(requireContext());
         alarmManager = new EventAlarmManager(requireContext());
 
-        android.util.Log.d("CalendarFragment", "Repository and AlarmManager initialized");
+        Log.d(TAG, "Repository and AlarmManager initialized");
 
         // 초기 설정
         setupCalendarView();
         setupRecyclerView();
         setupFab();
 
-        android.util.Log.d("CalendarFragment", "Setup methods called");
+        Log.d(TAG, "Setup methods called");
 
         // 초기 데이터 로드
         loadEventsForDate(selectedDate);
 
-        android.util.Log.d("CalendarFragment", "Initial data loaded");
+        Log.d(TAG, "Initial data loaded");
 
         return view;
     }
 
     /**
-     * 캘린더 뷰 설정
+     * 개선된 캘린더 뷰 설정
      */
     private void setupCalendarView() {
         calendarView.setOnDateChangeListener(new CalendarView.OnDateChangeListener() {
             @Override
             public void onSelectedDayChange(@NonNull CalendarView view, int year, int month, int dayOfMonth) {
+                Log.d(TAG, "날짜 선택: " + year + "-" + (month+1) + "-" + dayOfMonth);
+
                 Calendar calendar = Calendar.getInstance();
-                calendar.set(year, month, dayOfMonth);
+                calendar.clear(); // 모든 필드 초기화
+                calendar.set(year, month, dayOfMonth, 0, 0, 0); // 00:00:00으로 설정
+                calendar.set(Calendar.MILLISECOND, 0);
+
                 selectedDate = calendar.getTimeInMillis();
+
+                Log.d(TAG, "선택된 날짜 timestamp: " + selectedDate);
+                Log.d(TAG, "선택된 날짜: " + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date(selectedDate)));
 
                 // 해당 날짜의 일정 로드
                 loadEventsForDate(selectedDate);
             }
         });
+
+        // 초기 날짜 설정도 수정
+        Calendar initialCalendar = Calendar.getInstance();
+        initialCalendar.set(Calendar.HOUR_OF_DAY, 0);
+        initialCalendar.set(Calendar.MINUTE, 0);
+        initialCalendar.set(Calendar.SECOND, 0);
+        initialCalendar.set(Calendar.MILLISECOND, 0);
+        selectedDate = initialCalendar.getTimeInMillis();
+
+        Log.d(TAG, "초기 선택 날짜: " + new Date(selectedDate));
     }
 
     /**
-     * 리사이클러뷰 설정
+     * 개선된 리사이클러뷰 설정
      */
     private void setupRecyclerView() {
         recyclerViewEvents.setLayoutManager(new LinearLayoutManager(getContext()));
         eventAdapter = new CalendarEventAdapter();
         recyclerViewEvents.setAdapter(eventAdapter);
+
+        Log.d(TAG, "RecyclerView 설정 완료");
+
+        // 어댑터가 비어있을 때 대비
+        eventAdapter.updateEvents(new ArrayList<>());
     }
 
     /**
@@ -120,17 +147,60 @@ public class CalendarFragment extends Fragment {
     }
 
     /**
-     * 특정 날짜의 일정을 로드
+     * 개선된 특정 날짜의 일정을 로드
      */
     private void loadEventsForDate(long date) {
-        currentEvents = eventRepository.getEventsForDate(date);
-        eventAdapter.updateEvents(currentEvents);
+        Log.d(TAG, "loadEventsForDate 시작: " + new Date(date));
 
-        // 일정이 없는 경우 메시지 표시
-        if (currentEvents.isEmpty()) {
+        List<CalendarEvent> events = eventRepository.getEventsForDate(date);
+        Log.d(TAG, "Repository에서 로드된 이벤트 수: " + events.size());
+
+        // currentEvents 업데이트
+        currentEvents.clear();
+        currentEvents.addAll(events);
+
+        Log.d(TAG, "currentEvents 크기: " + currentEvents.size());
+
+        // 어댑터 업데이트
+        if (eventAdapter != null) {
+            eventAdapter.updateEvents(new ArrayList<>(currentEvents)); // 복사본 전달
+            Log.d(TAG, "어댑터 업데이트 완료");
+        } else {
+            Log.e(TAG, "eventAdapter가 null입니다!");
+        }
+
+        // UI 업데이트
+        updateEventListVisibility();
+
+        // 강제 레이아웃 업데이트
+        if (getView() != null) {
+            getView().post(() -> {
+                if (recyclerViewEvents != null && recyclerViewEvents.getAdapter() != null) {
+                    recyclerViewEvents.getAdapter().notifyDataSetChanged();
+                    Log.d(TAG, "RecyclerView 강제 새로고침 완료");
+
+                    // RecyclerView가 비어있다면 강제로 레이아웃 요청
+                    if (eventAdapter.getItemCount() > 0 && recyclerViewEvents.getChildCount() == 0) {
+                        recyclerViewEvents.requestLayout();
+                        Log.d(TAG, "RecyclerView 레이아웃 강제 요청");
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * UI 가시성 업데이트를 별도 메서드로 분리
+     */
+    private void updateEventListVisibility() {
+        Log.d(TAG, "UI 업데이트 - 이벤트 수: " + currentEvents.size());
+
+        if (currentEvents == null || currentEvents.isEmpty()) {
+            Log.d(TAG, "일정 없음 - 메시지 표시");
             textNoEvents.setVisibility(View.VISIBLE);
             recyclerViewEvents.setVisibility(View.GONE);
         } else {
+            Log.d(TAG, "일정 있음 - 리스트 표시");
             textNoEvents.setVisibility(View.GONE);
             recyclerViewEvents.setVisibility(View.VISIBLE);
         }
@@ -202,12 +272,12 @@ public class CalendarFragment extends Fragment {
         // 커스텀 save 버튼 처리
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             try {
-                android.util.Log.d("CalendarFragment", "Save button clicked!");
+                Log.d(TAG, "Save button clicked!");
 
                 String title = editTitle.getText().toString().trim();
                 String description = editDescription.getText().toString().trim();
 
-                android.util.Log.d("CalendarFragment", "Title: " + title + ", Description: " + description);
+                Log.d(TAG, "Title: " + title + ", Description: " + description);
 
                 if (title.isEmpty()) {
                     Toast.makeText(getContext(), R.string.empty_event_title, Toast.LENGTH_SHORT).show();
@@ -216,17 +286,17 @@ public class CalendarFragment extends Fragment {
 
                 // 알림 설정 수집
                 List<CalendarEvent.NotificationSetting> notificationSettings = collectNotificationSettings(layoutNotificationSettings);
-                android.util.Log.d("CalendarFragment", "Notification settings collected: " + notificationSettings.size());
+                Log.d(TAG, "Notification settings collected: " + notificationSettings.size());
 
                 long eventDateTime = eventCalendar.getTimeInMillis();
-                android.util.Log.d("CalendarFragment", "Event date time: " + new java.util.Date(eventDateTime));
+                Log.d(TAG, "Event date time: " + new Date(eventDateTime));
 
                 if (isEdit && existingEvent != null) {
-                    android.util.Log.d("CalendarFragment", "Updating existing event");
+                    Log.d(TAG, "Updating existing event");
                     // 일정 수정
                     updateEvent(existingEvent, title, description, eventDateTime, notificationSettings);
                 } else {
-                    android.util.Log.d("CalendarFragment", "Creating new event");
+                    Log.d(TAG, "Creating new event");
                     // 새 일정 추가
                     createNewEvent(title, description, eventDateTime, notificationSettings);
                 }
@@ -234,7 +304,7 @@ public class CalendarFragment extends Fragment {
                 dialog.dismiss();
 
             } catch (Exception e) {
-                android.util.Log.e("CalendarFragment", "Error in save button click", e);
+                Log.e(TAG, "Error in save button click", e);
                 Toast.makeText(getContext(), "저장 중 오류: " + e.getMessage(), Toast.LENGTH_LONG).show();
             }
         });
@@ -336,18 +406,43 @@ public class CalendarFragment extends Fragment {
     }
 
     /**
-     * 새 일정 생성
+     * 개선된 새 일정 생성
      */
     private void createNewEvent(String title, String description, long dateTime,
                                 List<CalendarEvent.NotificationSetting> notificationSettings) {
+        Log.d(TAG, "새 이벤트 생성 시작");
+        Log.d(TAG, "이벤트 날짜: " + new Date(dateTime));
+        Log.d(TAG, "현재 선택된 날짜: " + new Date(selectedDate));
+
         CalendarEvent newEvent = new CalendarEvent(title, description, dateTime);
         newEvent.setNotificationSettings(notificationSettings);
 
         long eventId = eventRepository.addEvent(newEvent);
         newEvent.setId(eventId);
 
+        Log.d(TAG, "이벤트 저장 완료, ID: " + eventId);
+
         // 알림 스케줄링
         alarmManager.scheduleEventNotifications(newEvent);
+
+        // 이벤트가 생성된 날짜로 캘린더 이동 및 UI 업데이트
+        Calendar eventCalendar = Calendar.getInstance();
+        eventCalendar.setTimeInMillis(dateTime);
+        eventCalendar.set(Calendar.HOUR_OF_DAY, 0);
+        eventCalendar.set(Calendar.MINUTE, 0);
+        eventCalendar.set(Calendar.SECOND, 0);
+        eventCalendar.set(Calendar.MILLISECOND, 0);
+
+        long eventDate = eventCalendar.getTimeInMillis();
+
+        // 선택된 날짜가 이벤트 날짜와 다르면 업데이트
+        if (selectedDate != eventDate) {
+            selectedDate = eventDate;
+            Log.d(TAG, "선택 날짜를 이벤트 날짜로 변경: " + new Date(selectedDate));
+
+            // 캘린더 뷰도 업데이트
+            calendarView.setDate(selectedDate, false, false);
+        }
 
         // UI 업데이트
         loadEventsForDate(selectedDate);
@@ -407,13 +502,21 @@ public class CalendarFragment extends Fragment {
     }
 
     /**
-     * 일정 어댑터
+     * 개선된 일정 어댑터
      */
     private class CalendarEventAdapter extends RecyclerView.Adapter<CalendarEventAdapter.EventViewHolder> {
 
+        private List<CalendarEvent> adapterEvents = new ArrayList<>(); // 어댑터 전용 리스트
+
         public void updateEvents(List<CalendarEvent> events) {
-            currentEvents.clear();
-            currentEvents.addAll(events);
+            Log.d(TAG + "_Adapter", "updateEvents 호출: " + events.size() + "개 이벤트");
+
+            adapterEvents.clear();
+            if (events != null) {
+                adapterEvents.addAll(events);
+            }
+
+            Log.d(TAG + "_Adapter", "어댑터 이벤트 수: " + adapterEvents.size());
             notifyDataSetChanged();
         }
 
@@ -427,7 +530,12 @@ public class CalendarFragment extends Fragment {
 
         @Override
         public void onBindViewHolder(@NonNull EventViewHolder holder, int position) {
-            CalendarEvent event = currentEvents.get(position);
+            if (position >= adapterEvents.size()) {
+                Log.e(TAG + "_Adapter", "잘못된 position: " + position + ", 크기: " + adapterEvents.size());
+                return;
+            }
+
+            CalendarEvent event = adapterEvents.get(position);
 
             holder.textTitle.setText(event.getTitle());
             holder.textDescription.setText(event.getDescription());
@@ -459,7 +567,9 @@ public class CalendarFragment extends Fragment {
 
         @Override
         public int getItemCount() {
-            return currentEvents.size();
+            int count = adapterEvents.size();
+            Log.d(TAG + "_Adapter", "getItemCount: " + count);
+            return count;
         }
 
         class EventViewHolder extends RecyclerView.ViewHolder {
@@ -479,7 +589,18 @@ public class CalendarFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        // 화면이 다시 표시될 때 데이터 새로고침
-        loadEventsForDate(selectedDate);
+        Log.d(TAG, "onResume called");
+
+        // 강제 새로고침
+        if (eventRepository != null) {
+            // Repository refresh가 필요하면 추가
+        }
+
+        // 약간의 지연 후 UI 업데이트
+        if (getView() != null) {
+            getView().postDelayed(() -> {
+                loadEventsForDate(selectedDate);
+            }, 100);
+        }
     }
 }
