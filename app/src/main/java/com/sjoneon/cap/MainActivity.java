@@ -383,9 +383,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             showFragment(new SettingsFragment());
             toolbar.setTitle("설정");
         } else if (id == R.id.nav_help) {
-            // 도움말 화면으로 전환
-            Toast.makeText(this, getString(R.string.feature_not_ready, getString(R.string.menu_help)), Toast.LENGTH_SHORT).show();
-            // 추후 HelpFragment 구현 예정
+            // 도움말 화면으로 전환 (Toast 대신 HelpFragment로 이동)
+            showFragment(new HelpFragment());
+            toolbar.setTitle("도움말");
         }
 
         // 네비게이션 드로어 닫기
@@ -428,7 +428,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
      * 프래그먼트를 화면에 표시하는 메서드
      * @param fragment 표시할 프래그먼트
      */
-    private void showFragment(Fragment fragment) {
+    public void showFragment(Fragment fragment) {
         View chatContainer = findViewById(R.id.chat_container);
         chatContainer.setVisibility(View.GONE);
 

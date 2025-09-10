@@ -1,8 +1,13 @@
 package com.sjoneon.cap;
 
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,6 +20,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.fragment.app.Fragment;
 
 import static android.content.Context.MODE_PRIVATE;
@@ -24,13 +30,15 @@ import static android.content.Context.MODE_PRIVATE;
  */
 public class SettingsFragment extends Fragment {
 
+    private static final String TAG = "SettingsFragment";
+
     // UI 요소들
     private ImageView imageProfile;
     private TextView textUserName;
+    private TextView textUserNameSubtitle;
     private LinearLayout layoutNicknameEdit;
     private LinearLayout layoutLocationSetting;
     private Switch switchPushAlarm;
-    private Switch switchLocationService;
     private LinearLayout layoutAbout;
     private LinearLayout layoutHelp;
 
@@ -67,26 +75,45 @@ public class SettingsFragment extends Fragment {
         layoutNicknameEdit = view.findViewById(R.id.layoutNicknameEdit);
         layoutLocationSetting = view.findViewById(R.id.layoutLocationSetting);
         switchPushAlarm = view.findViewById(R.id.switchPushAlarm);
-        switchLocationService = view.findViewById(R.id.switchLocationService);
         layoutAbout = view.findViewById(R.id.layoutAbout);
         layoutHelp = view.findViewById(R.id.layoutHelp);
+
+        // 서브타이틀 찾기 (layoutNicknameEdit 안의 두 번째 TextView)
+        textUserNameSubtitle = layoutNicknameEdit.findViewById(R.id.textUserNameSubtitle);
     }
 
     /**
      * 저장된 설정을 로드하는 메서드
      */
     private void loadSettings() {
-        // 사용자 닉네임 로드
-        currentNickname = preferences.getString("nickname", "123"); //이거 수정 필요함.
+        // 사용자 닉네임 로드 (기본값을 "사용자"로 변경)
+        currentNickname = preferences.getString("nickname", "사용자");
         textUserName.setText(currentNickname);
 
-        // 푸시 알림 설정 로드
-        boolean pushAlarmEnabled = preferences.getBoolean("push_alarm_enabled", true);
-        switchPushAlarm.setChecked(pushAlarmEnabled);
+        // 서브타이틀도 업데이트
+        if (textUserNameSubtitle != null) {
+            textUserNameSubtitle.setText(currentNickname);
+        }
 
-        // 위치 서비스 설정 로드
-        boolean locationServiceEnabled = preferences.getBoolean("location_service_enabled", true);
-        switchLocationService.setChecked(locationServiceEnabled);
+        // 푸시 알림 설정 로드 및 실제 권한 상태 확인
+        loadPushAlarmSettings();
+    }
+
+    /**
+     * 푸시 알림 설정을 로드하고 실제 권한 상태를 확인하는 메서드
+     */
+    private void loadPushAlarmSettings() {
+        boolean pushAlarmEnabled = preferences.getBoolean("push_alarm_enabled", true);
+
+        // 실제 시스템 알림 권한 상태 확인
+        boolean hasNotificationPermission = NotificationManagerCompat.from(requireContext()).areNotificationsEnabled();
+
+        // 둘 다 활성화되어야 실제로 켜진 것으로 표시
+        boolean actuallyEnabled = pushAlarmEnabled && hasNotificationPermission;
+
+        switchPushAlarm.setChecked(actuallyEnabled);
+
+        Log.d(TAG, "푸시 알림 설정 - 앱 설정: " + pushAlarmEnabled + ", 시스템 권한: " + hasNotificationPermission);
     }
 
     /**
@@ -96,33 +123,80 @@ public class SettingsFragment extends Fragment {
         // 닉네임 편집 클릭
         layoutNicknameEdit.setOnClickListener(v -> showNicknameEditDialog());
 
-        // 위치 설정 클릭
+        // 위치 설정 클릭 - 시스템 설정으로 이동
         layoutLocationSetting.setOnClickListener(v -> {
-            // 위치 설정 화면으로 이동 (추후 구현)
-            Toast.makeText(getContext(), "위치 설정 기능 준비 중...", Toast.LENGTH_SHORT).show();
+            showLocationPermissionDialog();
         });
 
-        // 푸시 알림 스위치
+        // 푸시 알림 스위치 - 실제 권한과 연동
         switchPushAlarm.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            savePushAlarmSetting(isChecked);
-            String message = isChecked ? "푸시 알림이 켜졌습니다" : "푸시 알림이 꺼졌습니다";
-            Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
-        });
-
-        // 위치 서비스 스위치
-        switchLocationService.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            saveLocationServiceSetting(isChecked);
-            String message = isChecked ? "위치 서비스가 켜졌습니다" : "위치 서비스가 꺼졌습니다";
-            Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
+            if (isChecked) {
+                // 알림을 켜려고 할 때 시스템 권한 확인
+                if (!NotificationManagerCompat.from(requireContext()).areNotificationsEnabled()) {
+                    // 권한이 없으면 설정으로 안내
+                    showNotificationPermissionDialog();
+                    buttonView.setChecked(false); // 스위치를 다시 끄기
+                } else {
+                    // 권한이 있으면 앱 설정 저장
+                    savePushAlarmSetting(true);
+                    Toast.makeText(getContext(), "푸시 알림이 켜졌습니다", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                // 알림을 끄는 경우
+                savePushAlarmSetting(false);
+                Toast.makeText(getContext(), "푸시 알림이 꺼졌습니다", Toast.LENGTH_SHORT).show();
+            }
         });
 
         // 앱 정보 클릭
         layoutAbout.setOnClickListener(v -> showAboutDialog());
 
-        // 도움말 클릭
+        // 도움말 클릭 - HelpFragment로 이동
         layoutHelp.setOnClickListener(v -> {
-            Toast.makeText(getContext(), "도움말 기능 준비 중...", Toast.LENGTH_SHORT).show();
+            if (getActivity() instanceof MainActivity) {
+                ((MainActivity) getActivity()).showFragment(new HelpFragment());
+                if (((MainActivity) getActivity()).getSupportActionBar() != null) {
+                    ((MainActivity) getActivity()).getSupportActionBar().setTitle("도움말");
+                }
+            }
         });
+    }
+
+    /**
+     * 위치 권한 설정 다이얼로그를 표시하는 메서드
+     */
+    private void showLocationPermissionDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(getContext(), R.style.DialogTheme);
+
+        builder.setTitle("위치 권한 설정")
+                .setMessage("위치 기반 서비스를 사용하려면 위치 권한이 필요합니다.\n설정에서 위치 권한을 관리할 수 있습니다.")
+                .setPositiveButton("설정으로 이동", (dialog, which) -> {
+                    // 앱 설정 화면으로 이동
+                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    Uri uri = Uri.fromParts("package", requireActivity().getPackageName(), null);
+                    intent.setData(uri);
+                    startActivity(intent);
+                })
+                .setNegativeButton("취소", null)
+                .show();
+    }
+
+    /**
+     * 알림 권한 설정 다이얼로그를 표시하는 메서드
+     */
+    private void showNotificationPermissionDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(getContext(), R.style.DialogTheme);
+
+        builder.setTitle("알림 권한 필요")
+                .setMessage("푸시 알림을 받으려면 알림 권한이 필요합니다.\n설정에서 알림 권한을 허용해주세요.")
+                .setPositiveButton("설정으로 이동", (dialog, which) -> {
+                    // 앱 알림 설정 화면으로 이동
+                    Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                    intent.putExtra(Settings.EXTRA_APP_PACKAGE, requireActivity().getPackageName());
+                    startActivity(intent);
+                })
+                .setNegativeButton("취소", null)
+                .show();
     }
 
     /**
@@ -193,6 +267,11 @@ public class SettingsFragment extends Fragment {
         currentNickname = newNickname;
         textUserName.setText(newNickname);
 
+        // 서브타이틀도 업데이트
+        if (textUserNameSubtitle != null) {
+            textUserNameSubtitle.setText(newNickname);
+        }
+
         Toast.makeText(getContext(), "닉네임이 변경되었습니다", Toast.LENGTH_SHORT).show();
 
         // MainActivity의 네비게이션 헤더도 업데이트하도록 알림
@@ -208,15 +287,8 @@ public class SettingsFragment extends Fragment {
         SharedPreferences.Editor editor = preferences.edit();
         editor.putBoolean("push_alarm_enabled", enabled);
         editor.apply();
-    }
 
-    /**
-     * 위치 서비스 설정을 저장하는 메서드
-     */
-    private void saveLocationServiceSetting(boolean enabled) {
-        SharedPreferences.Editor editor = preferences.edit();
-        editor.putBoolean("location_service_enabled", enabled);
-        editor.apply();
+        Log.d(TAG, "푸시 알림 설정 저장: " + enabled);
     }
 
     /**
