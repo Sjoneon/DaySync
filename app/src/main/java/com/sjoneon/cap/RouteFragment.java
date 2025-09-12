@@ -82,6 +82,8 @@ public class RouteFragment extends Fragment {
     private ExecutorService executorService;
     private Handler mainHandler;
 
+    private LinearLayout layoutLoading;
+
     private Location startLocation, endLocation;
 
     @Nullable
@@ -103,6 +105,7 @@ public class RouteFragment extends Fragment {
         buttonMapView = view.findViewById(R.id.buttonMapView);
         textNoRoutes = view.findViewById(R.id.textNoRoutes);
         recyclerViewRoutes = view.findViewById(R.id.recyclerViewRoutes);
+        layoutLoading = view.findViewById(R.id.layoutLoading);
     }
 
     private void initializeServices() {
@@ -139,18 +142,37 @@ public class RouteFragment extends Fragment {
 
     private void setupClickListeners() {
         if (buttonSearchRoute != null) {
-            buttonSearchRoute.setOnClickListener(v -> searchRoutes());
+            buttonSearchRoute.setOnClickListener(v -> {
+                // 로딩 상태 시작
+                showLoading(true);
+                searchRoutes();
+            });
         }
 
         if (buttonMapView != null) {
             buttonMapView.setOnClickListener(v -> {
                 if (routeList.isEmpty()) {
                     showToast("경로를 먼저 검색해주세요.");
-                } else {
-                    openMapView(routeList.get(0));
+                    return;
                 }
+                openMapView(routeList.get(0));
             });
         }
+    }
+
+    /**
+     * 로딩 상태 표시/숨김 처리
+     * @param show true면 로딩 표시, false면 숨김
+     */
+    private void showLoading(boolean show) {
+        if (getActivity() == null) return;
+
+        getActivity().runOnUiThread(() -> {
+            if (layoutLoading != null && buttonSearchRoute != null) {
+                layoutLoading.setVisibility(show ? View.VISIBLE : View.GONE);
+                buttonSearchRoute.setEnabled(!show);
+            }
+        });
     }
 
     private void toggleRouteDetails(int position) {
@@ -221,7 +243,8 @@ public class RouteFragment extends Fragment {
         String endAddress = editEndLocation.getText().toString().trim();
 
         if (startAddress.isEmpty() || endAddress.isEmpty()) {
-            showToast("출발지와 도착지를 모두 입력해주세요.");
+            showToast(getString(R.string.empty_location_error));
+            showLoading(false);  // 로딩 종료 추가
             return;
         }
 
@@ -240,6 +263,7 @@ public class RouteFragment extends Fragment {
                     mainHandler.post(() -> {
                         updateRouteListVisibility(true, "주소를 찾을 수 없습니다.");
                         showToast("주소를 다시 확인해주세요.");
+                        showLoading(false);  // 로딩 종료 추가
                     });
                     return;
                 }
@@ -254,12 +278,14 @@ public class RouteFragment extends Fragment {
                         @Override
                         public void onSuccess(List<RouteInfo> routes) {
                             finalizeAndDisplayRoutes(routes);
+                            showLoading(false);  // 성공 시 로딩 종료
                         }
 
                         @Override
                         public void onError(String errorMessage) {
                             updateRouteListVisibility(true, "경로 탐색 중 오류가 발생했습니다: " + errorMessage);
                             showToast("경로 탐색에 실패했습니다.");
+                            showLoading(false);  // 실패 시 로딩 종료
                         }
                     });
                 });
@@ -268,6 +294,7 @@ public class RouteFragment extends Fragment {
                 Log.e(TAG, "경로 탐색 중 예외 발생", e);
                 mainHandler.post(() -> {
                     updateRouteListVisibility(true, "경로 탐색 중 오류가 발생했습니다.");
+                    showLoading(false);  // 예외 시 로딩 종료
                 });
             }
         });
@@ -625,16 +652,8 @@ public class RouteFragment extends Fragment {
         try {
             int busWaitMin = Math.max(1, bus.arrtime / 60);
 
-            // 🚌 핵심 필터링 로직: 대기시간이 도보시간보다 짧으면 제외
-            if (busWaitMin < walkToStartMin) {
-                Log.d(TAG, String.format("❌ %s번 버스 제외: 대기시간(%d분) < 도보시간(%d분) - 걸어가는 동안 버스가 지나감",
-                        bus.routeno, busWaitMin, walkToStartMin));
-                callback.onError(); // 이 버스는 제외
-                return;
-            }
-
-            // 필터링 통과한 버스에 대해 경로 정보 생성 계속 진행
-            Log.d(TAG, String.format("✅ %s번 버스 포함: 대기시간(%d분) >= 도보시간(%d분) - 버스 탑승 가능",
+            // 기존 필터링 로직 제거 - 모든 버스를 경로에 포함
+            Log.d(TAG, String.format("✅ %s번 버스 경로 생성: 대기시간(%d분), 도보시간(%d분)",
                     bus.routeno, busWaitMin, walkToStartMin));
 
             int busRideMin = DEFAULT_BUS_RIDE_TIME_MIN;
@@ -1221,8 +1240,8 @@ public class RouteFragment extends Fragment {
     }
 
     private void finalizeAndDisplayRoutes(List<RouteInfo> routes) {
-        if (routes == null || routes.isEmpty()) {
-            updateRouteListVisibility(true, "이용 가능한 대중교통 경로를 찾을 수 없습니다.");
+        if (routes.isEmpty()) {
+            updateRouteListVisibility(true, "경로를 찾을 수 없습니다.\n다른 출발지나 도착지를 시도해보세요.");
         } else {
             routeList.clear();
             routeList.addAll(routes);
@@ -1239,6 +1258,9 @@ public class RouteFragment extends Fragment {
                         route.getStopInfo()));
             }
         }
+
+        // 중요: 모든 경우에 로딩 상태 종료
+        showLoading(false);
     }
 
     private void updateRouteListVisibility(boolean noRoutes, String message) {

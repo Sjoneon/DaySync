@@ -126,4 +126,7 @@
     <string name="location_service_error">위치 서비스 오류가 발생했습니다</string>
     <string name="route_search_error">경로 검색 중 오류가 발생했습니다</string>
     <string name="map_loading_error">지도 로딩 중 오류가 발생했습니다</string>
+
+    <!-- 버스 검색 로딩 마크-->
+    <string name="searching_route">검색 중...</string>
 </resources>

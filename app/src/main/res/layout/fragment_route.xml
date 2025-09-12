@@ -47,9 +47,7 @@
                         android:id="@+id/buttonMapView"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:background="@color/background_input"
-                        android:paddingStart="@dimen/padding_large"
-                        android:paddingEnd="@dimen/padding_large"
+                        android:background="@drawable/rounded_button_background"
                         android:text="@string/map_view_button"
                         android:textColor="@color/text_primary"
                         android:textSize="@dimen/text_size_small" />
@@ -60,7 +58,7 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="@dimen/margin_medium"
+                    android:layout_marginBottom="@dimen/margin_xlarge"
                     android:orientation="horizontal">
 
                     <ImageView
@@ -108,17 +106,52 @@
 
                 </LinearLayout>
 
-                <!-- 경로 검색 버튼 -->
-                <Button
-                    android:id="@+id/buttonSearchRoute"
+                <!-- 경로 검색 버튼 (로딩 상태 포함) -->
+                <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/rounded_button_background"
-                    android:padding="@dimen/padding_large"
-                    android:text="@string/search_route"
-                    android:textColor="@color/text_primary"
-                    android:textSize="@dimen/text_size_large"
-                    android:textStyle="bold" />
+                    android:layout_height="wrap_content">
+
+                    <Button
+                        android:id="@+id/buttonSearchRoute"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/rounded_button_background"
+                        android:padding="@dimen/padding_large"
+                        android:text="@string/search_route"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/text_size_large"
+                        android:textStyle="bold" />
+
+                    <!-- 검색 중 로딩 오버레이 -->
+                    <LinearLayout
+                        android:id="@+id/layoutLoading"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/rounded_button_background_loading"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <ProgressBar
+                            android:id="@+id/progressBarLoading"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_marginEnd="@dimen/margin_small"
+                            android:indeterminate="true"
+                            android:indeterminateTint="@color/text_primary" />
+
+                        <TextView
+                            android:id="@+id/textSearching"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/searching_route"
+                            android:textColor="@color/text_primary"
+                            android:textSize="@dimen/text_size_large"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                </FrameLayout>
 
             </LinearLayout>
 
