@@ -624,6 +624,19 @@ public class RouteFragment extends Fragment {
                                               RouteInfoCallback callback) {
         try {
             int busWaitMin = Math.max(1, bus.arrtime / 60);
+
+            // 🚌 핵심 필터링 로직: 대기시간이 도보시간보다 짧으면 제외
+            if (busWaitMin < walkToStartMin) {
+                Log.d(TAG, String.format("❌ %s번 버스 제외: 대기시간(%d분) < 도보시간(%d분) - 걸어가는 동안 버스가 지나감",
+                        bus.routeno, busWaitMin, walkToStartMin));
+                callback.onError(); // 이 버스는 제외
+                return;
+            }
+
+            // 필터링 통과한 버스에 대해 경로 정보 생성 계속 진행
+            Log.d(TAG, String.format("✅ %s번 버스 포함: 대기시간(%d분) >= 도보시간(%d분) - 버스 탑승 가능",
+                    bus.routeno, busWaitMin, walkToStartMin));
+
             int busRideMin = DEFAULT_BUS_RIDE_TIME_MIN;
             int totalDurationMin = walkToStartMin + busWaitMin + busRideMin + walkToEndMin;
 
@@ -639,7 +652,7 @@ public class RouteFragment extends Fragment {
             routeInfo.setWalkingTimeToStartStop(walkToStartMin);
             routeInfo.setBusRideTime(busRideMin);
             routeInfo.setWalkingTimeToDestination(walkToEndMin);
-            routeInfo.setDirectionInfo(directionInfo); // 방향 정보 설정
+            routeInfo.setDirectionInfo(directionInfo);
 
             Log.i(TAG, String.format("경로 정보 생성 완료: %s번 버스 %s, 총 %d분 (도보: %d+%d분, 대기: %d분, 버스: %d분)",
                     bus.routeno, directionInfo, totalDurationMin, walkToStartMin, walkToEndMin, busWaitMin, busRideMin));
@@ -651,8 +664,6 @@ public class RouteFragment extends Fragment {
             callback.onError();
         }
     }
-
-    // [나머지 기존 메서드들은 동일하게 유지...]
 
     /**
      * 정류장 순서 기반 방향 판단
