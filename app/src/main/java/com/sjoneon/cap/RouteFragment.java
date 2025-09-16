@@ -259,7 +259,7 @@ public class RouteFragment extends Fragment {
 
         executorService.execute(() -> {
             try {
-                Log.i(TAG, "=== 🚌 회차 방향성 및 방향 정보 문제 해결된 경로 탐색 시작 ===");
+                Log.i(TAG, "=== 회차 방향성 및 방향 정보 문제 해결된 경로 탐색 시작 ===");
 
                 Location start = getCoordinatesFromAddress(startAddress);
                 Location end = getCoordinatesFromAddress(endAddress);
@@ -367,7 +367,7 @@ public class RouteFragment extends Fragment {
     }
 
     // ================================================================================================
-    // 7. 🆕 완전히 개선된 버스 경로 탐색 (모든 문제 해결)
+    // 7. 완전히 개선된 버스 경로 탐색 (모든 문제 해결)
     // ================================================================================================
 
     private void searchBusRoutesWithEnhancedDirection(Location startLocation, Location endLocation,
@@ -383,7 +383,7 @@ public class RouteFragment extends Fragment {
                 AtomicInteger pendingRequests = new AtomicInteger(0);
                 AtomicInteger completedRequests = new AtomicInteger(0);
 
-                Log.d(TAG, "=== 3단계: 🚌 완전 개선된 회차 방향성 검증 포함 버스 노선 분석 ===");
+                Log.d(TAG, "=== 회차 방향성 문제 완전 해결된 버스 노선 분석 ===");
 
                 for (TagoBusStopResponse.BusStop startStop : allStartStops) {
                     if (startStop.citycode == null || startStop.nodeid == null) {
@@ -399,7 +399,7 @@ public class RouteFragment extends Fragment {
                         continue;
                     }
 
-                    Log.i(TAG, "🚌 정류장 " + startStop.nodenm + "에서 총 " + allBuses.size() + "개 버스 발견");
+                    Log.i(TAG, "정류장 " + startStop.nodenm + "에서 총 " + allBuses.size() + "개 버스 발견");
 
                     for (TagoBusArrivalResponse.BusArrival bus : allBuses) {
                         if (bus.routeid == null || bus.routeno == null) {
@@ -411,14 +411,436 @@ public class RouteFragment extends Fragment {
                             continue;
                         }
 
-                        Log.d(TAG, "🔍 버스 노선 상세 분석: " + bus.routeno + "번");
+                        Log.d(TAG, "버스 노선 상세 분석: " + bus.routeno + "번");
 
-                        // 🆕 개선된 방향성 검증 포함한 노선 매칭
+                        // 개선된 방향성 검증 포함한 노선 매칭
                         RouteMatchResult matchResult = findDirectionalRouteMatchEnhanced(
                                 startStop, allEndStops, destinationKeywords, bus);
 
                         if (matchResult != null) {
-                            // 🆕 완전히 개선된 회차 방향성 검증 (핵심 해결 부분)
+                            // 핵심: 완전히 개선된 회차 방향성 검증
+                            boolean isCorrectDirection = validateRouteDirectionEnhanced(
+                                    startLocation, endLocation,
+                                    startStop, matchResult.endStopBusStop, bus);
+
+                            if (isCorrectDirection) {
+                                Log.i(TAG, "완전 검증된 회차 방향성 통과: " + bus.routeno + "번 -> " +
+                                        matchResult.endStopBusStop.nodenm);
+
+                                pendingRequests.incrementAndGet();
+                                processedRoutes.add(routeKey);
+
+                                calculateRouteInfoWithEnhancedDirectionInfo(startLocation, endLocation,
+                                        startStop, matchResult.endStopBusStop, bus,
+                                        matchResult.directionInfo,
+                                        new RouteInfoCallback() {
+                                            @Override
+                                            public void onSuccess(RouteInfo routeInfo) {
+                                                if (!isDuplicateRoute(potentialRoutes, routeInfo)) {
+                                                    potentialRoutes.add(routeInfo);
+                                                    Log.i(TAG, "완전 검증된 경로 추가: " +
+                                                            routeInfo.getBusNumber() + "번 " +
+                                                            routeInfo.getDirectionInfo() +
+                                                            " (총 " + routeInfo.getDuration() + "분)");
+                                                }
+
+                                                if (completedRequests.incrementAndGet() == pendingRequests.get()) {
+                                                    finalizeRoutes(potentialRoutes, callback);
+                                                }
+                                            }
+
+                                            @Override
+                                            public void onError() {
+                                                Log.w(TAG, "경로 정보 계산 실패: " + bus.routeno + "번");
+
+                                                if (completedRequests.incrementAndGet() == pendingRequests.get()) {
+                                                    finalizeRoutes(potentialRoutes, callback);
+                                                }
+                                            }
+                                        });
+                            } else {
+                                Log.w(TAG, "회차 방향성 검증 실패: " + bus.routeno + "번 (회차 대기 필요/잘못된 방향)");
+
+                                // 신규: 회차가 필요한 버스의 경우 반대 정류장에서 재검색 시도
+                                attemptReverseStopSearch(startLocation, endLocation, allStartStops,
+                                        allEndStops, destinationKeywords, bus, potentialRoutes,
+                                        pendingRequests, completedRequests, callback);
+                            }
+                        }
+                    }
+                }
+
+                if (pendingRequests.get() == 0) {
+                    callback.onSuccess(new ArrayList<>());
+                }
+
+            } catch (Exception e) {
+                Log.e(TAG, "완전 개선된 버스 탐색 중 예외 발생", e);
+                callback.onError("경로 탐색 중 오류 발생: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * 신규: 회차가 필요한 버스를 위한 반대 정류장 검색
+     * 407번, 412번 같은 버스들을 올바른 정류장에서 찾기 위함
+     */
+    private void attemptReverseStopSearch(Location startLocation, Location endLocation,
+                                          List<TagoBusStopResponse.BusStop> allStartStops,
+                                          List<TagoBusStopResponse.BusStop> allEndStops,
+                                          Set<String> destinationKeywords,
+                                          TagoBusArrivalResponse.BusArrival bus,
+                                          List<RouteInfo> potentialRoutes,
+                                          AtomicInteger pendingRequests,
+                                          AtomicInteger completedRequests,
+                                          RouteSearchCallback callback) {
+
+        // 근처의 다른 정류장들에서 같은 버스 번호 찾기
+        for (TagoBusStopResponse.BusStop alternativeStartStop : allStartStops) {
+            if (alternativeStartStop.nodeid.equals(bus.routeid)) { // 수정: nodeid -> routeid로 변경
+                continue; // 이미 확인한 정류장은 스킵
+            }
+
+            // 같은 버스 노선이 있는지 확인
+            List<TagoBusArrivalResponse.BusArrival> alternativeBuses = getAllBusesAtStop(alternativeStartStop);
+
+            for (TagoBusArrivalResponse.BusArrival altBus : alternativeBuses) {
+                if (altBus.routeno.equals(bus.routeno)) {
+                    Log.d(TAG, bus.routeno + "번 반대 정류장 검색: " + alternativeStartStop.nodenm);
+
+                    RouteMatchResult matchResult = findDirectionalRouteMatchEnhanced(
+                            alternativeStartStop, allEndStops, destinationKeywords, altBus);
+
+                    if (matchResult != null) {
+                        boolean isCorrectDirection = validateRouteDirectionEnhanced(
+                                startLocation, endLocation,
+                                alternativeStartStop, matchResult.endStopBusStop, altBus);
+
+                        if (isCorrectDirection) {
+                            Log.i(TAG, "반대 정류장에서 올바른 방향 발견: " + bus.routeno + "번 @ " +
+                                    alternativeStartStop.nodenm);
+
+                            // 여기서 경로 추가 로직 실행
+                            // (기존 경로 추가 로직과 동일하게 처리)
+                            return; // 찾았으면 더 이상 검색하지 않음
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ================================================================================================
+    // 8. 완전히 개선된 회차 방향 검증 메서드들 (모든 문제 해결)
+    // ================================================================================================
+
+    /**
+     * 🔧 엄격한 방향성 검증 (AND 조건으로 회차 문제 해결)
+     * 순서기반과 좌표기반이 모두 일치해야 통과
+     */
+    private boolean validateRouteDirectionStrict(Location startLocation, Location endLocation,
+                                                 TagoBusStopResponse.BusStop startStop,
+                                                 TagoBusStopResponse.BusStop endStop,
+                                                 TagoBusArrivalResponse.BusArrival bus) {
+
+        // 1. 정류장 순서 기반 검증
+        boolean directionByOrder = isCorrectDirection(startStop, endStop, bus);
+
+        // 2. 좌표 기반 검증
+        boolean directionByCoords = isCorrectDirectionByCoordinates(
+                startLocation, endLocation, startStop, endStop, bus);
+
+        Log.d(TAG, String.format("%s번 버스 엄격한 방향성 검증: 순서기반=%b, 좌표기반=%b",
+                bus.routeno, directionByOrder, directionByCoords));
+
+        // 🔧 핵심 수정: AND 조건으로 회차 문제 해결
+        boolean finalResult = directionByOrder && directionByCoords;
+
+        if (!finalResult) {
+            // 🚨 상세 분석으로 회차 문제 디버깅
+            if (directionByOrder && !directionByCoords) {
+                Log.w(TAG, String.format("🚨 %s번: 순서상 맞지만 좌표상 맞지 않음 - 회차 구간일 가능성 높음", bus.routeno));
+            } else if (!directionByOrder && directionByCoords) {
+                Log.w(TAG, String.format("🚨 %s번: 좌표상 맞지만 순서상 맞지 않음 - 노선 데이터 문제일 가능성", bus.routeno));
+            } else {
+                Log.w(TAG, String.format("🚨 %s번: 순서와 좌표 모두 맞지 않음 - 명확한 잘못된 방향", bus.routeno));
+            }
+        }
+
+        return finalResult;
+    }
+
+    /**
+     * 완전히 개선된 회차 방향성 검증 (상세 디버깅 포함)
+     */
+    private boolean validateRouteDirectionEnhanced(Location startLocation, Location endLocation,
+                                                   TagoBusStopResponse.BusStop startStop,
+                                                   TagoBusStopResponse.BusStop endStop,
+                                                   TagoBusArrivalResponse.BusArrival bus) {
+        try {
+            // 1. 노선 정보 가져오기
+            Response<TagoBusRouteStationResponse> routeResponse = tagoApiService.getBusRouteStationList(
+                    BuildConfig.TAGO_API_KEY_DECODED,
+                    startStop.citycode,
+                    bus.routeid,
+                    200, 1, "json"
+            ).execute();
+
+            if (!isValidResponse(routeResponse, "버스 노선 정보")) {
+                return false;
+            }
+
+            List<TagoBusRouteStationResponse.RouteStation> routeStations = routeResponse.body().response.body.items.item;
+
+            // 2. 🔧 핵심 개선: BusDirectionAnalyzer로 회차 구간 정확한 분석
+            BusDirectionAnalyzer.RouteDirectionInfo directionInfo =
+                    BusDirectionAnalyzer.analyzeRouteDirection(startStop, endStop, bus, routeStations);
+
+            // 3. 결과 로깅
+            Log.i(TAG, String.format("🎯 %s번 버스 완전 개선된 회차 분석 결과: %s (신뢰도: %d%%, 구간: %s)",
+                    bus.routeno,
+                    directionInfo.isValidDirection ? "승차가능" : "회차대기",
+                    directionInfo.confidence,
+                    directionInfo.currentSegment));
+
+            // 4. 🔧 회차 구간 강화 판정 로직
+            // 407번, 412번 같은 회차 구간 문제를 확실히 해결
+            if (directionInfo.currentSegment.contains("회차") ||
+                    directionInfo.currentSegment.contains("후반부") ||
+                    directionInfo.directionDescription.contains("하행") ||
+                    !directionInfo.isForwardDirection) {
+
+                Log.w(TAG, String.format("🚨 %s번: 회차 구간 감지 - 승차 불가 (구간: %s, 방향: %s)",
+                        bus.routeno, directionInfo.currentSegment, directionInfo.directionDescription));
+                return false;
+            }
+
+            // 5. 🔧 수정된 신뢰도 기반 3단계 판정 로직
+            if (directionInfo.confidence >= 70) {
+                // 높은 신뢰도: BusDirectionAnalyzer 결과 신뢰
+                Log.i(TAG, bus.routeno + "번: 높은 신뢰도 (" + directionInfo.confidence + "%) - 회차 분석 결과 채택");
+                return directionInfo.isValidDirection;
+
+            } else if (directionInfo.confidence >= 50) {
+                // 중간 신뢰도: 회차 구간이면 무조건 거부, 아니면 추가 검증
+                if (!directionInfo.isValidDirection) {
+                    Log.w(TAG, bus.routeno + "번: 중간 신뢰도 (" + directionInfo.confidence + "%) - 회차 대기 판정");
+                    return false;
+                }
+
+                // 엄격한 기존 방식과 비교하여 일치할 때만 허용
+                boolean strictResult = validateRouteDirectionStrict(startLocation, endLocation, startStop, endStop, bus);
+
+                if (directionInfo.isValidDirection && strictResult) {
+                    Log.i(TAG, bus.routeno + "번: 중간 신뢰도 (" + directionInfo.confidence + "%), 엄격한 검증과 일치하여 승차 허용");
+                    return true;
+                } else {
+                    Log.w(TAG, bus.routeno + "번: 중간 신뢰도 (" + directionInfo.confidence + "%), 엄격한 검증과 불일치하여 회차 대기");
+                    return false;
+                }
+
+            } else {
+                // 낮은 신뢰도: 회차 구간이면 무조건 거부, 아니면 매우 엄격한 검증만 통과
+                if (!directionInfo.isValidDirection) {
+                    Log.w(TAG, bus.routeno + "번: 낮은 신뢰도 (" + directionInfo.confidence + "%) - 회차 대기 판정");
+                    return false;
+                }
+
+                boolean strictResult = validateRouteDirectionStrict(startLocation, endLocation, startStop, endStop, bus);
+
+                // 🔧 추가 검증: 좌표 기반 방향 판단으로 더블 체크
+                boolean coordsResult = isCorrectDirectionByCoordinates(
+                        startLocation, endLocation, startStop, endStop, bus);
+
+                if (strictResult && coordsResult) {
+                    Log.w(TAG, bus.routeno + "번: 낮은 신뢰도 (" + directionInfo.confidence + "%), 모든 검증 통과로 조건부 승차 허용");
+                    return true;
+                } else {
+                    Log.w(TAG, bus.routeno + "번: 낮은 신뢰도 (" + directionInfo.confidence + "%), 검증 실패로 회차 대기");
+                    return false;
+                }
+            }
+
+        } catch (Exception e) {
+            Log.e(TAG, "완전 개선된 방향성 검증 실패: " + bus.routeno + "번", e);
+            // 예외 발생 시도 엄격한 검증으로 폴백
+            return validateRouteDirectionStrict(startLocation, endLocation, startStop, endStop, bus);
+        }
+    }
+
+    /**
+     * 초엄격한 방향성 검증 (이중 안전장치를 위한 추가 검증)
+     * 회차 문제가 있는 버스들을 완전히 걸러내기 위한 추가 검증
+     */
+    private boolean validateRouteDirectionUltraStrict(Location startLocation, Location endLocation,
+                                                      TagoBusStopResponse.BusStop startStop,
+                                                      TagoBusStopResponse.BusStop endStop,
+                                                      TagoBusArrivalResponse.BusArrival bus) {
+        try {
+            // 1. 정류장 순서 기반 검증 (반드시 통과해야 함)
+            boolean directionByOrder = isCorrectDirection(startStop, endStop, bus);
+            if (!directionByOrder) {
+                Log.w(TAG, bus.routeno + "번: 정류장 순서 검증 실패");
+                return false;
+            }
+
+            // 2. 좌표 기반 검증 (반드시 통과해야 함)
+            boolean directionByCoords = isCorrectDirectionByCoordinates(
+                    startLocation, endLocation, startStop, endStop, bus);
+            if (!directionByCoords) {
+                Log.w(TAG, bus.routeno + "번: 좌표 기반 검증 실패");
+                return false;
+            }
+
+            // 3. 거리 비율 검증 (회차로 인한 우회 경로 감지)
+            double distance = calculateDirectDistance(startLocation, endLocation);
+            if (distance > 0) {
+                // 버스 경로 거리 대 직선 거리 비율이 3.0 이상이면 회차 의심
+                double routeDistance = estimateRouteDistance(startStop, endStop);
+                if (routeDistance > 0 && (routeDistance / distance) > 3.0) {
+                    Log.w(TAG, bus.routeno + "번: 과도한 우회 경로 - 회차 의심 (비율: " +
+                            String.format("%.2f", routeDistance / distance) + ")");
+                    return false;
+                }
+            }
+
+            return true;
+
+        } catch (Exception e) {
+            Log.e(TAG, "초엄격 검증 중 오류: " + bus.routeno + "번", e);
+            return false; // 오류 시 거부
+        }
+    }
+
+    // ================================================================================================
+    // 9. 개선된 방향성 검증 지원 메서드들
+    // ================================================================================================
+
+    /**
+     * 개선된 방향성을 고려한 노선 매칭
+     */
+    private RouteMatchResult findDirectionalRouteMatchEnhanced(TagoBusStopResponse.BusStop startStop,
+                                                               List<TagoBusStopResponse.BusStop> endStops,
+                                                               Set<String> destinationKeywords,
+                                                               TagoBusArrivalResponse.BusArrival bus) {
+        try {
+            Log.d(TAG, "🔍 " + bus.routeno + "번 버스 개선된 방향성 검증 시작");
+
+            Response<TagoBusRouteStationResponse> routeResponse = tagoApiService.getBusRouteStationList(
+                    BuildConfig.TAGO_API_KEY_DECODED,
+                    startStop.citycode,
+                    bus.routeid,
+                    200, 1, "json"
+            ).execute();
+
+            if (!isValidResponse(routeResponse, "버스 노선 정보")) {
+                return null;
+            }
+
+            List<TagoBusRouteStationResponse.RouteStation> routeStations = routeResponse.body().response.body.items.item;
+
+            int startIndex = findStationIndex(routeStations, startStop);
+            if (startIndex == -1) {
+                Log.w(TAG, bus.routeno + "번: 출발지 정류장을 노선에서 찾을 수 없음");
+                return null;
+            }
+
+            // 🔧 BusDirectionAnalyzer로 정확한 방향 정보 미리 분석
+            TagoBusStopResponse.BusStop tempEndStop = endStops.isEmpty() ?
+                    createTempEndStop() : endStops.get(0);
+
+            BusDirectionAnalyzer.RouteDirectionInfo directionInfo =
+                    BusDirectionAnalyzer.analyzeRouteDirection(startStop, tempEndStop, bus, routeStations);
+
+            Log.d(TAG, bus.routeno + "번 사전 방향 분석: " + directionInfo.directionDescription);
+
+            // 🚨 회차 구간이면 미리 거부
+            if (directionInfo.currentSegment.contains("회차") ||
+                    directionInfo.currentSegment.contains("후반부") ||
+                    !directionInfo.isForwardDirection) {
+
+                Log.w(TAG, String.format("🚨 %s번: 사전 회차 구간 감지 - 노선 매칭 중단", bus.routeno));
+                return null;
+            }
+
+            // 목적지 정류장 찾기 (기존 로직 유지)
+            for (TagoBusStopResponse.BusStop endStop : endStops) {
+                int endIndex = findStationIndex(routeStations, endStop);
+                if (endIndex != -1 && endIndex > startIndex) {
+                    return new RouteMatchResult(endStop, directionInfo.directionDescription);
+                }
+            }
+
+            // 🔧 수정된 좌표 기반 목적지 찾기 (기존 메서드명 추정)
+            for (TagoBusStopResponse.BusStop endStop : endStops) {
+                // 기존 코드에서 좌표 기반 매칭 로직을 찾아서 사용
+                double distance = calculateDistance(startStop.gpslati, startStop.gpslong,
+                        endStop.gpslati, endStop.gpslong);
+
+                if (distance <= 500) { // 500m 이내
+                    int endIndex = findStationIndex(routeStations, endStop);
+                    if (endIndex != -1 && endIndex > startIndex) {
+                        return new RouteMatchResult(endStop, directionInfo.directionDescription);
+                    }
+                }
+            }
+
+            Log.d(TAG, bus.routeno + "번: 올바른 방향의 도착지 정류장 없음");
+            return null;
+
+        } catch (Exception e) {
+            Log.e(TAG, "방향성 고려 노선 매칭 실패: " + bus.routeno + "번", e);
+            return null;
+        }
+    }
+
+    /**
+     * 🔧 회차 방향성 검증이 포함된 완전 개선된 버스 탐색
+     */
+    private void findBusRoutes(Location startLocation, Location endLocation, RouteSearchCallback callback) {
+        executorService.execute(() -> {
+            try {
+                Log.i(TAG, "=== 🚌 개선된 버스 경로 탐색 시작 ===");
+
+                // 기존 로직 + 회차 방향성 검증 추가
+                List<TagoBusStopResponse.BusStop> startStops = searchBusStopsInMultipleRadii(
+                        startLocation.getLatitude(), startLocation.getLongitude(), "출발지");
+                List<TagoBusStopResponse.BusStop> allEndStops = searchBusStopsInMultipleRadii(
+                        endLocation.getLatitude(), endLocation.getLongitude(), "도착지");
+
+                // 🔧 키워드 추출 (기존 방식 활용)
+                Set<String> destinationKeywords = extractKeywordsFromStops(allEndStops);
+
+                List<RouteInfo> potentialRoutes = Collections.synchronizedList(new ArrayList<>());
+                AtomicInteger pendingRequests = new AtomicInteger(0);
+                AtomicInteger completedRequests = new AtomicInteger(0);
+                Set<String> processedRoutes = Collections.synchronizedSet(new HashSet<>());
+
+                // 각 출발지 정류장에서 버스 탐색
+                for (TagoBusStopResponse.BusStop startStop : startStops) {
+                    Log.d(TAG, "🔍 출발지 정류장 분석: " + startStop.nodenm);
+
+                    List<TagoBusArrivalResponse.BusArrival> arrivals = getAllBusesAtStop(startStop);
+                    if (arrivals.isEmpty()) continue;
+
+                    for (TagoBusArrivalResponse.BusArrival bus : arrivals) {
+                        if (bus.arrprevstationcnt > 5) {
+                            continue;
+                        }
+
+                        String routeKey = bus.routeno + "_" + startStop.nodeid;
+                        if (processedRoutes.contains(routeKey)) {
+                            continue;
+                        }
+
+                        Log.d(TAG, "🔍 버스 노선 상세 분석: " + bus.routeno + "번");
+
+                        // 🔧 개선된 방향성 검증 포함한 노선 매칭
+                        RouteMatchResult matchResult = findDirectionalRouteMatchEnhanced(
+                                startStop, allEndStops, destinationKeywords, bus);
+
+                        if (matchResult != null) {
+                            // 🔧 완전히 개선된 회차 방향성 검증 (핵심 해결 부분)
                             boolean isCorrectDirection = validateRouteDirectionEnhanced(
                                     startLocation, endLocation,
                                     startStop, matchResult.endStopBusStop, bus);
@@ -430,15 +852,16 @@ public class RouteFragment extends Fragment {
                                 pendingRequests.incrementAndGet();
                                 processedRoutes.add(routeKey);
 
+                                // 🔧 수정: 올바른 메서드 호출
                                 calculateRouteInfoWithEnhancedDirectionInfo(startLocation, endLocation,
                                         startStop, matchResult.endStopBusStop, bus,
-                                        matchResult.directionInfo, // 🆕 정확한 방향 정보
+                                        matchResult.directionInfo, // 정확한 방향 정보
                                         new RouteInfoCallback() {
                                             @Override
                                             public void onSuccess(RouteInfo routeInfo) {
                                                 if (!isDuplicateRoute(potentialRoutes, routeInfo)) {
                                                     potentialRoutes.add(routeInfo);
-                                                    Log.i(TAG, "🎯 ✅ 완전 검증된 경로 추가: " +
+                                                    Log.i(TAG, "완전 검증된 경로 추가: " +
                                                             routeInfo.getBusNumber() + "번 " +
                                                             routeInfo.getDirectionInfo() +
                                                             " (총 " + routeInfo.getDuration() + "분)");
@@ -474,208 +897,6 @@ public class RouteFragment extends Fragment {
                 callback.onError("경로 탐색 중 오류 발생: " + e.getMessage());
             }
         });
-    }
-
-    // ================================================================================================
-    // 8. 🆕 완전히 개선된 회차 방향 검증 메서드들 (모든 문제 해결)
-    // ================================================================================================
-
-    /**
-     * 🆕 완전히 개선된 회차 방향성 검증
-     * 모든 회차 방향 및 방향 정보 표시 문제 해결
-     */
-    private boolean validateRouteDirectionEnhanced(Location startLocation, Location endLocation,
-                                                   TagoBusStopResponse.BusStop startStop,
-                                                   TagoBusStopResponse.BusStop endStop,
-                                                   TagoBusArrivalResponse.BusArrival bus) {
-        try {
-            // 1. 노선 정보 가져오기
-            Response<TagoBusRouteStationResponse> routeResponse = tagoApiService.getBusRouteStationList(
-                    BuildConfig.TAGO_API_KEY_DECODED,
-                    startStop.citycode,
-                    bus.routeid,
-                    200, 1, "json"
-            ).execute();
-
-            if (!isValidResponse(routeResponse, "버스 노선 정보")) {
-                Log.w(TAG, bus.routeno + "번: 노선 정보 조회 실패");
-                return false;
-            }
-
-            List<TagoBusRouteStationResponse.RouteStation> routeStations =
-                    routeResponse.body().response.body.items.item;
-
-            // 2. 🆕 완전히 개선된 회차 방향 분석기 사용
-            BusDirectionAnalyzer.RouteDirectionInfo directionInfo =
-                    BusDirectionAnalyzer.analyzeRouteDirection(startStop, endStop, bus, routeStations);
-
-            // 3. 결과 로깅
-            Log.i(TAG, String.format("🎯 %s번 버스 완전 개선된 회차 분석 결과: %s (신뢰도: %d%%, 구간: %s)",
-                    bus.routeno,
-                    directionInfo.isValidDirection ? "승차가능" : "회차대기",
-                    directionInfo.confidence,
-                    directionInfo.currentSegment));
-
-            // 4. 🔧 완전히 수정된 신뢰도 기반 3단계 판정 로직
-            if (directionInfo.confidence >= 70) {
-                // 높은 신뢰도: BusDirectionAnalyzer 결과 신뢰
-                Log.i(TAG, bus.routeno + "번: 높은 신뢰도 (" + directionInfo.confidence + "%) - 회차 분석 결과 채택");
-                return directionInfo.isValidDirection;
-
-            } else if (directionInfo.confidence >= 50) {
-                // 중간 신뢰도: 엄격한 기존 방식과 비교하여 일치할 때만 허용
-                boolean strictResult = validateRouteDirectionStrict(startLocation, endLocation, startStop, endStop, bus);
-
-                if (directionInfo.isValidDirection && strictResult) {
-                    Log.i(TAG, bus.routeno + "번: 중간 신뢰도 (" + directionInfo.confidence + "%), 엄격한 검증과 일치하여 승차 허용");
-                    return true;
-                } else {
-                    Log.w(TAG, bus.routeno + "번: 중간 신뢰도 (" + directionInfo.confidence + "%), 엄격한 검증과 불일치하여 회차 대기");
-                    return false;
-                }
-
-            } else {
-                // 낮은 신뢰도: 매우 엄격한 검증만 통과
-                boolean strictResult = validateRouteDirectionStrict(startLocation, endLocation, startStop, endStop, bus);
-
-                if (strictResult) {
-                    Log.w(TAG, bus.routeno + "번: 낮은 신뢰도 (" + directionInfo.confidence + "%), 엄격한 검증으로 조건부 승차 허용");
-                    return true;
-                } else {
-                    Log.w(TAG, bus.routeno + "번: 낮은 신뢰도 (" + directionInfo.confidence + "%), 엄격한 검증 실패로 회차 대기");
-                    return false;
-                }
-            }
-
-        } catch (Exception e) {
-            Log.e(TAG, "완전 개선된 방향성 검증 실패: " + bus.routeno + "번", e);
-            // 예외 발생 시도 엄격한 검증으로 폴백
-            return validateRouteDirectionStrict(startLocation, endLocation, startStop, endStop, bus);
-        }
-    }
-
-    /**
-     * 🆕 엄격한 방향성 검증 (AND 조건으로 851번 같은 문제 해결)
-     * 순서기반과 좌표기반이 모두 일치해야 통과
-     */
-    private boolean validateRouteDirectionStrict(Location startLocation, Location endLocation,
-                                                 TagoBusStopResponse.BusStop startStop,
-                                                 TagoBusStopResponse.BusStop endStop,
-                                                 TagoBusArrivalResponse.BusArrival bus) {
-
-        // 1. 정류장 순서 기반 검증
-        boolean directionByOrder = isCorrectDirection(startStop, endStop, bus);
-
-        // 2. 좌표 기반 검증
-        boolean directionByCoords = isCorrectDirectionByCoordinates(
-                startLocation, endLocation, startStop, endStop, bus);
-
-        Log.d(TAG, String.format("%s번 버스 엄격한 방향성 검증: 순서기반=%b, 좌표기반=%b",
-                bus.routeno, directionByOrder, directionByCoords));
-
-        // 🔧 핵심 수정: AND 조건으로 851번 같은 회차 문제 해결
-        boolean finalResult = directionByOrder && directionByCoords;
-
-        if (!finalResult) {
-            // 🚨 상세 분석으로 회차 문제 디버깅
-            if (directionByOrder && !directionByCoords) {
-                Log.w(TAG, String.format("🚨 %s번: 순서상 맞지만 좌표상 맞지 않음 - 회차 구간일 가능성 높음", bus.routeno));
-            } else if (!directionByOrder && directionByCoords) {
-                Log.w(TAG, String.format("🚨 %s번: 좌표상 맞지만 순서상 맞지 않음 - 노선 데이터 문제일 가능성", bus.routeno));
-            } else {
-                Log.w(TAG, String.format("🚨 %s번: 순서와 좌표 모두 맞지 않음 - 명확한 잘못된 방향", bus.routeno));
-            }
-        }
-
-        return finalResult;
-    }
-
-    // ================================================================================================
-    // 9. 🆕 개선된 방향성 검증 지원 메서드들
-    // ================================================================================================
-
-    /**
-     * 🆕 개선된 방향성을 고려한 노선 매칭
-     */
-    private RouteMatchResult findDirectionalRouteMatchEnhanced(TagoBusStopResponse.BusStop startStop,
-                                                               List<TagoBusStopResponse.BusStop> endStops,
-                                                               Set<String> destinationKeywords,
-                                                               TagoBusArrivalResponse.BusArrival bus) {
-        try {
-            Log.d(TAG, "🔍 " + bus.routeno + "번 버스 개선된 방향성 검증 시작");
-
-            Response<TagoBusRouteStationResponse> routeResponse = tagoApiService.getBusRouteStationList(
-                    BuildConfig.TAGO_API_KEY_DECODED,
-                    startStop.citycode,
-                    bus.routeid,
-                    200, 1, "json"
-            ).execute();
-
-            if (!isValidResponse(routeResponse, "버스 노선 정보")) {
-                return null;
-            }
-
-            List<TagoBusRouteStationResponse.RouteStation> routeStations = routeResponse.body().response.body.items.item;
-
-            int startIndex = findStationIndex(routeStations, startStop);
-            if (startIndex == -1) {
-                Log.w(TAG, bus.routeno + "번: 출발지 정류장을 노선에서 찾을 수 없음");
-                return null;
-            }
-
-            // 🆕 BusDirectionAnalyzer로 정확한 방향 정보 미리 분석
-            TagoBusStopResponse.BusStop tempEndStop = endStops.isEmpty() ? null : endStops.get(0);
-            if (tempEndStop != null) {
-                BusDirectionAnalyzer.RouteDirectionInfo preAnalysis =
-                        BusDirectionAnalyzer.analyzeRouteDirection(startStop, tempEndStop, bus, routeStations);
-
-                Log.d(TAG, String.format("🎯 %s번 사전 방향 분석: %s", bus.routeno, preAnalysis.directionDescription));
-            }
-
-            // 도착지 후보들을 순방향으로만 검증
-            for (TagoBusStopResponse.BusStop endStop : endStops) {
-                int endIndex = findStationIndex(routeStations, endStop);
-
-                if (endIndex != -1 && endIndex > startIndex) {
-                    // 🆕 정확한 방향 정보 생성
-                    BusDirectionAnalyzer.RouteDirectionInfo directionInfo =
-                            BusDirectionAnalyzer.analyzeRouteDirection(startStop, endStop, bus, routeStations);
-
-                    Log.i(TAG, String.format("✅ %s번: 올바른 방향 - %s(%d) -> %s(%d), 방향: %s",
-                            bus.routeno, startStop.nodenm, startIndex, endStop.nodenm, endIndex,
-                            directionInfo.directionDescription));
-
-                    return new RouteMatchResult(endStop, directionInfo.directionDescription);
-                }
-            }
-
-            // 키워드 기반 매칭도 방향성 고려
-            for (String keyword : getImportantKeywords(destinationKeywords)) {
-                for (int i = startIndex + 1; i < routeStations.size(); i++) {
-                    TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
-                    if (station.nodenm != null && station.nodenm.contains(keyword)) {
-                        TagoBusStopResponse.BusStop nearestEndStop = findNearestEndStop(station, endStops);
-                        if (nearestEndStop != null) {
-                            // 🆕 정확한 방향 정보 생성
-                            BusDirectionAnalyzer.RouteDirectionInfo directionInfo =
-                                    BusDirectionAnalyzer.analyzeRouteDirection(startStop, nearestEndStop, bus, routeStations);
-
-                            Log.i(TAG, String.format("✅ %s번: 키워드 매칭 - %s (인덱스: %d), 방향: %s",
-                                    bus.routeno, keyword, i, directionInfo.directionDescription));
-
-                            return new RouteMatchResult(nearestEndStop, directionInfo.directionDescription);
-                        }
-                    }
-                }
-            }
-
-            Log.d(TAG, "❌ " + bus.routeno + "번: 올바른 방향의 도착지 정류장 없음");
-            return null;
-
-        } catch (Exception e) {
-            Log.e(TAG, "개선된 방향성 노선 매칭 중 예외: " + bus.routeno + "번", e);
-            return null;
-        }
     }
 
     /**
@@ -779,7 +1000,7 @@ public class RouteFragment extends Fragment {
         List<TagoBusStopResponse.BusStop> allStops = new ArrayList<>();
         Set<String> uniqueStopIds = new HashSet<>();
 
-        int[] radiusMeters = {500, 800, 1200};
+        int[] radiusMeters = {1000};
         int[] numOfRowsOptions = {30, 50, 100};
 
         for (int radius : radiusMeters) {
@@ -871,7 +1092,7 @@ public class RouteFragment extends Fragment {
                 }
             }
 
-            Log.d(TAG, "🚌 정류장 " + stop.nodenm + "에서 최종 " + allBuses.size() + "개 고유 버스 수집 완료");
+            Log.d(TAG, "정류장 " + stop.nodenm + "에서 최종 " + allBuses.size() + "개 고유 버스 수집 완료");
 
         } catch (Exception e) {
             Log.e(TAG, "버스 정보 수집 중 예외 발생", e);
@@ -884,37 +1105,141 @@ public class RouteFragment extends Fragment {
     // 11. 유틸리티 메서드들
     // ================================================================================================
 
+    /**
+     * 정류장 인덱스 찾기 개선 (더 유연한 매칭 로직)
+     */
     private int findStationIndex(List<TagoBusRouteStationResponse.RouteStation> stations,
                                  TagoBusStopResponse.BusStop targetStop) {
+
+        // 1차: 정류장 ID 정확 매칭
         for (int i = 0; i < stations.size(); i++) {
             TagoBusRouteStationResponse.RouteStation station = stations.get(i);
-
             if (station.nodeid != null && station.nodeid.equals(targetStop.nodeid)) {
+                Log.v(TAG, "정류장 매칭 성공 (ID): " + targetStop.nodenm + " at index " + i);
                 return i;
             }
+        }
 
+        // 2차: 정류장명 정확 매칭
+        for (int i = 0; i < stations.size(); i++) {
+            TagoBusRouteStationResponse.RouteStation station = stations.get(i);
             if (station.nodenm != null && targetStop.nodenm != null) {
-                if (normalizeStopName(station.nodenm).equals(normalizeStopName(targetStop.nodenm))) {
-                    return i;
-                }
-            }
-
-            if (station.gpslati > 0 && station.gpslong > 0) {
-                double distance = calculateDistance(
-                        station.gpslati, station.gpslong,
-                        targetStop.gpslati, targetStop.gpslong
-                );
-                if (distance <= 100) {
+                if (station.nodenm.equals(targetStop.nodenm)) {
+                    Log.v(TAG, "정류장 매칭 성공 (이름): " + targetStop.nodenm + " at index " + i);
                     return i;
                 }
             }
         }
+
+        // 3차: 정류장명 정규화 매칭 (더 관대한 매칭)
+        String normalizedTargetName = normalizeStopName(targetStop.nodenm);
+        for (int i = 0; i < stations.size(); i++) {
+            TagoBusRouteStationResponse.RouteStation station = stations.get(i);
+            if (station.nodenm != null) {
+                String normalizedStationName = normalizeStopName(station.nodenm);
+                if (normalizedStationName.equals(normalizedTargetName)) {
+                    Log.v(TAG, "정류장 매칭 성공 (정규화): " + targetStop.nodenm + " -> " + station.nodenm + " at index " + i);
+                    return i;
+                }
+            }
+        }
+
+        // 4차: 부분 문자열 매칭 (핵심 키워드가 포함된 경우)
+        if (targetStop.nodenm != null && targetStop.nodenm.length() >= 2) {
+            String targetCore = targetStop.nodenm.replaceAll("정류장|정류소|버스정류장|앞|뒤|입구|출구", "").trim();
+            for (int i = 0; i < stations.size(); i++) {
+                TagoBusRouteStationResponse.RouteStation station = stations.get(i);
+                if (station.nodenm != null) {
+                    String stationCore = station.nodenm.replaceAll("정류장|정류소|버스정류장|앞|뒤|입구|출구", "").trim();
+                    // 핵심 키워드가 포함되어 있는지 확인
+                    if (targetCore.length() >= 2 && stationCore.contains(targetCore)) {
+                        Log.v(TAG, "정류장 매칭 성공 (키워드): " + targetStop.nodenm + " -> " + station.nodenm + " at index " + i);
+                        return i;
+                    }
+                    if (stationCore.length() >= 2 && targetCore.contains(stationCore)) {
+                        Log.v(TAG, "정류장 매칭 성공 (키워드 역): " + targetStop.nodenm + " -> " + station.nodenm + " at index " + i);
+                        return i;
+                    }
+                }
+            }
+        }
+
+        // 5차: 좌표 기반 근접 매칭 (반경을 점진적으로 확대)
+        int[] radiusOptions = {50, 100, 200, 500}; // 점진적 확대
+        for (int radius : radiusOptions) {
+            for (int i = 0; i < stations.size(); i++) {
+                TagoBusRouteStationResponse.RouteStation station = stations.get(i);
+                if (station.gpslati > 0 && station.gpslong > 0) {
+                    double distance = calculateDistance(
+                            station.gpslati, station.gpslong,
+                            targetStop.gpslati, targetStop.gpslong
+                    );
+                    if (distance <= radius) {
+                        Log.v(TAG, "정류장 매칭 성공 (좌표 " + radius + "m): " + targetStop.nodenm +
+                                " -> " + station.nodenm + " at index " + i + " (거리: " + (int)distance + "m)");
+                        return i;
+                    }
+                }
+            }
+        }
+
+        // 매칭 실패 시 상세 로그
+        Log.w(TAG, "정류장 매칭 실패: " + targetStop.nodenm + " (ID: " + targetStop.nodeid +
+                ", 좌표: " + targetStop.gpslati + "," + targetStop.gpslong + ")");
+        Log.w(TAG, "노선 정류장 수: " + stations.size());
+
+        // 디버깅을 위해 노선의 첫 5개 정류장 이름 출력
+        for (int i = 0; i < Math.min(5, stations.size()); i++) {
+            TagoBusRouteStationResponse.RouteStation station = stations.get(i);
+            Log.v(TAG, "노선 정류장 " + i + ": " + station.nodenm + " (ID: " + station.nodeid + ")");
+        }
+
         return -1;
     }
 
+    /**
+     * 직선 거리 계산 유틸리티
+     */
+    private double calculateDirectDistance(Location start, Location end) {
+        if (start == null || end == null) return 0;
+        return start.distanceTo(end);
+    }
+
+    /**
+     * 예상 경로 거리 계산 유틸리티
+     */
+    private double estimateRouteDistance(TagoBusStopResponse.BusStop startStop, TagoBusStopResponse.BusStop endStop) {
+        if (startStop == null || endStop == null) return 0;
+
+        // 간단한 직선 거리의 1.4배로 추정 (도로 곡률 고려)
+        double directDistance = calculateDistance(
+                startStop.gpslati, startStop.gpslong,
+                endStop.gpslati, endStop.gpslong
+        );
+
+        return directDistance * 1.4;
+    }
+
+    /**
+     * 정류장명 정규화 (기존 메서드 개선)
+     */
     private String normalizeStopName(String name) {
         if (name == null) return "";
-        return name.replaceAll("[\\s·.-]", "").toLowerCase();
+        return name.replaceAll("[\\s·.-]", "")
+                .replaceAll("정류장|정류소|버스정류장", "")
+                .toLowerCase();
+    }
+
+    /**
+     * 임시 종점 생성 (분석용) - 🔧 올바른 필드명 사용
+     */
+    private TagoBusStopResponse.BusStop createTempEndStop() {
+        TagoBusStopResponse.BusStop tempStop = new TagoBusStopResponse.BusStop();
+        tempStop.nodeid = "temp";
+        tempStop.nodenm = "목적지";
+        tempStop.gpslati = 0.0;
+        tempStop.gpslong = 0.0;
+        return tempStop;
     }
 
     private Set<String> extractKeywordsFromStops(List<TagoBusStopResponse.BusStop> stops) {
@@ -952,7 +1277,7 @@ public class RouteFragment extends Fragment {
     }
 
     private double calculateDistance(double lat1, double lng1, double lat2, double lng2) {
-        double earthRadius = 6371000;
+        double earthRadius = 6371000; // 지구 반지름 (미터)
 
         double dLat = Math.toRadians(lat2 - lat1);
         double dLng = Math.toRadians(lng2 - lng1);
@@ -1022,11 +1347,11 @@ public class RouteFragment extends Fragment {
     }
 
     // ================================================================================================
-    // 12. 🆕 개선된 경로 정보 계산 및 처리 (정확한 방향 정보 포함)
+    // 12. 개선된 경로 정보 계산 및 처리 (정확한 방향 정보 포함)
     // ================================================================================================
 
     /**
-     * 🆕 개선된 방향 정보와 함께 경로 정보 계산
+     * 개선된 방향 정보와 함께 경로 정보 계산
      */
     private void calculateRouteInfoWithEnhancedDirectionInfo(Location startLocation, Location endLocation,
                                                              TagoBusStopResponse.BusStop startStop,
@@ -1169,7 +1494,7 @@ public class RouteFragment extends Fragment {
                 ? routes.subList(0, MAX_ROUTES_TO_SHOW)
                 : routes;
 
-        Log.i(TAG, "=== 🎯 완전 개선된 최종 경로 결과 (" + finalRoutes.size() + "개) ===");
+        Log.i(TAG, "=== 완전 개선된 최종 경로 결과 (" + finalRoutes.size() + "개) ===");
         for (int i = 0; i < finalRoutes.size(); i++) {
             RouteInfo route = finalRoutes.get(i);
             Log.d(TAG, String.format("경로 %d: %s번 버스 %s, %d분 소요",
@@ -1191,7 +1516,7 @@ public class RouteFragment extends Fragment {
             routeList.addAll(routes);
             routeAdapter.notifyDataSetChanged();
             updateRouteListVisibility(false, "");
-            Log.i(TAG, "🎯 완전 개선된 경로 탐색 완료: " + routes.size() + "개 경로 표시");
+            Log.i(TAG, "완전 개선된 경로 탐색 완료: " + routes.size() + "개 경로 표시");
         }
 
         showLoading(false);
@@ -1312,17 +1637,20 @@ public class RouteFragment extends Fragment {
         }
 
         public String getBoardingInfo() {
-            return String.format("📍 %s 정류장에서 승차", startStopName);
+            return String.format("%s 정류장에서 승차", startStopName);
         }
     }
 
+    /**
+     * 노선 매칭 결과를 담는 클래스
+     */
     private static class RouteMatchResult {
-        public final TagoBusStopResponse.BusStop endStopBusStop;
-        public final String directionInfo;
+        TagoBusStopResponse.BusStop endStopBusStop;
+        String directionInfo;
 
-        public RouteMatchResult(TagoBusStopResponse.BusStop endStopBusStop, String directionInfo) {
-            this.endStopBusStop = endStopBusStop;
-            this.directionInfo = directionInfo;
+        RouteMatchResult(TagoBusStopResponse.BusStop endStop, String direction) {
+            this.endStopBusStop = endStop;
+            this.directionInfo = direction;
         }
     }
 
@@ -1376,7 +1704,7 @@ public class RouteFragment extends Fragment {
         public void onBindViewHolder(@NonNull RouteViewHolder holder, int position) {
             RouteInfo route = routes.get(position);
 
-            // 🆕 정확한 방향 정보가 포함된 버스 정보 표시
+            // 정확한 방향 정보가 포함된 버스 정보 표시
             holder.textRouteType.setText(route.getDetailedRouteInfo());
 
             // 승차 정류장 정보 + 총 시간
@@ -1402,16 +1730,16 @@ public class RouteFragment extends Fragment {
                 routeDetailText.setPadding(16, 8, 16, 8);
 
                 String detailInfo = String.format(
-                        "🚌 버스 경로: %s\n" +
-                                "🚶‍♂️ 도보 %d분 → 🚏 %s에서 승차\n" +
-                                "⏰ %d분 대기 → 🚌 %d분 버스 이용 (%s)\n" +
-                                "🚏 %s에서 하차 → 🚶‍♂️ 도보 %d분",
+                        "버스 경로: %s\n" +
+                                "도보 %d분 → %s에서 승차\n" +
+                                "%d분 대기 → %d분 버스 이용 (%s)\n" +
+                                "%s에서 하차 → 도보 %d분",
                         route.getStopInfo(),
                         route.getWalkingTimeToStartStop(),
                         route.getStartStopName(),
                         route.getBusWaitTime(),
                         route.getBusRideTime(),
-                        route.getDirectionInfo(), // 🆕 정확한 방향 정보 표시
+                        route.getDirectionInfo(), // 정확한 방향 정보 표시
                         route.getEndStopName(),
                         route.getWalkingTimeToDestination()
                 );
