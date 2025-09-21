@@ -459,4 +459,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         // 화면이 다시 보여질 때 네비게이션 헤더 업데이트
         updateNavigationHeader();
     }
+
+    /**
+     * 툴바 제목을 설정하는 메서드
+     * @param title 설정할 제목
+     */
+    public void setToolbarTitle(String title) {
+        if (toolbar != null) {
+            toolbar.setTitle(title);
+        }
+    }
 }

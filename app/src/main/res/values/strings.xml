@@ -129,4 +129,15 @@
 
     <!-- 버스 검색 로딩 마크-->
     <string name="searching_route">검색 중...</string>
+
+    <!-- UUID 관련 문자열 -->
+    <string name="user_uuid">사용자 ID</string>
+    <string name="user_uuid_subtitle">고유 식별자 확인</string>
+    <string name="show_uuid">UUID 보기</string>
+    <string name="uuid_dialog_title">사용자 고유 ID</string>
+    <string name="uuid_dialog_message">앱을 재설치할 때 데이터 복구를 위해 필요한 고유 ID입니다.\n\n아래 ID를 안전한 곳에 보관해 주세요:</string>
+    <string name="copy_uuid">복사</string>
+    <string name="uuid_copied">UUID가 클립보드에 복사되었습니다</string>
+    <string name="confirm">확인</string>
+
 </resources>

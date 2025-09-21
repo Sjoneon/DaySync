@@ -1,6 +1,9 @@
 package com.sjoneon.cap;
 
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -25,6 +28,7 @@ import androidx.fragment.app.Fragment;
 
 import static android.content.Context.MODE_PRIVATE;
 
+import java.util.UUID;
 /**
  * 개인설정을 관리하는 프래그먼트
  */
@@ -37,6 +41,7 @@ public class SettingsFragment extends Fragment {
     private TextView textUserName;
     private TextView textUserNameSubtitle;
     private LinearLayout layoutNicknameEdit;
+    private LinearLayout layoutUuidView;
     private LinearLayout layoutLocationSetting;
     private Switch switchPushAlarm;
     private LinearLayout layoutAbout;
@@ -73,6 +78,7 @@ public class SettingsFragment extends Fragment {
         imageProfile = view.findViewById(R.id.imageProfile);
         textUserName = view.findViewById(R.id.textUserName);
         layoutNicknameEdit = view.findViewById(R.id.layoutNicknameEdit);
+        layoutUuidView = view.findViewById(R.id.layoutUuidView);
         layoutLocationSetting = view.findViewById(R.id.layoutLocationSetting);
         switchPushAlarm = view.findViewById(R.id.switchPushAlarm);
         layoutAbout = view.findViewById(R.id.layoutAbout);
@@ -80,6 +86,89 @@ public class SettingsFragment extends Fragment {
 
         // 서브타이틀 찾기 (layoutNicknameEdit 안의 두 번째 TextView)
         textUserNameSubtitle = layoutNicknameEdit.findViewById(R.id.textUserNameSubtitle);
+    }
+
+    /**
+     * 클릭 리스너들을 설정하는 메서드
+     */
+    private void setupClickListeners() {
+        // 닉네임 편집 클릭
+        layoutNicknameEdit.setOnClickListener(v -> showNicknameEditDialog());
+
+        // UUID 보기 클릭
+        layoutUuidView.setOnClickListener(v -> showUuidDialog());
+
+        // 위치 설정 클릭
+        layoutLocationSetting.setOnClickListener(v -> showLocationSettingsDialog());
+
+        // 푸시 알림 스위치
+        switchPushAlarm.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked && !NotificationManagerCompat.from(requireContext()).areNotificationsEnabled()) {
+                // 스위치를 다시 끄고 권한 요청
+                switchPushAlarm.setChecked(false);
+                showNotificationPermissionDialog();
+            } else {
+                savePushAlarmSetting(isChecked);
+            }
+        });
+
+        // 앱 정보 클릭
+        layoutAbout.setOnClickListener(v -> showAboutDialog());
+
+        // 도움말 클릭
+        layoutHelp.setOnClickListener(v -> {
+            if (getActivity() instanceof MainActivity) {
+                ((MainActivity) getActivity()).showFragment(new HelpFragment());
+                ((MainActivity) getActivity()).setToolbarTitle("도움말");
+            }
+        });
+    }
+
+    /**
+     * UUID 다이얼로그를 표시하는 메서드
+     */
+    private void showUuidDialog() {
+        // UUID가 없으면 생성
+        ensureUuidExists();
+
+        String userUuid = preferences.getString("user_uuid", "");
+
+        if (userUuid.isEmpty()) {
+            Toast.makeText(getContext(), "UUID 정보를 찾을 수 없습니다", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(getContext(), R.style.DialogTheme);
+
+        String message = getString(R.string.uuid_dialog_message) + "\n\n" + userUuid;
+
+        builder.setTitle(getString(R.string.uuid_dialog_title))
+                .setMessage(message)
+                .setPositiveButton(getString(R.string.copy_uuid), (dialog, id) -> {
+                    // UUID를 클립보드에 복사
+                    ClipboardManager clipboard = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                    ClipData clip = ClipData.newPlainText("UUID", userUuid);
+                    clipboard.setPrimaryClip(clip);
+                    Toast.makeText(getContext(), getString(R.string.uuid_copied), Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton(getString(R.string.confirm), (dialog, id) -> dialog.dismiss());
+
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+
+    /**
+     * UUID가 없으면 생성하는 메서드
+     */
+    private void ensureUuidExists() {
+        String existingUuid = preferences.getString("user_uuid", null);
+        if (existingUuid == null) {
+            String newUuid = UUID.randomUUID().toString();
+            SharedPreferences.Editor editor = preferences.edit();
+            editor.putString("user_uuid", newUuid);
+            editor.apply();
+            Log.d(TAG, "기존 사용자용 UUID 생성: " + newUuid);
+        }
     }
 
     /**
@@ -117,89 +206,6 @@ public class SettingsFragment extends Fragment {
     }
 
     /**
-     * 클릭 리스너들을 설정하는 메서드
-     */
-    private void setupClickListeners() {
-        // 닉네임 편집 클릭
-        layoutNicknameEdit.setOnClickListener(v -> showNicknameEditDialog());
-
-        // 위치 설정 클릭 - 시스템 설정으로 이동
-        layoutLocationSetting.setOnClickListener(v -> {
-            showLocationPermissionDialog();
-        });
-
-        // 푸시 알림 스위치 - 실제 권한과 연동
-        switchPushAlarm.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (isChecked) {
-                // 알림을 켜려고 할 때 시스템 권한 확인
-                if (!NotificationManagerCompat.from(requireContext()).areNotificationsEnabled()) {
-                    // 권한이 없으면 설정으로 안내
-                    showNotificationPermissionDialog();
-                    buttonView.setChecked(false); // 스위치를 다시 끄기
-                } else {
-                    // 권한이 있으면 앱 설정 저장
-                    savePushAlarmSetting(true);
-                    Toast.makeText(getContext(), "푸시 알림이 켜졌습니다", Toast.LENGTH_SHORT).show();
-                }
-            } else {
-                // 알림을 끄는 경우
-                savePushAlarmSetting(false);
-                Toast.makeText(getContext(), "푸시 알림이 꺼졌습니다", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        // 앱 정보 클릭
-        layoutAbout.setOnClickListener(v -> showAboutDialog());
-
-        // 도움말 클릭 - HelpFragment로 이동
-        layoutHelp.setOnClickListener(v -> {
-            if (getActivity() instanceof MainActivity) {
-                ((MainActivity) getActivity()).showFragment(new HelpFragment());
-                if (((MainActivity) getActivity()).getSupportActionBar() != null) {
-                    ((MainActivity) getActivity()).getSupportActionBar().setTitle("도움말");
-                }
-            }
-        });
-    }
-
-    /**
-     * 위치 권한 설정 다이얼로그를 표시하는 메서드
-     */
-    private void showLocationPermissionDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(getContext(), R.style.DialogTheme);
-
-        builder.setTitle("위치 권한 설정")
-                .setMessage("위치 기반 서비스를 사용하려면 위치 권한이 필요합니다.\n설정에서 위치 권한을 관리할 수 있습니다.")
-                .setPositiveButton("설정으로 이동", (dialog, which) -> {
-                    // 앱 설정 화면으로 이동
-                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                    Uri uri = Uri.fromParts("package", requireActivity().getPackageName(), null);
-                    intent.setData(uri);
-                    startActivity(intent);
-                })
-                .setNegativeButton("취소", null)
-                .show();
-    }
-
-    /**
-     * 알림 권한 설정 다이얼로그를 표시하는 메서드
-     */
-    private void showNotificationPermissionDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(getContext(), R.style.DialogTheme);
-
-        builder.setTitle("알림 권한 필요")
-                .setMessage("푸시 알림을 받으려면 알림 권한이 필요합니다.\n설정에서 알림 권한을 허용해주세요.")
-                .setPositiveButton("설정으로 이동", (dialog, which) -> {
-                    // 앱 알림 설정 화면으로 이동
-                    Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
-                    intent.putExtra(Settings.EXTRA_APP_PACKAGE, requireActivity().getPackageName());
-                    startActivity(intent);
-                })
-                .setNegativeButton("취소", null)
-                .show();
-    }
-
-    /**
      * 닉네임 편집 다이얼로그를 표시하는 메서드
      */
     private void showNicknameEditDialog() {
@@ -233,6 +239,41 @@ public class SettingsFragment extends Fragment {
 
         AlertDialog dialog = builder.create();
         dialog.show();
+    }
+
+    /**
+     * 위치 설정 다이얼로그를 표시하는 메서드
+     */
+    private void showLocationSettingsDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(getContext(), R.style.DialogTheme);
+        builder.setTitle("위치 권한 설정")
+                .setMessage("DaySync는 위치 기반 서비스를 제공합니다.\n\n정확한 위치 정보 제공을 위해 위치 권한을 허용해 주세요.")
+                .setPositiveButton("설정으로 이동", (dialog, which) -> {
+                    // 앱 설정 화면으로 이동
+                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    Uri uri = Uri.fromParts("package", requireActivity().getPackageName(), null);
+                    intent.setData(uri);
+                    startActivity(intent);
+                })
+                .setNegativeButton("취소", null)
+                .show();
+    }
+
+    /**
+     * 알림 권한 설정 다이얼로그를 표시하는 메서드
+     */
+    private void showNotificationPermissionDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(getContext(), R.style.DialogTheme);
+        builder.setTitle("알림 권한 필요")
+                .setMessage("푸시 알림을 받으려면 알림 권한이 필요합니다.\n\n앱 설정에서 권한을 허용해주세요.")
+                .setPositiveButton("설정으로 이동", (dialog, which) -> {
+                    // 앱 알림 설정 화면으로 이동
+                    Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                    intent.putExtra(Settings.EXTRA_APP_PACKAGE, requireActivity().getPackageName());
+                    startActivity(intent);
+                })
+                .setNegativeButton("취소", null)
+                .show();
     }
 
     /**

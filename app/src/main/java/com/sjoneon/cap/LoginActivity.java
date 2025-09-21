@@ -8,6 +8,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
+import java.util.UUID;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -155,6 +156,17 @@ public class LoginActivity extends AppCompatActivity {
         editor.putString("nickname", nickname);
         editor.putBoolean("is_logged_in", true);
         editor.putLong("setup_time", System.currentTimeMillis()); // 설정 시간 기록
+
+        // UUID 생성 및 저장 (최초 설정 시에만)
+        String existingUuid = preferences.getString("user_uuid", null);
+        if (existingUuid == null) {
+            String userUuid = UUID.randomUUID().toString();
+            editor.putString("user_uuid", userUuid);
+            Log.d(TAG, "새로운 UUID 생성: " + userUuid);
+        } else {
+            Log.d(TAG, "기존 UUID 사용: " + existingUuid);
+        }
+
         editor.apply();
 
         Log.d(TAG, "닉네임 저장 완료: " + nickname);
@@ -187,4 +199,6 @@ public class LoginActivity extends AppCompatActivity {
         super.onBackPressed();
         finishAffinity();
     }
+
+
 }

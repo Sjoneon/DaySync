@@ -338,6 +338,65 @@
 
         </LinearLayout>
 
+        <!-- UUID -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/divider_color"
+            android:layout_marginTop="@dimen/margin_small"
+            android:layout_marginBottom="@dimen/margin_small" />
+
+        <!-- 사용자 UUID 보기 -->
+        <LinearLayout
+            android:id="@+id/layoutUuidView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:orientation="horizontal"
+            android:padding="@dimen/padding_large">
+
+            <ImageView
+                android:layout_width="@dimen/button_icon_size"
+                android:layout_height="@dimen/button_icon_size"
+                android:layout_gravity="center_vertical"
+                android:layout_marginEnd="@dimen/margin_medium"
+                android:src="@android:drawable/ic_menu_info_details"
+                app:tint="@color/text_primary" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/user_uuid"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/text_size_medium" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/margin_small"
+                    android:text="@string/user_uuid_subtitle"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="@dimen/text_size_small" />
+
+            </LinearLayout>
+
+            <ImageView
+                android:layout_width="@dimen/button_icon_size"
+                android:layout_height="@dimen/button_icon_size"
+                android:layout_gravity="center_vertical"
+                android:src="@android:drawable/ic_menu_more"
+                app:tint="@color/text_tertiary" />
+
+        </LinearLayout>
+
     </LinearLayout>
 
 </ScrollView>
