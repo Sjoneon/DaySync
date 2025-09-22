@@ -653,7 +653,7 @@ public class RouteFragment extends Fragment {
     }
 
     /**
-     * 방향성 검증 (이중 안전장치를 위한 추가 검증)
+     * 초엄격한 방향성 검증 (이중 안전장치를 위한 추가 검증)
      * 회차 문제가 있는 버스들을 완전히 걸러내기 위한 추가 검증
      */
     private boolean validateRouteDirectionUltraStrict(Location startLocation, Location endLocation,
@@ -979,6 +979,71 @@ public class RouteFragment extends Fragment {
     // ================================================================================================
     // 10. 정류장 및 버스 정보 수집 메서드들 (기존 메서드 유지)
     // ================================================================================================
+// RouteFragment.java에 추가할 getAllBusesAtStop 메서드
+
+    private List<TagoBusArrivalResponse.BusArrival> getAllBusesAtStop(TagoBusStopResponse.BusStop stop) {
+        List<TagoBusArrivalResponse.BusArrival> allBuses = new ArrayList<>();
+        Set<String> uniqueBusIds = new HashSet<>();
+
+        try {
+            int[] numOfRowsOptions = {50, 100, 200};
+
+            for (int numOfRows : numOfRowsOptions) {
+                for (int page = 1; page <= MAX_API_PAGES; page++) {
+                    try {
+                        Response<TagoBusArrivalResponse> response = tagoApiService.getBusArrivalInfo(
+                                BuildConfig.TAGO_API_KEY_DECODED,
+                                stop.citycode,
+                                stop.nodeid,
+                                numOfRows, page, "json"
+                        ).execute();
+
+                        if (!response.isSuccessful() || response.body() == null) {
+                            break;
+                        }
+
+                        TagoBusArrivalResponse.ItemsContainer itemsContainer = null;
+                        try {
+                            itemsContainer = new Gson().fromJson(response.body().response.body.items, TagoBusArrivalResponse.ItemsContainer.class);
+                        } catch (Exception e) {
+                            Log.w(TAG, "JSON 파싱 실패 - 정류장: " + stop.nodenm, e);
+                            break;
+                        }
+
+                        if (itemsContainer == null || itemsContainer.item == null || itemsContainer.item.isEmpty()) {
+                            break;
+                        }
+
+                        for (TagoBusArrivalResponse.BusArrival bus : itemsContainer.item) {
+                            if (bus.routeid != null && !uniqueBusIds.contains(bus.routeid)) {
+                                uniqueBusIds.add(bus.routeid);
+                                allBuses.add(bus);
+                            }
+                        }
+
+                        // 충분한 버스를 찾았으면 중단
+                        if (allBuses.size() >= 30) {
+                            break;
+                        }
+
+                    } catch (Exception e) {
+                        Log.w(TAG, "정류장 " + stop.nodenm + " 버스 도착 정보 검색 실패", e);
+                    }
+                }
+
+                if (allBuses.size() >= 20) {
+                    break;
+                }
+            }
+
+            Log.d(TAG, "정류장 " + stop.nodenm + "에서 최종 " + allBuses.size() + "개 고유 버스 수집 완료");
+
+        } catch (Exception e) {
+            Log.e(TAG, "정류장 " + stop.nodenm + " 전체 버스 검색 실패", e);
+        }
+
+        return allBuses;
+    }
 
     private List<TagoBusStopResponse.BusStop> searchBusStopsInMultipleRadii(double latitude, double longitude, String locationName) {
         List<TagoBusStopResponse.BusStop> allStops = new ArrayList<>();
@@ -1018,71 +1083,19 @@ public class RouteFragment extends Fragment {
             }
         }
 
-        Log.i(TAG, locationName + " 근처 정류장 " + allStops.size() + "개 발견");
-        return allStops;
-    }
-
-    private List<TagoBusArrivalResponse.BusArrival> getAllBusesAtStop(TagoBusStopResponse.BusStop stop) {
-        List<TagoBusArrivalResponse.BusArrival> allBuses = new ArrayList<>();
-        Set<String> uniqueBusIds = new HashSet<>();
-
-        try {
-            int[] numOfRowsOptions = {50, 100, 200};
-
-            for (int numOfRows : numOfRowsOptions) {
-                for (int page = 1; page <= MAX_API_PAGES; page++) {
-                    try {
-                        Response<TagoBusArrivalResponse> response = tagoApiService.getBusArrivalInfo(
-                                BuildConfig.TAGO_API_KEY_DECODED,
-                                stop.citycode,
-                                stop.nodeid,
-                                numOfRows, page, "json"
-                        ).execute();
-
-                        if (!response.isSuccessful() || response.body() == null) {
-                            break;
-                        }
-
-                        TagoBusArrivalResponse.ItemsContainer itemsContainer = null;
-                        try {
-                            itemsContainer = new Gson().fromJson(response.body().response.body.items, TagoBusArrivalResponse.ItemsContainer.class);
-                        } catch (Exception e) {
-                            Log.w(TAG, "JSON 파싱 실패 - numOfRows: " + numOfRows + ", page: " + page);
-                            continue;
-                        }
-
-                        if (itemsContainer == null || itemsContainer.item == null) {
-                            break;
-                        }
-
-                        for (TagoBusArrivalResponse.BusArrival bus : itemsContainer.item) {
-                            if (bus.routeid != null && bus.routeno != null) {
-                                String busKey = bus.routeno + "_" + bus.routeid;
-                                if (!uniqueBusIds.contains(busKey)) {
-                                    uniqueBusIds.add(busKey);
-                                    allBuses.add(bus);
-                                }
-                            }
-                        }
-
-                        if (itemsContainer.item.size() < numOfRows) {
-                            break;
-                        }
-
-                    } catch (Exception e) {
-                        Log.w(TAG, "API 호출 실패 - page: " + page + ", numOfRows: " + numOfRows, e);
-                        break;
-                    }
-                }
+        // 출발지인 경우에만 정류장 목록 로깅
+        if ("출발지".equals(locationName)) {
+            Log.d(TAG, "=== 출발지 근처 정류장 검색 결과 ===");
+            Log.d(TAG, "총 " + allStops.size() + "개 정류장 발견");
+            for (int i = 0; i < allStops.size(); i++) {
+                TagoBusStopResponse.BusStop stop = allStops.get(i);
+                Log.d(TAG, "[출발지 정류장 " + (i+1) + "] " + stop.nodenm + " (ID: " + stop.nodeid + ")");
             }
-
-            Log.d(TAG, "정류장 " + stop.nodenm + "에서 최종 " + allBuses.size() + "개 고유 버스 수집 완료");
-
-        } catch (Exception e) {
-            Log.e(TAG, "버스 정보 수집 중 예외 발생", e);
+            Log.d(TAG, "=== 출발지 정류장 목록 끝 ===");
         }
 
-        return allBuses;
+        Log.i(TAG, locationName + " 근처 정류장 " + allStops.size() + "개 발견");
+        return allStops;
     }
 
     // ================================================================================================
