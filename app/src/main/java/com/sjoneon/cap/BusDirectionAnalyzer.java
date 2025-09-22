@@ -302,21 +302,119 @@ public class BusDirectionAnalyzer {
      */
     private static int findStationIndexEnhanced(List<TagoBusRouteStationResponse.RouteStation> routeStations,
                                                 TagoBusStopResponse.BusStop targetStop) {
-        // ID로 먼저 찾기
+
+        // 1차: 정류장 ID 정확 매칭
         for (int i = 0; i < routeStations.size(); i++) {
-            if (routeStations.get(i).nodeid.equals(targetStop.nodeid)) {
+            TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
+            if (station.nodeid != null && station.nodeid.equals(targetStop.nodeid)) {
+                Log.v(TAG, "정류장 매칭 성공 (ID): " + targetStop.nodenm + " at index " + i);
                 return i;
             }
         }
 
-        // 이름으로 찾기
+        // 2차: 정류장명 정확 매칭
         for (int i = 0; i < routeStations.size(); i++) {
-            if (routeStations.get(i).nodenm.equals(targetStop.nodenm)) {
-                return i;
+            TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
+            if (station.nodenm != null && targetStop.nodenm != null) {
+                if (station.nodenm.equals(targetStop.nodenm)) {
+                    Log.v(TAG, "정류장 매칭 성공 (이름): " + targetStop.nodenm + " at index " + i);
+                    return i;
+                }
             }
         }
 
+        // 3차: 정류장명 정규화 매칭 (더 관대한 매칭)
+        String normalizedTargetName = normalizeStopName(targetStop.nodenm);
+        for (int i = 0; i < routeStations.size(); i++) {
+            TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
+            if (station.nodenm != null) {
+                String normalizedStationName = normalizeStopName(station.nodenm);
+                if (normalizedStationName.equals(normalizedTargetName)) {
+                    Log.v(TAG, "정류장 매칭 성공 (정규화): " + targetStop.nodenm +
+                            " -> " + station.nodenm + " at index " + i);
+                    return i;
+                }
+            }
+        }
+
+        // 4차: 부분 문자열 매칭 (핵심 키워드가 포함된 경우)
+        if (targetStop.nodenm != null && targetStop.nodenm.length() >= 2) {
+            String targetCore = targetStop.nodenm.replaceAll("정류장|정류소|버스정류장|앞|뒤|입구|출구", "").trim();
+            for (int i = 0; i < routeStations.size(); i++) {
+                TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
+                if (station.nodenm != null) {
+                    String stationCore = station.nodenm.replaceAll("정류장|정류소|버스정류장|앞|뒤|입구|출구", "").trim();
+                    // 핵심 키워드가 포함되어 있는지 확인
+                    if (targetCore.length() >= 2 && stationCore.contains(targetCore)) {
+                        Log.v(TAG, "정류장 매칭 성공 (키워드): " + targetStop.nodenm +
+                                " -> " + station.nodenm + " at index " + i);
+                        return i;
+                    }
+                    if (stationCore.length() >= 2 && targetCore.contains(stationCore)) {
+                        Log.v(TAG, "정류장 매칭 성공 (키워드 역): " + targetStop.nodenm +
+                                " -> " + station.nodenm + " at index " + i);
+                        return i;
+                    }
+                }
+            }
+        }
+
+        // 5차: 좌표 기반 근접 매칭 (반경을 점진적으로 확대)
+        int[] radiusOptions = {50, 100, 200, 500}; // 점진적 확대
+        for (int radius : radiusOptions) {
+            for (int i = 0; i < routeStations.size(); i++) {
+                TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
+                if (station.gpslati > 0 && station.gpslong > 0 &&
+                        targetStop.gpslati > 0 && targetStop.gpslong > 0) {
+                    double distance = calculateDistance(
+                            station.gpslati, station.gpslong,
+                            targetStop.gpslati, targetStop.gpslong
+                    );
+                    if (distance <= radius) {
+                        Log.v(TAG, "정류장 매칭 성공 (좌표 " + radius + "m): " + targetStop.nodenm +
+                                " -> " + station.nodenm + " at index " + i + " (거리: " + (int)distance + "m)");
+                        return i;
+                    }
+                }
+            }
+        }
+
+        // 매칭 실패
+        Log.w(TAG, "정류장 매칭 실패: " + targetStop.nodenm +
+                " (ID: " + targetStop.nodeid + ", 좌표: " + targetStop.gpslati + "," + targetStop.gpslong + ")");
         return -1;
+    }
+
+    /**
+     * 정류장명 정규화
+     */
+    private static String normalizeStopName(String stopName) {
+        if (stopName == null) return "";
+
+        return stopName.replaceAll("\\s+", "")  // 공백 제거
+                .replaceAll("\\([^)]*\\)", "")  // 괄호와 내용 제거
+                .replaceAll("[\\.,·]", "")  // 구두점 제거
+                .toLowerCase()  // 소문자 변환
+                .trim();
+    }
+
+    /**
+     * 두 좌표 간 거리 계산 (미터 단위)
+     */
+    private static double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371000; // 지구 반지름 (미터)
+
+        double lat1Rad = Math.toRadians(lat1);
+        double lat2Rad = Math.toRadians(lat2);
+        double deltaLat = Math.toRadians(lat2 - lat1);
+        double deltaLon = Math.toRadians(lon2 - lon1);
+
+        double a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
+                Math.cos(lat1Rad) * Math.cos(lat2Rad) *
+                        Math.sin(deltaLon/2) * Math.sin(deltaLon/2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        return R * c;
     }
 
     /**

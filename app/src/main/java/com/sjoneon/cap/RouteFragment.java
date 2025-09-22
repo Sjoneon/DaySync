@@ -653,7 +653,7 @@ public class RouteFragment extends Fragment {
     }
 
     /**
-     * 초엄격한 방향성 검증 (이중 안전장치를 위한 추가 검증)
+     * 방향성 검증 (이중 안전장치를 위한 추가 검증)
      * 회차 문제가 있는 버스들을 완전히 걸러내기 위한 추가 검증
      */
     private boolean validateRouteDirectionUltraStrict(Location startLocation, Location endLocation,
