@@ -571,7 +571,7 @@ public class RouteFragment extends Fragment {
     }
 
     /**
-     * 완전히 개선된 회차 방향성 검증 (상세 디버깅 포함)
+     * 회차 방향성 검증 메서드 (상행↔하행 간 이동 차단)
      */
     private boolean validateRouteDirectionEnhanced(Location startLocation, Location endLocation,
                                                    TagoBusStopResponse.BusStop startStop,
@@ -592,79 +592,63 @@ public class RouteFragment extends Fragment {
 
             List<TagoBusRouteStationResponse.RouteStation> routeStations = routeResponse.body().response.body.items.item;
 
-            // 2. 🔧 핵심 개선: BusDirectionAnalyzer로 회차 구간 정확한 분석
+            // 2. 🔧 핵심 개선: 수정된 BusDirectionAnalyzer로 회차 구간 간 이동 차단
             BusDirectionAnalyzer.RouteDirectionInfo directionInfo =
                     BusDirectionAnalyzer.analyzeRouteDirection(startStop, endStop, bus, routeStations);
 
             // 3. 결과 로깅
-            Log.i(TAG, String.format("🎯 %s번 버스 완전 개선된 회차 분석 결과: %s (신뢰도: %d%%, 구간: %s)",
+            Log.i(TAG, String.format("🎯 %s번 버스 회차 분석 결과: %s (신뢰도: %d%%, 구간: %s)",
                     bus.routeno,
-                    directionInfo.isValidDirection ? "승차가능" : "회차대기",
+                    directionInfo.isValidDirection ? "승차가능" : "상행↔하행 간 이동불가",
                     directionInfo.confidence,
                     directionInfo.currentSegment));
 
-            // 4. 🔧 회차 구간 강화 판정 로직
-            // 407번, 412번 같은 회차 구간 문제를 확실히 해결
-            if (directionInfo.currentSegment.contains("회차") ||
-                    directionInfo.currentSegment.contains("후반부") ||
-                    directionInfo.directionDescription.contains("하행") ||
-                    !directionInfo.isForwardDirection) {
-
-                Log.w(TAG, String.format("🚨 %s번: 회차 구간 감지 - 승차 불가 (구간: %s, 방향: %s)",
-                        bus.routeno, directionInfo.currentSegment, directionInfo.directionDescription));
+            // 4. 🔧 핵심 수정: 회차 구간 간 이동 차단이 우선 판정
+            if (!directionInfo.isValidDirection) {
+                Log.w(TAG, String.format("🚨 %s번: %s - 승차 불가",
+                        bus.routeno, directionInfo.directionDescription));
                 return false;
             }
 
-            // 5. 🔧 수정된 신뢰도 기반 3단계 판정 로직
-            if (directionInfo.confidence >= 70) {
-                // 높은 신뢰도: BusDirectionAnalyzer 결과 신뢰
-                Log.i(TAG, bus.routeno + "번: 높은 신뢰도 (" + directionInfo.confidence + "%) - 회차 분석 결과 채택");
-                return directionInfo.isValidDirection;
+            // 5. 같은 구간 내에서는 인덱스 증가 방향으로 이동 허용
+            // (하행구간에서도 API 인덱스 순서대로 가는 것이 정상)
 
-            } else if (directionInfo.confidence >= 50) {
-                // 중간 신뢰도: 회차 구간이면 무조건 거부, 아니면 추가 검증
-                if (!directionInfo.isValidDirection) {
-                    Log.w(TAG, bus.routeno + "번: 중간 신뢰도 (" + directionInfo.confidence + "%) - 회차 대기 판정");
-                    return false;
-                }
+            // 5. 추가 안전 검증 (기존 방식과 병행)
+            if (directionInfo.confidence >= 80) {
+                // 높은 신뢰도: BusDirectionAnalyzer 결과만으로 판정
+                Log.i(TAG, bus.routeno + "번: 높은 신뢰도 (" + directionInfo.confidence + "%) - 승차 허용");
+                return true;
 
-                // 엄격한 기존 방식과 비교하여 일치할 때만 허용
+            } else if (directionInfo.confidence >= 60) {
+                // 중간 신뢰도: 추가 검증과 병행
                 boolean strictResult = validateRouteDirectionStrict(startLocation, endLocation, startStop, endStop, bus);
 
-                if (directionInfo.isValidDirection && strictResult) {
-                    Log.i(TAG, bus.routeno + "번: 중간 신뢰도 (" + directionInfo.confidence + "%), 엄격한 검증과 일치하여 승차 허용");
+                if (strictResult) {
+                    Log.i(TAG, bus.routeno + "번: 중간 신뢰도 (" + directionInfo.confidence + "%), 추가 검증 통과 - 승차 허용");
                     return true;
                 } else {
-                    Log.w(TAG, bus.routeno + "번: 중간 신뢰도 (" + directionInfo.confidence + "%), 엄격한 검증과 불일치하여 회차 대기");
+                    Log.w(TAG, bus.routeno + "번: 중간 신뢰도 (" + directionInfo.confidence + "%), 추가 검증 실패 - 승차 불가");
                     return false;
                 }
 
             } else {
-                // 낮은 신뢰도: 회차 구간이면 무조건 거부, 아니면 매우 엄격한 검증만 통과
-                if (!directionInfo.isValidDirection) {
-                    Log.w(TAG, bus.routeno + "번: 낮은 신뢰도 (" + directionInfo.confidence + "%) - 회차 대기 판정");
-                    return false;
-                }
-
+                // 낮은 신뢰도: 매우 엄격한 추가 검증
                 boolean strictResult = validateRouteDirectionStrict(startLocation, endLocation, startStop, endStop, bus);
-
-                // 🔧 추가 검증: 좌표 기반 방향 판단으로 더블 체크
-                boolean coordsResult = isCorrectDirectionByCoordinates(
-                        startLocation, endLocation, startStop, endStop, bus);
+                boolean coordsResult = isCorrectDirectionByCoordinates(startLocation, endLocation, startStop, endStop, bus);
 
                 if (strictResult && coordsResult) {
-                    Log.w(TAG, bus.routeno + "번: 낮은 신뢰도 (" + directionInfo.confidence + "%), 모든 검증 통과로 조건부 승차 허용");
+                    Log.w(TAG, bus.routeno + "번: 낮은 신뢰도 (" + directionInfo.confidence + "%), 모든 검증 통과 - 조건부 승차 허용");
                     return true;
                 } else {
-                    Log.w(TAG, bus.routeno + "번: 낮은 신뢰도 (" + directionInfo.confidence + "%), 검증 실패로 회차 대기");
+                    Log.w(TAG, bus.routeno + "번: 낮은 신뢰도 (" + directionInfo.confidence + "%), 검증 실패 - 승차 불가");
                     return false;
                 }
             }
 
         } catch (Exception e) {
-            Log.e(TAG, "완전 개선된 방향성 검증 실패: " + bus.routeno + "번", e);
-            // 예외 발생 시도 엄격한 검증으로 폴백
-            return validateRouteDirectionStrict(startLocation, endLocation, startStop, endStop, bus);
+            Log.e(TAG, "회차 방향성 검증 실패: " + bus.routeno + "번", e);
+            // 예외 발생 시 보수적으로 거부
+            return false;
         }
     }
 
@@ -777,7 +761,7 @@ public class RouteFragment extends Fragment {
                 double distance = calculateDistance(startStop.gpslati, startStop.gpslong,
                         endStop.gpslati, endStop.gpslong);
 
-                if (distance <= 500) { // 500m 이내
+                if (distance <= 800) { // 800m 이내
                     int endIndex = findStationIndex(routeStations, endStop);
                     if (endIndex != -1 && endIndex > startIndex) {
                         return new RouteMatchResult(endStop, directionInfo.directionDescription);
@@ -1001,7 +985,7 @@ public class RouteFragment extends Fragment {
         Set<String> uniqueStopIds = new HashSet<>();
 
         int[] radiusMeters = {1000};
-        int[] numOfRowsOptions = {30, 50, 100};
+        int[] numOfRowsOptions = {50, 70, 120};
 
         for (int radius : radiusMeters) {
             for (int numOfRows : numOfRowsOptions) {
