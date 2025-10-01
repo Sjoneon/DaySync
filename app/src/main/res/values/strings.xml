@@ -156,6 +156,6 @@
 
     <!-- 콘텐츠 설명 -->
     <string name="content_desc_mic">음성 입력 버튼</string>
-    <string name="content_desc_send">메시지 전송 버튼</string>
+
 
 </resources>

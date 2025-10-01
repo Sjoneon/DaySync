@@ -29,8 +29,16 @@ import static android.content.Context.MODE_PRIVATE;
 
 import com.sjoneon.cap.R;
 import com.sjoneon.cap.activities.MainActivity;
+import com.sjoneon.cap.models.api.UserCreateRequest;
+import com.sjoneon.cap.models.api.UserCreateResponse;
+import com.sjoneon.cap.utils.ApiClient;
 
 import java.util.UUID;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
 /**
  * 개인설정을 관리하는 프래그먼트
  */
@@ -120,7 +128,7 @@ public class SettingsFragment extends Fragment {
         // 도움말 클릭
         layoutHelp.setOnClickListener(v -> {
             if (getActivity() instanceof MainActivity) {
-                ((MainActivity) getActivity()).showFragment(new HelpFragment());
+                ((MainActivity) getActivity()).showFragment(new com.sjoneon.cap.fragments.HelpFragment());
                 ((MainActivity) getActivity()).setToolbarTitle("도움말");
             }
         });
@@ -160,16 +168,112 @@ public class SettingsFragment extends Fragment {
     }
 
     /**
-     * UUID가 없으면 생성하는 메서드
+     * UUID가 없으면 서버에 사용자를 생성하는 메서드
      */
     private void ensureUuidExists() {
         String existingUuid = preferences.getString("user_uuid", null);
+
         if (existingUuid == null) {
+            // UUID가 없으면 서버에 사용자 생성
+            String nickname = preferences.getString("nickname", "사용자");
+            createUserOnServer(nickname);
+        } else {
+            Log.d(TAG, "UUID 존재 확인: " + existingUuid);
+        }
+    }
+
+    /**
+     * 서버에 새 사용자를 생성하는 메서드
+     * @param nickname 사용자 닉네임
+     */
+    private void createUserOnServer(String nickname) {
+        // 가이드라인 준수: null 체크
+        if (ApiClient.getInstance() == null || ApiClient.getInstance().getApiService() == null) {
+            Log.e(TAG, "API 클라이언트를 초기화할 수 없습니다");
+            fallbackLocalUuidCreation(nickname);
+            return;
+        }
+
+        // 서버에 사용자 생성 요청 (기존 생성자 사용)
+        UserCreateRequest request = new UserCreateRequest(nickname, 1800);
+
+        Log.d(TAG, "서버에 사용자 생성 요청 중 (SettingsFragment)...");
+
+        ApiClient.getInstance().getApiService()
+                .createUser(request)
+                .enqueue(new Callback<UserCreateResponse>() {
+                    @Override
+                    public void onResponse(Call<UserCreateResponse> call, Response<UserCreateResponse> response) {
+                        // 가이드라인 준수: 단계별 null 체크
+                        if (response != null && response.isSuccessful() && response.body() != null) {
+                            String serverUuid = response.body().getUuid();
+
+                            if (serverUuid != null && !serverUuid.isEmpty()) {
+                                // 서버에서 받은 UUID 저장
+                                SharedPreferences.Editor editor = preferences.edit();
+                                editor.putString("user_uuid", serverUuid);
+                                editor.apply();
+
+                                Log.d(TAG, "서버에서 UUID 생성 성공: " + serverUuid);
+
+                                if (getActivity() != null) {
+                                    getActivity().runOnUiThread(() ->
+                                            Toast.makeText(getContext(),
+                                                    "사용자 등록 완료",
+                                                    Toast.LENGTH_SHORT).show()
+                                    );
+                                }
+                            } else {
+                                Log.e(TAG, "서버 응답에 UUID가 없습니다");
+                                fallbackLocalUuidCreation(nickname);
+                            }
+                        } else {
+                            int errorCode = response != null ? response.code() : -1;
+                            Log.e(TAG, "서버 사용자 생성 실패 - 응답 코드: " + errorCode);
+                            fallbackLocalUuidCreation(nickname);
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<UserCreateResponse> call, Throwable t) {
+                        Log.e(TAG, "서버 통신 실패", t);
+
+                        if (getActivity() != null) {
+                            getActivity().runOnUiThread(() ->
+                                    Toast.makeText(getContext(),
+                                            "서버 연결 실패. 오프라인 모드로 진행합니다.",
+                                            Toast.LENGTH_SHORT).show()
+                            );
+                        }
+
+                        fallbackLocalUuidCreation(nickname);
+                    }
+                });
+    }
+
+    /**
+     * 서버 등록 실패 시 로컬에서 UUID를 생성하는 fallback 메서드
+     * @param nickname 사용자 닉네임
+     */
+    private void fallbackLocalUuidCreation(String nickname) {
+        // 가이드라인 준수: 예외 처리
+        try {
             String newUuid = UUID.randomUUID().toString();
             SharedPreferences.Editor editor = preferences.edit();
             editor.putString("user_uuid", newUuid);
             editor.apply();
-            Log.d(TAG, "기존 사용자용 UUID 생성: " + newUuid);
+
+            Log.w(TAG, "로컬에서 UUID 생성 (서버 미등록): " + newUuid);
+
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(() ->
+                        Toast.makeText(getContext(),
+                                "오프라인 모드로 UUID 생성됨",
+                                Toast.LENGTH_SHORT).show()
+                );
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "UUID 생성 실패", e);
         }
     }
 
