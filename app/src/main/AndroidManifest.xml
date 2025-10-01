@@ -41,7 +41,7 @@
 
         <!-- 스플래시 액티비티 - 앱 시작점 -->
         <activity
-            android:name=".SplashActivity"
+            android:name=".activities.SplashActivity"
             android:exported="true"
             android:theme="@style/SplashTheme">
             <intent-filter>
@@ -52,19 +52,19 @@
 
         <!-- 로그인(닉네임 설정) 액티비티 -->
         <activity
-            android:name=".LoginActivity"
+            android:name=".activities.LoginActivity"
             android:exported="false"
             android:theme="@style/Theme.Cap" />
 
         <!-- 메인 액티비티 -->
         <activity
-            android:name=".MainActivity"
+            android:name=".activities.MainActivity"
             android:exported="false"
             android:theme="@style/Theme.Cap" />
 
         <!-- 알람 액티비티 -->
         <activity
-            android:name=".AlarmActivity"
+            android:name=".activities.AlarmActivity"
             android:exported="false"
             android:theme="@style/Theme.Cap"
             android:launchMode="singleTop"
@@ -72,19 +72,19 @@
 
         <!-- 일반 알림 BroadcastReceiver -->
         <receiver
-            android:name=".AlarmReceiver"
+            android:name=".receivers.AlarmReceiver"
             android:enabled="true"
             android:exported="false" />
 
         <!-- 일정 알림 BroadcastReceiver (추가됨) -->
         <receiver
-            android:name=".EventAlarmManager$EventNotificationReceiver"
+            android:name=".helpers.EventAlarmManager$EventNotificationReceiver"
             android:enabled="true"
             android:exported="false" />
 
         <!-- 부팅 완료 감지 리시버 (선택사항) -->
         <receiver
-            android:name=".BootReceiver"
+            android:name=".receivers.BootReceiver"
             android:enabled="true"
             android:exported="false">
             <intent-filter android:priority="1000">

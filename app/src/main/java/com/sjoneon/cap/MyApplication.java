@@ -3,6 +3,8 @@ package com.sjoneon.cap;
 import android.app.Application;
 import android.util.Log;
 
+import com.sjoneon.cap.helpers.NotificationHelper;
+
 /**
  * 애플리케이션 클래스
  * 앱 시작 시 필요한 초기화 작업을 수행합니다.

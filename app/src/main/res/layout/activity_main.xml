@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/background_black"
-    tools:context=".MainActivity">
+    tools:context=".activities.MainActivity">
 
     <!-- 메인 콘텐츠 영역 -->
     <androidx.coordinatorlayout.widget.CoordinatorLayout
