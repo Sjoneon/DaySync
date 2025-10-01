@@ -40,8 +40,8 @@ import com.sjoneon.cap.models.api.TagoBusRouteStationResponse;
 import com.sjoneon.cap.models.api.TagoBusStopResponse;
 import com.sjoneon.cap.services.TagoApiService;
 import com.sjoneon.cap.services.TmapApiService;
-import com.sjoneon.cap.unils.BusDirectionAnalyzer;
-import com.sjoneon.cap.unils.TagoBusArrivalDeserializer;
+import com.sjoneon.cap.utils.BusDirectionAnalyzer;
+import com.sjoneon.cap.utils.TagoBusArrivalDeserializer;
 
 import java.io.IOException;
 import java.io.Serializable;

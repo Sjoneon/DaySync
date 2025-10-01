@@ -63,7 +63,7 @@ dependencies {
     implementation(libs.activity)
     implementation(libs.constraintlayout)
 
-    // [수정] 네이버 지도 SDK 버전을 3.21.0에서 최신 버전인 3.22.0으로 업데이트합니다.
+    // 네이버 지도 SDK
     implementation("com.naver.maps:map-sdk:3.22.0")
 
     // Google Play 서비스 위치 라이브러리 (현위치 기능)
@@ -78,8 +78,11 @@ dependencies {
     // Scalars Converter (응답을 String 등 기본 타입으로 받기 위함)
     implementation("com.squareup.retrofit2:converter-scalars:2.9.0")
 
-    // [추가] 응답을 String 등 기본 타입으로 받기 위함 (TAGO API 에러 처리 등에 유용)
-    implementation("com.squareup.retrofit2:converter-scalars:2.9.0")
+    // ===== [새로 추가] AI 채팅 기능을 위한 OkHttp & Logging Interceptor =====
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    // =====================================================================
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)

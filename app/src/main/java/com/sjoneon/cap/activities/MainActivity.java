@@ -1,5 +1,6 @@
 package com.sjoneon.cap.activities;
 
+import android.Manifest;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -20,6 +21,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
@@ -41,6 +43,17 @@ import com.sjoneon.cap.helpers.NavigationCategoryHelper;
 import com.sjoneon.cap.helpers.PermissionHelper;
 import com.sjoneon.cap.models.local.Message;
 
+// ===== [새로 추가] AI 채팅 기능을 위한 import =====
+import com.sjoneon.cap.services.SpeechToTextService;
+import com.sjoneon.cap.services.DaySyncApiService;
+import com.sjoneon.cap.models.api.ChatRequest;
+import com.sjoneon.cap.models.api.ChatResponse;
+import com.sjoneon.cap.utils.ApiClient;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+// =================================================
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -53,6 +66,10 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
     private static final String TAG = "MainActivity";
+
+    // ===== [새로 추가] 음성 인식 권한 요청 코드 =====
+    private static final int REQUEST_RECORD_AUDIO_PERMISSION = 101;
+    // ==============================================
 
     private DrawerLayout drawerLayout;
     private NavigationView navigationView;
@@ -70,6 +87,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     // 채팅 메시지 목록
     private List<Message> messageList = new ArrayList<>();
+
+    // ===== [새로 추가] AI 채팅 기능을 위한 필드 =====
+    private SpeechToTextService speechToTextService;
+    private DaySyncApiService apiService;
+    private String userUuid;
+    private Integer sessionId;
+    // ================================================
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -99,6 +123,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         // 채팅 입력 및 버튼 리스너 설정
         setupChatInterface();
+
+        // ===== [새로 추가] AI 서비스 초기화 =====
+        initializeAiServices();
+        loadUserUuid();
+        checkRecordAudioPermission();
+        // =========================================
 
         // 권한 체크 (약간의 지연 후 실행)
         checkPermissionsAfterDelay();
@@ -151,6 +181,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
+        // ===== [기존] 알림 권한 처리 =====
         if (requestCode == PermissionHelper.REQUEST_NOTIFICATION_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.d(TAG, "알림 권한이 허용되었습니다");
@@ -165,6 +196,18 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 Toast.makeText(this, "알림 권한이 거부되었습니다. 설정에서 수동으로 허용할 수 있습니다.", Toast.LENGTH_LONG).show();
             }
         }
+
+        // ===== [새로 추가] 음성 인식 권한 처리 =====
+        if (requestCode == REQUEST_RECORD_AUDIO_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "음성 인식 권한 허용됨");
+                Toast.makeText(this, "음성 인식을 사용할 수 있습니다", Toast.LENGTH_SHORT).show();
+            } else {
+                Log.w(TAG, "음성 인식 권한 거부됨");
+                Toast.makeText(this, "음성 인식 권한이 필요합니다", Toast.LENGTH_SHORT).show();
+            }
+        }
+        // ============================================
     }
 
     /**
@@ -302,12 +345,208 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         });
 
-        // 음성 입력 버튼 클릭 리스너
+        // ===== [수정됨] 음성 입력 버튼 클릭 리스너 =====
         buttonVoice.setOnClickListener(v -> {
-            // 음성 입력 처리 (Speech-to-Text 구현 필요)
-            Toast.makeText(MainActivity.this, getString(R.string.voice_input_not_ready), Toast.LENGTH_SHORT).show();
+            toggleSpeechRecognition();
+        });
+        // ==============================================
+    }
+
+    // ===== [새로 추가] AI 서비스 초기화 메서드 =====
+    /**
+     * AI 서비스 초기화 (STT + API)
+     */
+    private void initializeAiServices() {
+        // STT 서비스 초기화
+        speechToTextService = new SpeechToTextService(this);
+        speechToTextService.setListener(new SpeechToTextService.SpeechRecognitionListener() {
+            @Override
+            public void onSpeechResult(String text) {
+                runOnUiThread(() -> {
+                    editTextMessage.setText(text);
+                    buttonVoice.setImageResource(R.drawable.ic_mic);
+                });
+            }
+
+            @Override
+            public void onSpeechError(String error) {
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, error, Toast.LENGTH_SHORT).show();
+                    buttonVoice.setImageResource(R.drawable.ic_mic);
+                });
+            }
+
+            @Override
+            public void onSpeechStarted() {
+                runOnUiThread(() -> {
+                    buttonVoice.setImageResource(R.drawable.ic_mic_active);
+                });
+            }
+
+            @Override
+            public void onSpeechEnded() {
+                runOnUiThread(() -> {
+                    buttonVoice.setImageResource(R.drawable.ic_mic);
+                });
+            }
+        });
+
+        // API 서비스 초기화
+        apiService = ApiClient.getInstance().getApiService();
+
+        Log.d(TAG, "AI 서비스 초기화 완료");
+    }
+
+    /**
+     * 사용자 UUID 로드
+     */
+    private void loadUserUuid() {
+        SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+        userUuid = prefs.getString("user_uuid", null);
+
+        // sessionId는 int로 저장되므로 -1을 기본값으로 사용
+        int savedSessionId = prefs.getInt("session_id", -1);
+        sessionId = (savedSessionId == -1) ? null : savedSessionId;
+
+        Log.d(TAG, "사용자 UUID: " + userUuid);
+        Log.d(TAG, "세션 ID: " + sessionId);
+    }
+
+    /**
+     * 사용자 정보 저장
+     */
+    private void saveUserInfo() {
+        SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+
+        if (userUuid != null) {
+            editor.putString("user_uuid", userUuid);
+        }
+
+        if (sessionId != null) {
+            editor.putInt("session_id", sessionId);
+        } else {
+            editor.putInt("session_id", -1);
+        }
+
+        editor.apply();
+        Log.d(TAG, "사용자 정보 저장 완료");
+    }
+
+    /**
+     * 음성 인식 권한 체크
+     */
+    private void checkRecordAudioPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.RECORD_AUDIO},
+                    REQUEST_RECORD_AUDIO_PERMISSION);
+        }
+    }
+
+    /**
+     * 음성 인식 토글
+     */
+    private void toggleSpeechRecognition() {
+        // 권한 체크
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "음성 인식 권한이 필요합니다", Toast.LENGTH_SHORT).show();
+            checkRecordAudioPermission();
+            return;
+        }
+
+        // 음성 인식 시작/중지
+        if (speechToTextService != null) {
+            if (speechToTextService.isListening()) {
+                speechToTextService.stopListening();
+                Log.d(TAG, "음성 인식 중지");
+            } else {
+                speechToTextService.startListening();
+                Log.d(TAG, "음성 인식 시작");
+            }
+        }
+    }
+
+    /**
+     * API로 메시지 전송
+     */
+    private void sendMessageToApi(String messageText) {
+        // UUID 체크
+        if (userUuid == null) {
+            Log.w(TAG, "사용자 UUID가 없습니다. API 호출 중단");
+            Toast.makeText(this, "사용자 정보를 불러오는 중입니다", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // ChatRequest 생성 (context는 null)
+        ChatRequest request = new ChatRequest(userUuid, messageText, sessionId);
+
+        Log.d(TAG, "API 호출 시작 - UUID: " + userUuid + ", SessionID: " + sessionId);
+
+        // Retrofit 호출
+        Call<ChatResponse> call = apiService.sendChatMessage(request);
+        call.enqueue(new Callback<ChatResponse>() {
+            @Override
+            public void onResponse(@NonNull Call<ChatResponse> call,
+                                   @NonNull Response<ChatResponse> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    ChatResponse chatResponse = response.body();
+
+                    if (chatResponse.isSuccess()) {
+                        // AI 응답을 채팅에 추가
+                        String aiMessage = chatResponse.getAiResponse();
+
+                        if (aiMessage != null && !aiMessage.isEmpty()) {
+                            addAiMessage(aiMessage);
+                            Log.d(TAG, "AI 응답 수신: " + aiMessage);
+                        }
+
+                        // 세션 ID 업데이트 (null 체크)
+                        if (chatResponse.getSessionId() != null) {
+                            sessionId = chatResponse.getSessionId();
+                            saveUserInfo();
+                            Log.d(TAG, "세션 ID 업데이트: " + sessionId);
+                        }
+                    } else {
+                        // 실패 응답 처리
+                        String error = chatResponse.getError();
+                        if (error != null && !error.isEmpty()) {
+                            addAiMessage("오류: " + error);
+                            Log.e(TAG, "AI 응답 오류: " + error);
+                        } else {
+                            addAiMessage("알 수 없는 오류가 발생했습니다");
+                            Log.e(TAG, "AI 응답 실패 (오류 메시지 없음)");
+                        }
+                    }
+                } else {
+                    // HTTP 오류 처리
+                    addAiMessage("서버 응답 오류가 발생했습니다");
+                    Log.e(TAG, "서버 응답 실패 - 코드: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<ChatResponse> call, @NonNull Throwable t) {
+                // 네트워크 오류 처리
+                addAiMessage("네트워크 오류가 발생했습니다");
+                Log.e(TAG, "API 호출 실패", t);
+                Toast.makeText(MainActivity.this,
+                        "네트워크 연결을 확인하세요", Toast.LENGTH_SHORT).show();
+            }
         });
     }
+
+    /**
+     * AI 메시지를 채팅에 추가하는 헬퍼 메서드
+     */
+    private void addAiMessage(String content) {
+        Message aiMessage = new Message(content, false);
+        chatAdapter.addMessage(aiMessage);
+        scrollToBottom();
+    }
+    // =============================================
 
     /**
      * 환영 메시지 추가 메서드
@@ -330,8 +569,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         chatAdapter.addMessage(userMessage);
         scrollToBottom();
 
+        // ===== [새로 추가] API로 메시지 전송 =====
+        sendMessageToApi(content);
+        // =========================================
+
         // AI 응답 처리 (실제 구현에서는 비동기 처리 필요)
-        processAiResponse(content);
+        // processAiResponse(content); // 이제 API로 대체되므로 주석 처리 가능
     }
 
     /**
@@ -471,6 +714,19 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         // 화면이 다시 보여질 때 네비게이션 헤더 업데이트
         updateNavigationHeader();
     }
+
+    // ===== [새로 추가] onDestroy 메서드 =====
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        // STT 서비스 정리
+        if (speechToTextService != null) {
+            speechToTextService.destroy();
+            Log.d(TAG, "STT 서비스 정리 완료");
+        }
+    }
+    // =========================================
 
     /**
      * 툴바 제목을 설정하는 메서드

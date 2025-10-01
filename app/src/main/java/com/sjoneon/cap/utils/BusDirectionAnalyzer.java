@@ -1,6 +1,6 @@
 // app/src/main/java/com/sjoneon/cap/BusDirectionAnalyzer.java
 
-package com.sjoneon.cap.unils;
+package com.sjoneon.cap.utils;
 
 import android.util.Log;
 

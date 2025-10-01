@@ -140,4 +140,22 @@
     <string name="uuid_copied">UUID가 클립보드에 복사되었습니다</string>
     <string name="confirm">확인</string>
 
+    <!-- 음성 인식 관련 -->
+    <string name="speech_listening">음성을 듣고 있습니다...</string>
+    <string name="speech_error_permission">음성 인식 권한이 필요합니다</string>
+    <string name="speech_error_no_match">음성을 인식하지 못했습니다</string>
+
+    <!-- 채팅 관련 -->
+    <string name="chat_input_hint">메시지를 입력하세요...</string>
+    <string name="chat_send">전송</string>
+    <string name="chat_mic_description">음성 입력</string>
+    <string name="chat_network_error">네트워크 연결을 확인하세요</string>
+
+    <!-- 권한 관련 -->
+    <string name="permission_record_audio_rationale">음성 인식 기능을 사용하려면 마이크 권한이 필요합니다</string>
+
+    <!-- 콘텐츠 설명 -->
+    <string name="content_desc_mic">음성 입력 버튼</string>
+    <string name="content_desc_send">메시지 전송 버튼</string>
+
 </resources>

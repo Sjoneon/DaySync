@@ -1,4 +1,4 @@
-package com.sjoneon.cap.unils;
+package com.sjoneon.cap.utils;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonDeserializationContext;
