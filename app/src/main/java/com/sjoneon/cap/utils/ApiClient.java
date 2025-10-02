@@ -11,6 +11,10 @@ import java.util.concurrent.TimeUnit;
  * API 클라이언트 싱글톤
  * Retrofit 인스턴스를 관리하고 DaySyncApiService를 제공
  */
+
+/**
+ * 현재 로컬에서 테스트 중이므로 안드로이드 스튜디오 - ApiClient.java에 있는 로컬 ip를 테스트 환경에 맞게 수정해야 정상 작동합니다.
+ */
 public class ApiClient {
     private static final String TAG = "ApiClient";
 

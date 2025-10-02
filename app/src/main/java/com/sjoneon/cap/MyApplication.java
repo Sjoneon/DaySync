@@ -9,6 +9,11 @@ import com.sjoneon.cap.helpers.NotificationHelper;
  * 애플리케이션 클래스
  * 앱 시작 시 필요한 초기화 작업을 수행합니다.
  */
+
+/**
+ * 현재 로컬에서 테스트 중이므로 안드로이드 스튜디오 - ApiClient.java에 있는 로컬 ip를 테스트 환경에 맞게 수정해야 정상 작동합니다.
+ */
+
 public class MyApplication extends Application {
 
     private static final String TAG = "MyApplication";
