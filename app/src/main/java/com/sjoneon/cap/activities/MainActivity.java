@@ -556,6 +556,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
      * AI 메시지를 채팅에 추가하는 헬퍼 메서드
      */
     private void addAiMessage(String content) {
+        // ✅ trim()으로 앞뒤 공백 제거
+        if (content != null) {
+            content = content.trim();
+        }
+
         Message aiMessage = new Message(content, false);
         chatAdapter.addMessage(aiMessage);
         scrollToBottom();

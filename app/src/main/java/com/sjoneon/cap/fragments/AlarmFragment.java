@@ -2,17 +2,22 @@ package com.sjoneon.cap.fragments;
 
 import android.app.AlertDialog;
 import android.app.TimePickerDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.text.InputFilter;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -22,21 +27,27 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import android.text.InputFilter;
-
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.sjoneon.cap.R;
 import com.sjoneon.cap.helpers.AlarmScheduler;
+import com.sjoneon.cap.utils.ApiClient;
+import com.sjoneon.cap.models.api.AlarmRequest;
+import com.sjoneon.cap.models.api.AlarmResponse;
+import com.sjoneon.cap.models.api.ApiResponse;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
-/**
- * 알람 설정 및 관리를 위한 프래그먼트 (완전 기능 구현)
- */
 public class AlarmFragment extends Fragment {
 
+    private static final String TAG = "AlarmFragment";
     private RecyclerView recyclerViewAlarms;
     private TextView textNoAlarms;
     private FloatingActionButton fabAddAlarm;
@@ -59,16 +70,93 @@ public class AlarmFragment extends Fragment {
 
         fabAddAlarm.setOnClickListener(v -> showTimePickerDialog());
 
-        loadAlarms();
+        // 서버에서 알람 불러오기
+        loadAlarmsFromServer();
 
         return view;
     }
 
-    private void loadAlarms() {
-        // 실제 구현에서는 데이터베이스에서 알람 목록을 로드해야 함
-        // 여기서는 임시로 저장된 알람들을 불러오는 로직을 구현
-        alarmList.clear();
-        updateAlarmListVisibility();
+    private void loadAlarmsFromServer() {
+        SharedPreferences preferences = requireActivity().getSharedPreferences("UserPrefs", Context.MODE_PRIVATE);
+        String userUuid = preferences.getString("user_uuid", null);
+
+        if (userUuid == null) {
+            Log.e(TAG, "사용자 UUID가 없습니다");
+            updateAlarmListVisibility();
+            return;
+        }
+
+        if (ApiClient.getInstance() == null || ApiClient.getInstance().getApiService() == null) {
+            Log.e(TAG, "API 클라이언트 초기화 실패");
+            updateAlarmListVisibility();
+            return;
+        }
+
+        ApiClient.getInstance().getApiService()
+                .getUserAlarms(userUuid)
+                .enqueue(new Callback<List<AlarmResponse>>() {
+                    @Override
+                    public void onResponse(Call<List<AlarmResponse>> call, Response<List<AlarmResponse>> response) {
+                        if (response == null || !response.isSuccessful() || response.body() == null) {
+                            updateAlarmListVisibility();
+                            return;
+                        }
+
+                        Log.d(TAG, "서버에서 알람 불러오기 성공: " + response.body().size() + "개");
+
+                        alarmList.clear();
+
+                        for (AlarmResponse alarmResponse : response.body()) {
+                            if (alarmResponse == null || alarmResponse.getAlarmTime() == null ||
+                                    alarmResponse.getLabel() == null) {
+                                continue;
+                            }
+
+                            String timeString = parseTimeFromISO(alarmResponse.getAlarmTime());
+                            if (timeString == null) {
+                                continue;
+                            }
+
+                            AlarmItem alarmItem = new AlarmItem(
+                                    alarmResponse.getId(),
+                                    timeString,
+                                    alarmResponse.getLabel(),
+                                    alarmResponse.isEnabled(),
+                                    true,
+                                    true
+                            );
+
+                            alarmList.add(alarmItem);
+                        }
+
+                        if (alarmAdapter != null) {
+                            alarmAdapter.notifyDataSetChanged();
+                        }
+                        updateAlarmListVisibility();
+                    }
+
+                    @Override
+                    public void onFailure(Call<List<AlarmResponse>> call, Throwable t) {
+                        Log.e(TAG, "서버 통신 실패", t);
+                        updateAlarmListVisibility();
+                    }
+                });
+    }
+
+    private String parseTimeFromISO(String isoDateString) {
+        if (isoDateString == null || isoDateString.isEmpty()) {
+            return null;
+        }
+
+        try {
+            SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+            SimpleDateFormat outputFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
+            Date date = inputFormat.parse(isoDateString);
+            return date == null ? null : outputFormat.format(date);
+        } catch (Exception e) {
+            Log.e(TAG, "시간 파싱 오류: " + isoDateString, e);
+            return null;
+        }
     }
 
     private void updateAlarmListVisibility() {
@@ -108,10 +196,8 @@ public class AlarmFragment extends Fragment {
         CheckBox checkBoxSound = dialogView.findViewById(R.id.checkBoxSound);
         CheckBox checkBoxVibration = dialogView.findViewById(R.id.checkBoxVibration);
 
-        // 입력 길이 제한 (25자)
         editAlarmLabel.setFilters(new InputFilter[]{new InputFilter.LengthFilter(25)});
 
-        // 기본값 설정
         checkBoxSound.setChecked(true);
         checkBoxVibration.setChecked(true);
 
@@ -137,10 +223,8 @@ public class AlarmFragment extends Fragment {
         int alarmId = (int) System.currentTimeMillis();
         String timeString = String.format("%02d:%02d", hourOfDay, minute);
 
-        // 알람 설정 저장
         AlarmScheduler.saveAlarmSettings(requireContext(), alarmId, soundEnabled, vibrationEnabled);
 
-        // 실제 알람 스케줄링
         boolean success = AlarmScheduler.scheduleAlarm(requireContext(), alarmId, hourOfDay, minute, label);
 
         if (success) {
@@ -149,9 +233,11 @@ public class AlarmFragment extends Fragment {
             alarmAdapter.notifyDataSetChanged();
             updateAlarmListVisibility();
 
+            // 서버에 알람 추가
+            createAlarmOnServer(hourOfDay, minute, label);
+
             Toast.makeText(getContext(), getString(R.string.alarm_time_set, timeString), Toast.LENGTH_SHORT).show();
         } else {
-            // 권한이 없는 경우 설정 화면으로 이동
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
                         Uri.parse("package:" + requireContext().getPackageName()));
@@ -163,6 +249,42 @@ public class AlarmFragment extends Fragment {
         }
     }
 
+    private void createAlarmOnServer(int hourOfDay, int minute, String label) {
+        SharedPreferences preferences = requireActivity().getSharedPreferences("UserPrefs", Context.MODE_PRIVATE);
+        String userUuid = preferences.getString("user_uuid", null);
+
+        if (userUuid == null || ApiClient.getInstance() == null) {
+            Log.e(TAG, "서버에 알람 추가 불가");
+            return;
+        }
+
+        Calendar calendar = Calendar.getInstance();
+        calendar.set(Calendar.HOUR_OF_DAY, hourOfDay);
+        calendar.set(Calendar.MINUTE, minute);
+        calendar.set(Calendar.SECOND, 0);
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+        String alarmTime = sdf.format(calendar.getTime());
+
+        AlarmRequest request = new AlarmRequest(userUuid, alarmTime, label);
+
+        ApiClient.getInstance().getApiService()
+                .createAlarm(request)
+                .enqueue(new Callback<AlarmResponse>() {
+                    @Override
+                    public void onResponse(Call<AlarmResponse> call, Response<AlarmResponse> response) {
+                        if (response != null && response.isSuccessful()) {
+                            Log.d(TAG, "서버에 알람 추가 성공");
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<AlarmResponse> call, Throwable t) {
+                        Log.e(TAG, "서버 통신 실패", t);
+                    }
+                });
+    }
+
     @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -171,9 +293,6 @@ public class AlarmFragment extends Fragment {
         }
     }
 
-    /**
-     * 알람 데이터 클래스 (확장됨)
-     */
     public static class AlarmItem {
         private int id;
         private String time;
@@ -182,7 +301,6 @@ public class AlarmFragment extends Fragment {
         private boolean soundEnabled;
         private boolean vibrationEnabled;
 
-        // Gson을 위한 기본 생성자
         public AlarmItem() {}
 
         public AlarmItem(int id, String time, String label, boolean isEnabled, boolean soundEnabled, boolean vibrationEnabled) {
@@ -194,7 +312,6 @@ public class AlarmFragment extends Fragment {
             this.vibrationEnabled = vibrationEnabled;
         }
 
-        // Getters
         public int getId() { return id; }
         public String getTime() { return time; }
         public String getLabel() { return label; }
@@ -202,16 +319,12 @@ public class AlarmFragment extends Fragment {
         public boolean isSoundEnabled() { return soundEnabled; }
         public boolean isVibrationEnabled() { return vibrationEnabled; }
 
-        // Setters
         public void setEnabled(boolean enabled) { isEnabled = enabled; }
         public void setLabel(String label) { this.label = label; }
         public void setSoundEnabled(boolean soundEnabled) { this.soundEnabled = soundEnabled; }
         public void setVibrationEnabled(boolean vibrationEnabled) { this.vibrationEnabled = vibrationEnabled; }
     }
 
-    /**
-     * 알람 어댑터 (확장됨)
-     */
     private class AlarmAdapter extends RecyclerView.Adapter<AlarmAdapter.AlarmViewHolder> {
         private List<AlarmItem> alarms;
 
@@ -232,11 +345,10 @@ public class AlarmFragment extends Fragment {
             holder.textTime.setText(alarm.getTime());
             holder.textLabel.setText(alarm.getLabel());
 
-            // 설정 정보 표시
             String settings = "";
-            if (alarm.isSoundEnabled()) settings += "🔊 ";
-            if (alarm.isVibrationEnabled()) settings += "📳 ";
-            if (settings.isEmpty()) settings = "🔇 ";
+            if (alarm.isSoundEnabled()) settings += "소리 ";
+            if (alarm.isVibrationEnabled()) settings += "진동 ";
+            if (settings.isEmpty()) settings = "무음 ";
 
             holder.textSettings.setText(settings.trim());
             holder.switchAlarm.setChecked(alarm.isEnabled());
@@ -244,29 +356,25 @@ public class AlarmFragment extends Fragment {
             holder.switchAlarm.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 alarm.setEnabled(isChecked);
                 if (isChecked) {
-                    // 알람 다시 활성화
                     String[] timeParts = alarm.getTime().split(":");
                     int hour = Integer.parseInt(timeParts[0]);
                     int minute = Integer.parseInt(timeParts[1]);
                     AlarmScheduler.scheduleAlarm(getContext(), alarm.getId(), hour, minute, alarm.getLabel());
                 } else {
-                    // 알람 비활성화
                     AlarmScheduler.cancelAlarm(getContext(), alarm.getId());
                 }
             });
 
-            // 설정 버튼 클릭 리스너
             holder.buttonSettings.setOnClickListener(v -> showAlarmEditDialog(alarm, position));
 
             holder.buttonDelete.setOnClickListener(v -> {
-                // 알람 취소
                 AlarmScheduler.cancelAlarm(getContext(), alarm.getId());
 
                 alarms.remove(position);
                 notifyItemRemoved(position);
                 notifyItemRangeChanged(position, alarms.size());
                 updateAlarmListVisibility();
-                Toast.makeText(getContext(), R.string.alarm_deleted, Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "알람이 삭제되었습니다.", Toast.LENGTH_SHORT).show();
             });
         }
 
@@ -279,11 +387,11 @@ public class AlarmFragment extends Fragment {
             TextView textTime;
             TextView textLabel;
             TextView textSettings;
-            android.widget.Switch switchAlarm;
+            Switch switchAlarm;
             ImageButton buttonSettings;
             ImageButton buttonDelete;
 
-            AlarmViewHolder(View itemView) {
+            AlarmViewHolder(@NonNull View itemView) {
                 super(itemView);
                 textTime = itemView.findViewById(R.id.textAlarmTime);
                 textLabel = itemView.findViewById(R.id.textAlarmLabel);
@@ -304,10 +412,8 @@ public class AlarmFragment extends Fragment {
         CheckBox checkBoxSound = dialogView.findViewById(R.id.checkBoxSound);
         CheckBox checkBoxVibration = dialogView.findViewById(R.id.checkBoxVibration);
 
-        // 입력 길이 제한 (25자)
         editAlarmLabel.setFilters(new InputFilter[]{new InputFilter.LengthFilter(25)});
 
-        // 현재 설정값으로 초기화
         editAlarmLabel.setText(alarm.getLabel());
         checkBoxSound.setChecked(alarm.isSoundEnabled());
         checkBoxVibration.setChecked(alarm.isVibrationEnabled());
@@ -323,15 +429,12 @@ public class AlarmFragment extends Fragment {
                     boolean soundEnabled = checkBoxSound.isChecked();
                     boolean vibrationEnabled = checkBoxVibration.isChecked();
 
-                    // 설정 업데이트
                     alarm.setLabel(label);
                     alarm.setSoundEnabled(soundEnabled);
                     alarm.setVibrationEnabled(vibrationEnabled);
 
-                    // 알람 설정 저장
                     AlarmScheduler.saveAlarmSettings(requireContext(), alarm.getId(), soundEnabled, vibrationEnabled);
 
-                    // 알람이 활성화되어 있으면 다시 스케줄링
                     if (alarm.isEnabled()) {
                         String[] timeParts = alarm.getTime().split(":");
                         int hour = Integer.parseInt(timeParts[0]);
