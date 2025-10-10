@@ -4,7 +4,7 @@ import com.google.gson.annotations.SerializedName;
 
 /**
  * AI 채팅 응답 모델
- * POST /api/ai/chat 응답
+ * FastAPI 백엔드의 ChatResponse와 매핑됩니다.
  */
 public class ChatResponse {
 
@@ -21,19 +21,82 @@ public class ChatResponse {
     private Integer messageId;
 
     @SerializedName("error")
-    private String error; // 오류 시 사용
+    private String error;
 
-    public ChatResponse() {}
+    // ===== [새로 추가] Function Call 필드 =====
+    @SerializedName("function_called")
+    private String functionCalled;
+    // ==========================================
 
-    // Getters and Setters
-    public boolean isSuccess() { return success; }
-    public void setSuccess(boolean success) { this.success = success; }
-    public String getAiResponse() { return aiResponse; }
-    public void setAiResponse(String aiResponse) { this.aiResponse = aiResponse; }
-    public Integer getSessionId() { return sessionId; }
-    public void setSessionId(Integer sessionId) { this.sessionId = sessionId; }
-    public Integer getMessageId() { return messageId; }
-    public void setMessageId(Integer messageId) { this.messageId = messageId; }
-    public String getError() { return error; }
-    public void setError(String error) { this.error = error; }
+    // 생성자
+    public ChatResponse(boolean success, String aiResponse, Integer sessionId, Integer messageId) {
+        this.success = success;
+        this.aiResponse = aiResponse;
+        this.sessionId = sessionId;
+        this.messageId = messageId;
+    }
+
+    // Getters
+    public boolean isSuccess() {
+        return success;
+    }
+
+    public String getAiResponse() {
+        return aiResponse;
+    }
+
+    public Integer getSessionId() {
+        return sessionId;
+    }
+
+    public Integer getMessageId() {
+        return messageId;
+    }
+
+    public String getError() {
+        return error;
+    }
+
+    // ===== [새로 추가] Getter =====
+    public String getFunctionCalled() {
+        return functionCalled;
+    }
+    // ================================
+
+    // Setters (필요시 사용)
+    public void setSuccess(boolean success) {
+        this.success = success;
+    }
+
+    public void setAiResponse(String aiResponse) {
+        this.aiResponse = aiResponse;
+    }
+
+    public void setSessionId(Integer sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    public void setMessageId(Integer messageId) {
+        this.messageId = messageId;
+    }
+
+    public void setError(String error) {
+        this.error = error;
+    }
+
+    public void setFunctionCalled(String functionCalled) {
+        this.functionCalled = functionCalled;
+    }
+
+    @Override
+    public String toString() {
+        return "ChatResponse{" +
+                "success=" + success +
+                ", aiResponse='" + aiResponse + '\'' +
+                ", sessionId=" + sessionId +
+                ", messageId=" + messageId +
+                ", error='" + error + '\'' +
+                ", functionCalled='" + functionCalled + '\'' +
+                '}';
+    }
 }

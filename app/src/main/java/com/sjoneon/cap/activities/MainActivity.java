@@ -509,6 +509,20 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             saveUserInfo();
                             Log.d(TAG, "세션 ID 업데이트: " + sessionId);
                         }
+
+                        // ===== [새로 추가] Function Call 처리 =====
+                        if (chatResponse.getFunctionCalled() != null) {
+                            String functionName = chatResponse.getFunctionCalled();
+                            Log.d(TAG, "Function 호출됨: " + functionName);
+
+                            // 함수에 따라 해당 Fragment 새로고침
+                            if ("create_schedule".equals(functionName)) {
+                                refreshCalendarIfVisible();
+                            } else if ("create_alarm".equals(functionName)) {
+                                refreshAlarmIfVisible();
+                            }
+                        }
+                        // ===========================================
                     } else {
                         // 실패 응답 처리
                         String error = chatResponse.getError();
@@ -735,6 +749,36 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     public void setToolbarTitle(String title) {
         if (toolbar != null) {
             toolbar.setTitle(title);
+        }
+    }
+
+    /**
+     * 현재 CalendarFragment가 보이는 경우 새로고침
+     */
+    private void refreshCalendarIfVisible() {
+        Fragment currentFragment = getSupportFragmentManager()
+                .findFragmentById(R.id.fragment_container);
+
+        if (currentFragment instanceof CalendarFragment) {
+            // CalendarFragment를 새로 로드하여 업데이트된 일정 표시
+            showFragment(new CalendarFragment());
+            toolbar.setTitle(R.string.menu_calendar);
+            Log.d(TAG, "CalendarFragment 새로고침 완료");
+        }
+    }
+
+    /**
+     * 현재 AlarmFragment가 보이는 경우 새로고침
+     */
+    private void refreshAlarmIfVisible() {
+        Fragment currentFragment = getSupportFragmentManager()
+                .findFragmentById(R.id.fragment_container);
+
+        if (currentFragment instanceof AlarmFragment) {
+            // AlarmFragment를 새로 로드하여 업데이트된 알람 표시
+            showFragment(new AlarmFragment());
+            toolbar.setTitle(R.string.menu_alarm);
+            Log.d(TAG, "AlarmFragment 새로고침 완료");
         }
     }
 }

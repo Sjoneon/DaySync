@@ -22,7 +22,7 @@ public class ApiClient {
     private static final String BASE_URL_EMULATOR = "http://10.0.2.2:8000/";
 
     // 실제 기기용 (개발 PC의 로컬 IP로 변경 필요)
-    private static final String BASE_URL_DEVICE = "http://172.29.10.197:8000/";
+    private static final String BASE_URL_DEVICE = "http://192.168.0.24:8000/";
 
     // 현재 사용할 BASE_URL
     private static final String BASE_URL = BASE_URL_DEVICE;

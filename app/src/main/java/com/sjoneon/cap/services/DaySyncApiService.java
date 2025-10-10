@@ -1,15 +1,24 @@
 package com.sjoneon.cap.services;
 
+import com.sjoneon.cap.models.api.ApiResponse;
 import com.sjoneon.cap.models.api.ChatRequest;
 import com.sjoneon.cap.models.api.ChatResponse;
 import com.sjoneon.cap.models.api.UserCreateRequest;
 import com.sjoneon.cap.models.api.UserCreateResponse;
 import com.sjoneon.cap.models.api.UserResponse;
 
+import com.sjoneon.cap.models.api.CalendarEventRequest;
+import com.sjoneon.cap.models.api.CalendarEventResponse;
+import com.sjoneon.cap.models.api.AlarmRequest;
+import com.sjoneon.cap.models.api.AlarmResponse;
+import java.util.List;
+
 import retrofit2.Call;
 import retrofit2.http.Body;
+import retrofit2.http.DELETE;
 import retrofit2.http.GET;
 import retrofit2.http.POST;
+import retrofit2.http.PUT;
 import retrofit2.http.Path;
 
 /**
@@ -38,4 +47,55 @@ public interface DaySyncApiService {
      */
     @GET("api/users/{uuid}")
     Call<UserResponse> getUser(@Path("uuid") String uuid);
+
+
+    // ========================================
+    // 일정 관리 API
+    // ========================================
+
+    /**
+     * 새 일정 생성
+     */
+    @POST("/api/schedule/calendar/events")
+    Call<CalendarEventResponse> createCalendarEvent(@Body CalendarEventRequest request);
+
+    /**
+     * 사용자의 모든 일정 조회
+     */
+    @GET("/api/schedule/calendar/events/{user_uuid}")
+    Call<List<CalendarEventResponse>> getUserEvents(@Path("user_uuid") String userUuid);
+
+    /**
+     * 일정 삭제
+     */
+    @DELETE("/api/schedule/calendar/events/{event_id}")
+    Call<ApiResponse> deleteCalendarEvent(@Path("event_id") int eventId);
+
+    // ========================================
+    // 알람 관리 API
+    // ========================================
+
+    /**
+     * 새 알람 생성
+     */
+    @POST("/api/schedule/alarms")
+    Call<AlarmResponse> createAlarm(@Body AlarmRequest request);
+
+    /**
+     * 사용자의 모든 알람 조회
+     */
+    @GET("/api/schedule/alarms/{user_uuid}")
+    Call<List<AlarmResponse>> getUserAlarms(@Path("user_uuid") String userUuid);
+
+    /**
+     * 알람 삭제
+     */
+    @DELETE("/api/schedule/alarms/{alarm_id}")
+    Call<ApiResponse> deleteAlarm(@Path("alarm_id") int alarmId);
+
+    /**
+     * 알람 활성화/비활성화 토글
+     */
+    @PUT("/api/schedule/alarms/{alarm_id}/toggle")
+    Call<AlarmResponse> toggleAlarm(@Path("alarm_id") int alarmId);
 }
