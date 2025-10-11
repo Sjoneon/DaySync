@@ -14,6 +14,7 @@ public class CalendarEvent {
     private List<NotificationSetting> notificationSettings;
     private long createdAt;
     private long updatedAt;
+    private Integer serverId;  // 서버 DB ID 추가
 
     public CalendarEvent(long id, String title, String description, long dateTime) {
         this.id = id;
@@ -60,6 +61,10 @@ public class CalendarEvent {
     public long getCreatedAt() { return createdAt; }
     public long getUpdatedAt() { return updatedAt; }
 
+    // 서버 ID getter/setter
+    public Integer getServerId() { return serverId; }
+    public void setServerId(Integer serverId) { this.serverId = serverId; }
+
     public void addNotificationSetting(NotificationSetting setting) {
         if (notificationSettings == null) {
             notificationSettings = new ArrayList<>();
@@ -79,38 +84,40 @@ public class CalendarEvent {
         public enum NotificationType {
             THREE_HOURS_BEFORE(3 * 60 * 60 * 1000L, "3시간 전"),
             ONE_DAY_BEFORE(24 * 60 * 60 * 1000L, "1일 전"),
-            THREE_DAYS_BEFORE(3 * 24 * 60 * 60 * 1000L, "3일 전"),
-            ONE_WEEK_BEFORE(7 * 24 * 60 * 60 * 1000L, "1주일 전");
+            ONE_HOUR_BEFORE(60 * 60 * 1000L, "1시간 전"),
+            THIRTY_MINUTES_BEFORE(30 * 60 * 1000L, "30분 전"),
+            FIFTEEN_MINUTES_BEFORE(15 * 60 * 1000L, "15분 전"),
+            FIVE_MINUTES_BEFORE(5 * 60 * 1000L, "5분 전"),
+            AT_TIME_OF_EVENT(0L, "일정 시간");
 
-            private final long milliseconds;
+            private final long millisBefore;
             private final String displayName;
 
-            NotificationType(long milliseconds, String displayName) {
-                this.milliseconds = milliseconds;
+            NotificationType(long millisBefore, String displayName) {
+                this.millisBefore = millisBefore;
                 this.displayName = displayName;
             }
 
-            public long getMilliseconds() { return milliseconds; }
+            public long getMillisBefore() { return millisBefore; }
             public String getDisplayName() { return displayName; }
         }
 
         private NotificationType type;
-        private boolean isEnabled;
-        private int requestCode;
+        private boolean enabled;
 
-        public NotificationSetting(NotificationType type, boolean isEnabled) {
+        public NotificationSetting(NotificationType type, boolean enabled) {
             this.type = type;
-            this.isEnabled = isEnabled;
-            this.requestCode = (int) (System.currentTimeMillis() & 0xfffffff);
+            this.enabled = enabled;
         }
 
         public NotificationType getType() { return type; }
-        public boolean isEnabled() { return isEnabled; }
-        public void setEnabled(boolean enabled) { isEnabled = enabled; }
-        public int getRequestCode() { return requestCode; }
+        public void setType(NotificationType type) { this.type = type; }
 
-        public long getNotificationTime(long eventDateTime) {
-            return eventDateTime - type.getMilliseconds();
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+
+        public long getNotificationTime(long eventTime) {
+            return eventTime - type.getMillisBefore();
         }
     }
 }

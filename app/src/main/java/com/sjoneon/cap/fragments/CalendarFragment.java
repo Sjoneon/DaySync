@@ -487,7 +487,8 @@ public class CalendarFragment extends Fragment {
     }
 
     private void createEventOnServer(String title, String description, long dateTime) {
-        SharedPreferences preferences = requireActivity().getSharedPreferences("UserPrefs", Context.MODE_PRIVATE);
+        SharedPreferences preferences = requireActivity()
+                .getSharedPreferences("UserPrefs", Context.MODE_PRIVATE);
         String userUuid = preferences.getString("user_uuid", null);
 
         if (userUuid == null || ApiClient.getInstance() == null) {
@@ -505,9 +506,13 @@ public class CalendarFragment extends Fragment {
                 .createCalendarEvent(request)
                 .enqueue(new Callback<CalendarEventResponse>() {
                     @Override
-                    public void onResponse(Call<CalendarEventResponse> call, Response<CalendarEventResponse> response) {
-                        if (response != null && response.isSuccessful()) {
-                            Log.d(TAG, "서버에 일정 추가 성공");
+                    public void onResponse(Call<CalendarEventResponse> call,
+                                           Response<CalendarEventResponse> response) {
+                        if (response != null && response.isSuccessful() && response.body() != null) {
+                            int serverId = response.body().getId();
+                            Log.d(TAG, "서버에 일정 추가 성공, ID: " + serverId);
+
+                            saveServerIdToLocalEvent(title, dateTime, serverId);
                         }
                     }
 
@@ -516,6 +521,21 @@ public class CalendarFragment extends Fragment {
                         Log.e(TAG, "서버 통신 실패", t);
                     }
                 });
+    }
+
+    private void saveServerIdToLocalEvent(String title, long dateTime, int serverId) {
+        List<CalendarEvent> events = eventRepository.getAllEvents();
+
+        for (CalendarEvent event : events) {
+            if (event.getTitle().equals(title) &&
+                    Math.abs(event.getDateTime() - dateTime) < 1000) {
+                event.setServerId(serverId);
+                eventRepository.updateEvent(event);
+                Log.d(TAG, "로컬 이벤트에 서버 ID 저장 완료: " + serverId);
+                return;
+            }
+        }
+        Log.w(TAG, "서버 ID를 저장할 로컬 이벤트를 찾지 못함");
     }
 
     private void updateEvent(CalendarEvent event, String title, String description, long dateTime,
@@ -554,12 +574,47 @@ public class CalendarFragment extends Fragment {
     }
 
     private void deleteEvent(CalendarEvent event) {
+        // 시스템 알림 취소
         alarmManager.cancelEventNotifications(event);
 
+        // 로컬에서 삭제
         eventRepository.deleteEvent(event.getId());
+
+        // 서버에서도 삭제
+        if (event.getServerId() != null) {
+            deleteEventFromServer(event.getServerId());
+        } else {
+            Log.w(TAG, "서버 ID가 없어 로컬에서만 삭제됨");
+        }
 
         loadEventsForDate(selectedDate);
         Toast.makeText(getContext(), "일정이 삭제되었습니다.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void deleteEventFromServer(int serverId) {
+        if (ApiClient.getInstance() == null) {
+            Log.e(TAG, "ApiClient 없음");
+            return;
+        }
+
+        ApiClient.getInstance().getApiService()
+                .deleteCalendarEvent(serverId)
+                .enqueue(new Callback<ApiResponse>() {
+                    @Override
+                    public void onResponse(Call<ApiResponse> call, Response<ApiResponse> response) {
+                        if (response != null && response.isSuccessful()) {
+                            Log.d(TAG, "서버에서 일정 삭제 성공: ID=" + serverId);
+                        } else {
+                            Log.e(TAG, "서버 일정 삭제 실패: " +
+                                    (response != null ? response.code() : "null"));
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<ApiResponse> call, Throwable t) {
+                        Log.e(TAG, "서버 통신 실패", t);
+                    }
+                });
     }
 
     private class CalendarEventAdapter extends RecyclerView.Adapter<CalendarEventAdapter.EventViewHolder> {
@@ -642,11 +697,69 @@ public class CalendarFragment extends Fragment {
     public void onResume() {
         super.onResume();
         Log.d(TAG, "onResume called");
+        syncWithServer();
 
         if (getView() != null) {
             getView().postDelayed(() -> {
                 loadEventsForDate(selectedDate);
             }, 100);
+        }
+    }
+
+    private void syncWithServer() {
+        SharedPreferences preferences = requireActivity()
+                .getSharedPreferences("UserPrefs", Context.MODE_PRIVATE);
+        String userUuid = preferences.getString("user_uuid", null);
+
+        if (userUuid == null || ApiClient.getInstance() == null) {
+            return;
+        }
+
+        ApiClient.getInstance().getApiService()
+                .getUserEvents(userUuid)
+                .enqueue(new Callback<List<CalendarEventResponse>>() {
+                    @Override
+                    public void onResponse(Call<List<CalendarEventResponse>> call,
+                                           Response<List<CalendarEventResponse>> response) {
+                        if (response != null && response.isSuccessful() && response.body() != null) {
+                            mapServerIdsToLocalEvents(response.body());
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<List<CalendarEventResponse>> call, Throwable t) {
+                        Log.e(TAG, "서버 동기화 실패", t);
+                    }
+                });
+    }
+
+    private void mapServerIdsToLocalEvents(List<CalendarEventResponse> serverEvents) {
+        List<CalendarEvent> localEvents = eventRepository.getAllEvents();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+
+        for (CalendarEvent localEvent : localEvents) {
+            if (localEvent.getServerId() != null) {
+                continue;
+            }
+
+            for (CalendarEventResponse serverEvent : serverEvents) {
+                if (!localEvent.getTitle().equals(serverEvent.getEventTitle())) {
+                    continue;
+                }
+
+                try {
+                    Date serverDate = sdf.parse(serverEvent.getEventStartTime());
+                    if (serverDate != null &&
+                            Math.abs(serverDate.getTime() - localEvent.getDateTime()) < 60000) {
+                        localEvent.setServerId(serverEvent.getId());
+                        eventRepository.updateEvent(localEvent);
+                        Log.d(TAG, "서버 ID 매핑: " + localEvent.getTitle() + " -> " + serverEvent.getId());
+                        break;
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "날짜 파싱 오류", e);
+                }
+            }
         }
     }
 }

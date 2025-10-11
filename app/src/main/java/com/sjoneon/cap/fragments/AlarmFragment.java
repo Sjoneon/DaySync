@@ -30,10 +30,12 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.sjoneon.cap.R;
 import com.sjoneon.cap.helpers.AlarmScheduler;
+import com.sjoneon.cap.repositories.AlarmRepository;
 import com.sjoneon.cap.utils.ApiClient;
 import com.sjoneon.cap.models.api.AlarmRequest;
 import com.sjoneon.cap.models.api.AlarmResponse;
 import com.sjoneon.cap.models.api.ApiResponse;
+
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -53,16 +55,20 @@ public class AlarmFragment extends Fragment {
     private FloatingActionButton fabAddAlarm;
     private AlarmAdapter alarmAdapter;
     private List<AlarmItem> alarmList = new ArrayList<>();
+    private AlarmRepository alarmRepository;
     private static final int REQUEST_SCHEDULE_EXACT_ALARM = 1;
 
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+                             @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_alarm, container, false);
 
         recyclerViewAlarms = view.findViewById(R.id.recyclerViewAlarms);
         textNoAlarms = view.findViewById(R.id.textNoAlarms);
         fabAddAlarm = view.findViewById(R.id.fabAddAlarm);
+
+        alarmRepository = AlarmRepository.getInstance(requireContext());
 
         recyclerViewAlarms.setLayoutManager(new LinearLayoutManager(getContext()));
         alarmAdapter = new AlarmAdapter(alarmList);
@@ -70,25 +76,35 @@ public class AlarmFragment extends Fragment {
 
         fabAddAlarm.setOnClickListener(v -> showTimePickerDialog());
 
-        // 서버에서 알람 불러오기
-        loadAlarmsFromServer();
+        loadAlarmsFromRepository();
+        updateAlarmListVisibility();
 
         return view;
     }
 
-    private void loadAlarmsFromServer() {
-        SharedPreferences preferences = requireActivity().getSharedPreferences("UserPrefs", Context.MODE_PRIVATE);
+    @Override
+    public void onResume() {
+        super.onResume();
+
+        loadAlarmsFromRepository();
+        syncWithServer();
+    }
+
+    private void loadAlarmsFromRepository() {
+        alarmList.clear();
+        alarmList.addAll(alarmRepository.getAllAlarms());
+        if (alarmAdapter != null) {
+            alarmAdapter.notifyDataSetChanged();
+        }
+        updateAlarmListVisibility();
+    }
+
+    private void syncWithServer() {
+        SharedPreferences preferences = requireActivity()
+                .getSharedPreferences("UserPrefs", Context.MODE_PRIVATE);
         String userUuid = preferences.getString("user_uuid", null);
 
-        if (userUuid == null) {
-            Log.e(TAG, "사용자 UUID가 없습니다");
-            updateAlarmListVisibility();
-            return;
-        }
-
-        if (ApiClient.getInstance() == null || ApiClient.getInstance().getApiService() == null) {
-            Log.e(TAG, "API 클라이언트 초기화 실패");
-            updateAlarmListVisibility();
+        if (userUuid == null || ApiClient.getInstance() == null) {
             return;
         }
 
@@ -96,66 +112,48 @@ public class AlarmFragment extends Fragment {
                 .getUserAlarms(userUuid)
                 .enqueue(new Callback<List<AlarmResponse>>() {
                     @Override
-                    public void onResponse(Call<List<AlarmResponse>> call, Response<List<AlarmResponse>> response) {
-                        if (response == null || !response.isSuccessful() || response.body() == null) {
-                            updateAlarmListVisibility();
-                            return;
+                    public void onResponse(Call<List<AlarmResponse>> call,
+                                           Response<List<AlarmResponse>> response) {
+                        if (response != null && response.isSuccessful() && response.body() != null) {
+                            mapServerIdsToLocalAlarms(response.body());
                         }
-
-                        Log.d(TAG, "서버에서 알람 불러오기 성공: " + response.body().size() + "개");
-
-                        alarmList.clear();
-
-                        for (AlarmResponse alarmResponse : response.body()) {
-                            if (alarmResponse == null || alarmResponse.getAlarmTime() == null ||
-                                    alarmResponse.getLabel() == null) {
-                                continue;
-                            }
-
-                            String timeString = parseTimeFromISO(alarmResponse.getAlarmTime());
-                            if (timeString == null) {
-                                continue;
-                            }
-
-                            AlarmItem alarmItem = new AlarmItem(
-                                    alarmResponse.getId(),
-                                    timeString,
-                                    alarmResponse.getLabel(),
-                                    alarmResponse.isEnabled(),
-                                    true,
-                                    true
-                            );
-
-                            alarmList.add(alarmItem);
-                        }
-
-                        if (alarmAdapter != null) {
-                            alarmAdapter.notifyDataSetChanged();
-                        }
-                        updateAlarmListVisibility();
                     }
 
                     @Override
                     public void onFailure(Call<List<AlarmResponse>> call, Throwable t) {
-                        Log.e(TAG, "서버 통신 실패", t);
-                        updateAlarmListVisibility();
+                        Log.e(TAG, "서버 동기화 실패", t);
                     }
                 });
     }
 
-    private String parseTimeFromISO(String isoDateString) {
-        if (isoDateString == null || isoDateString.isEmpty()) {
-            return null;
-        }
+    private void mapServerIdsToLocalAlarms(List<AlarmResponse> serverAlarms) {
+        SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        SimpleDateFormat serverFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
 
-        try {
-            SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
-            SimpleDateFormat outputFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
-            Date date = inputFormat.parse(isoDateString);
-            return date == null ? null : outputFormat.format(date);
-        } catch (Exception e) {
-            Log.e(TAG, "시간 파싱 오류: " + isoDateString, e);
-            return null;
+        for (AlarmItem localAlarm : alarmList) {
+            if (localAlarm.getServerId() != null) {
+                continue;
+            }
+
+            for (AlarmResponse serverAlarm : serverAlarms) {
+                if (!localAlarm.getLabel().equals(serverAlarm.getLabel())) {
+                    continue;
+                }
+
+                try {
+                    Date serverTime = serverFormat.parse(serverAlarm.getAlarmTime());
+                    String serverTimeStr = timeFormat.format(serverTime);
+
+                    if (serverTimeStr.equals(localAlarm.getTime())) {
+                        localAlarm.setServerId(serverAlarm.getId());
+                        alarmRepository.updateAlarm(localAlarm);
+                        Log.d(TAG, "서버 ID 매핑: " + localAlarm.getLabel() + " -> " + serverAlarm.getId());
+                        break;
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "시간 파싱 오류", e);
+                }
+            }
         }
     }
 
@@ -219,38 +217,47 @@ public class AlarmFragment extends Fragment {
         builder.create().show();
     }
 
-    private void addAlarm(int hourOfDay, int minute, String label, boolean soundEnabled, boolean vibrationEnabled) {
+    private void addAlarm(int hourOfDay, int minute, String label,
+                          boolean soundEnabled, boolean vibrationEnabled) {
         int alarmId = (int) System.currentTimeMillis();
         String timeString = String.format("%02d:%02d", hourOfDay, minute);
 
         AlarmScheduler.saveAlarmSettings(requireContext(), alarmId, soundEnabled, vibrationEnabled);
 
-        boolean success = AlarmScheduler.scheduleAlarm(requireContext(), alarmId, hourOfDay, minute, label);
+        boolean success = AlarmScheduler.scheduleAlarm(requireContext(), alarmId,
+                hourOfDay, minute, label);
 
         if (success) {
-            AlarmItem alarmItem = new AlarmItem(alarmId, timeString, label, true, soundEnabled, vibrationEnabled);
+            AlarmItem alarmItem = new AlarmItem(alarmId, timeString, label,
+                    true, soundEnabled, vibrationEnabled);
             alarmList.add(alarmItem);
+
+            alarmRepository.addAlarm(alarmItem);
+
             alarmAdapter.notifyDataSetChanged();
             updateAlarmListVisibility();
 
-            // 서버에 알람 추가
-            createAlarmOnServer(hourOfDay, minute, label);
+            createAlarmOnServer(hourOfDay, minute, label, alarmItem);
 
-            Toast.makeText(getContext(), getString(R.string.alarm_time_set, timeString), Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), getString(R.string.alarm_time_set, timeString),
+                    Toast.LENGTH_SHORT).show();
         } else {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
                         Uri.parse("package:" + requireContext().getPackageName()));
                 startActivityForResult(intent, REQUEST_SCHEDULE_EXACT_ALARM);
-                Toast.makeText(getContext(), "알람 설정을 위해 권한을 허용해주세요.", Toast.LENGTH_LONG).show();
+                Toast.makeText(getContext(), "알람 설정을 위해 권한을 허용해주세요.",
+                        Toast.LENGTH_LONG).show();
             } else {
-                Toast.makeText(getContext(), "알람 설정에 실패했습니다.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "알람 설정에 실패했습니다.",
+                        Toast.LENGTH_SHORT).show();
             }
         }
     }
 
-    private void createAlarmOnServer(int hourOfDay, int minute, String label) {
-        SharedPreferences preferences = requireActivity().getSharedPreferences("UserPrefs", Context.MODE_PRIVATE);
+    private void createAlarmOnServer(int hourOfDay, int minute, String label, AlarmItem localAlarm) {
+        SharedPreferences preferences = requireActivity()
+                .getSharedPreferences("UserPrefs", Context.MODE_PRIVATE);
         String userUuid = preferences.getString("user_uuid", null);
 
         if (userUuid == null || ApiClient.getInstance() == null) {
@@ -272,9 +279,14 @@ public class AlarmFragment extends Fragment {
                 .createAlarm(request)
                 .enqueue(new Callback<AlarmResponse>() {
                     @Override
-                    public void onResponse(Call<AlarmResponse> call, Response<AlarmResponse> response) {
-                        if (response != null && response.isSuccessful()) {
-                            Log.d(TAG, "서버에 알람 추가 성공");
+                    public void onResponse(Call<AlarmResponse> call,
+                                           Response<AlarmResponse> response) {
+                        if (response != null && response.isSuccessful() && response.body() != null) {
+                            int serverId = response.body().getId();
+                            Log.d(TAG, "서버에 알람 추가 성공, ID: " + serverId);
+
+                            localAlarm.setServerId(serverId);
+                            alarmRepository.updateAlarm(localAlarm);
                         }
                     }
 
@@ -285,11 +297,38 @@ public class AlarmFragment extends Fragment {
                 });
     }
 
+    private void deleteAlarmFromServer(int serverId) {
+        if (ApiClient.getInstance() == null) {
+            Log.e(TAG, "ApiClient 없음");
+            return;
+        }
+
+        ApiClient.getInstance().getApiService()
+                .deleteAlarm(serverId)
+                .enqueue(new Callback<ApiResponse>() {
+                    @Override
+                    public void onResponse(Call<ApiResponse> call, Response<ApiResponse> response) {
+                        if (response != null && response.isSuccessful()) {
+                            Log.d(TAG, "서버에서 알람 삭제 성공: ID=" + serverId);
+                        } else {
+                            Log.e(TAG, "서버 알람 삭제 실패: " +
+                                    (response != null ? response.code() : "null"));
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<ApiResponse> call, Throwable t) {
+                        Log.e(TAG, "서버 통신 실패", t);
+                    }
+                });
+    }
+
     @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_SCHEDULE_EXACT_ALARM) {
-            Toast.makeText(getContext(), "권한 설정 후 다시 알람을 설정해주세요.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), "권한 설정 후 다시 알람을 설정해주세요.",
+                    Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -300,10 +339,12 @@ public class AlarmFragment extends Fragment {
         private boolean isEnabled;
         private boolean soundEnabled;
         private boolean vibrationEnabled;
+        private Integer serverId;
 
         public AlarmItem() {}
 
-        public AlarmItem(int id, String time, String label, boolean isEnabled, boolean soundEnabled, boolean vibrationEnabled) {
+        public AlarmItem(int id, String time, String label, boolean isEnabled,
+                         boolean soundEnabled, boolean vibrationEnabled) {
             this.id = id;
             this.time = time;
             this.label = label;
@@ -318,11 +359,13 @@ public class AlarmFragment extends Fragment {
         public boolean isEnabled() { return isEnabled; }
         public boolean isSoundEnabled() { return soundEnabled; }
         public boolean isVibrationEnabled() { return vibrationEnabled; }
+        public Integer getServerId() { return serverId; }
 
         public void setEnabled(boolean enabled) { isEnabled = enabled; }
         public void setLabel(String label) { this.label = label; }
         public void setSoundEnabled(boolean soundEnabled) { this.soundEnabled = soundEnabled; }
         public void setVibrationEnabled(boolean vibrationEnabled) { this.vibrationEnabled = vibrationEnabled; }
+        public void setServerId(Integer serverId) { this.serverId = serverId; }
     }
 
     private class AlarmAdapter extends RecyclerView.Adapter<AlarmAdapter.AlarmViewHolder> {
@@ -335,7 +378,8 @@ public class AlarmFragment extends Fragment {
         @NonNull
         @Override
         public AlarmViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_alarm, parent, false);
+            View view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_alarm, parent, false);
             return new AlarmViewHolder(view);
         }
 
@@ -355,11 +399,15 @@ public class AlarmFragment extends Fragment {
 
             holder.switchAlarm.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 alarm.setEnabled(isChecked);
+
+                alarmRepository.updateAlarm(alarm);
+
                 if (isChecked) {
                     String[] timeParts = alarm.getTime().split(":");
                     int hour = Integer.parseInt(timeParts[0]);
                     int minute = Integer.parseInt(timeParts[1]);
-                    AlarmScheduler.scheduleAlarm(getContext(), alarm.getId(), hour, minute, alarm.getLabel());
+                    AlarmScheduler.scheduleAlarm(getContext(), alarm.getId(),
+                            hour, minute, alarm.getLabel());
                 } else {
                     AlarmScheduler.cancelAlarm(getContext(), alarm.getId());
                 }
@@ -370,10 +418,19 @@ public class AlarmFragment extends Fragment {
             holder.buttonDelete.setOnClickListener(v -> {
                 AlarmScheduler.cancelAlarm(getContext(), alarm.getId());
 
+                alarmRepository.deleteAlarm(alarm.getId());
+
+                if (alarm.getServerId() != null) {
+                    deleteAlarmFromServer(alarm.getServerId());
+                } else {
+                    Log.w(TAG, "서버 ID가 없어 로컬에서만 삭제됨");
+                }
+
                 alarms.remove(position);
                 notifyItemRemoved(position);
                 notifyItemRangeChanged(position, alarms.size());
                 updateAlarmListVisibility();
+
                 Toast.makeText(getContext(), "알람이 삭제되었습니다.", Toast.LENGTH_SHORT).show();
             });
         }
@@ -423,7 +480,7 @@ public class AlarmFragment extends Fragment {
                 .setPositiveButton("저장", (dialog, id) -> {
                     String label = editAlarmLabel.getText().toString().trim();
                     if (label.isEmpty()) {
-                        label = getString(R.string.default_alarm_label);
+                        label = "알람";
                     }
 
                     boolean soundEnabled = checkBoxSound.isChecked();
@@ -433,17 +490,22 @@ public class AlarmFragment extends Fragment {
                     alarm.setSoundEnabled(soundEnabled);
                     alarm.setVibrationEnabled(vibrationEnabled);
 
-                    AlarmScheduler.saveAlarmSettings(requireContext(), alarm.getId(), soundEnabled, vibrationEnabled);
+                    AlarmScheduler.saveAlarmSettings(requireContext(), alarm.getId(),
+                            soundEnabled, vibrationEnabled);
+
+                    alarmRepository.updateAlarm(alarm);
 
                     if (alarm.isEnabled()) {
                         String[] timeParts = alarm.getTime().split(":");
                         int hour = Integer.parseInt(timeParts[0]);
                         int minute = Integer.parseInt(timeParts[1]);
-                        AlarmScheduler.scheduleAlarm(requireContext(), alarm.getId(), hour, minute, label);
+                        AlarmScheduler.scheduleAlarm(requireContext(), alarm.getId(),
+                                hour, minute, label);
                     }
 
                     alarmAdapter.notifyItemChanged(position);
-                    Toast.makeText(getContext(), "알람 설정이 변경되었습니다.", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), "알람 설정이 변경되었습니다.",
+                            Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton(R.string.cancel, (dialog, id) -> dialog.cancel());
 
