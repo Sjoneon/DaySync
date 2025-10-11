@@ -9,6 +9,9 @@ import com.sjoneon.cap.models.api.UserResponse;
 
 import com.sjoneon.cap.models.api.CalendarEventRequest;
 import com.sjoneon.cap.models.api.CalendarEventResponse;
+import com.sjoneon.cap.models.api.CalendarEventUpdateRequest;
+
+import com.sjoneon.cap.models.api.AlarmUpdateRequest;
 import com.sjoneon.cap.models.api.AlarmRequest;
 import com.sjoneon.cap.models.api.AlarmResponse;
 import java.util.List;
@@ -66,6 +69,15 @@ public interface DaySyncApiService {
     Call<List<CalendarEventResponse>> getUserEvents(@Path("user_uuid") String userUuid);
 
     /**
+     * 일정 수정
+     */
+    @PUT("/api/schedule/calendar/events/{event_id}")
+    Call<CalendarEventResponse> updateCalendarEvent(
+            @Path("event_id") int eventId,
+            @Body CalendarEventUpdateRequest request
+    );
+
+    /**
      * 일정 삭제
      */
     @DELETE("/api/schedule/calendar/events/{event_id}")
@@ -86,6 +98,15 @@ public interface DaySyncApiService {
      */
     @GET("/api/schedule/alarms/{user_uuid}")
     Call<List<AlarmResponse>> getUserAlarms(@Path("user_uuid") String userUuid);
+
+    /**
+     * 알람 수정
+     */
+    @PUT("/api/schedule/alarms/{alarm_id}")
+    Call<AlarmResponse> updateAlarm(
+            @Path("alarm_id") int alarmId,
+            @Body AlarmUpdateRequest request
+    );
 
     /**
      * 알람 삭제

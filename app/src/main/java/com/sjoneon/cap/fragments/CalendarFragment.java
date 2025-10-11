@@ -32,6 +32,7 @@ import com.sjoneon.cap.models.local.CalendarEvent;
 import com.sjoneon.cap.utils.ApiClient;
 import com.sjoneon.cap.models.api.CalendarEventRequest;
 import com.sjoneon.cap.models.api.CalendarEventResponse;
+import com.sjoneon.cap.models.api.CalendarEventUpdateRequest;
 import com.sjoneon.cap.models.api.ApiResponse;
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -85,7 +86,6 @@ public class CalendarFragment extends Fragment {
 
         Log.d(TAG, "Setup methods called");
 
-        // 서버에서 일정 불러오기
         loadEventsFromServer();
 
         Log.d(TAG, "Initial data loaded");
@@ -168,30 +168,32 @@ public class CalendarFragment extends Fragment {
                         List<CalendarEvent> existingEvents = eventRepository.getAllEvents();
 
                         for (CalendarEventResponse eventResponse : response.body()) {
-                            if (eventResponse == null || eventResponse.getEventTitle() == null ||
-                                    eventResponse.getEventStartTime() == null) {
-                                continue;
-                            }
-
-                            long dateTimeMillis = convertToMillis(eventResponse.getEventStartTime());
-                            if (dateTimeMillis == -1) continue;
-
-                            boolean isDuplicate = false;
-                            for (CalendarEvent existing : existingEvents) {
-                                if (existing.getTitle().equals(eventResponse.getEventTitle()) &&
-                                        existing.getDateTime() == dateTimeMillis) {
-                                    isDuplicate = true;
+                            boolean exists = false;
+                            for (CalendarEvent existingEvent : existingEvents) {
+                                if (existingEvent.getServerId() != null &&
+                                        existingEvent.getServerId() == eventResponse.getId()) {
+                                    exists = true;
                                     break;
                                 }
                             }
 
-                            if (!isDuplicate) {
-                                CalendarEvent localEvent = new CalendarEvent(
-                                        eventResponse.getEventTitle(),
-                                        eventResponse.getDescription(),
-                                        dateTimeMillis
-                                );
-                                eventRepository.addEvent(localEvent);
+                            if (!exists) {
+                                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+                                try {
+                                    Date startDate = sdf.parse(eventResponse.getEventStartTime());
+                                    if (startDate != null) {
+                                        CalendarEvent newEvent = new CalendarEvent(
+                                                eventResponse.getEventTitle(),
+                                                eventResponse.getDescription() != null ? eventResponse.getDescription() : "",
+                                                startDate.getTime()
+                                        );
+                                        newEvent.setServerId(eventResponse.getId());
+                                        eventRepository.addEvent(newEvent);
+                                        Log.d(TAG, "서버에서 가져온 일정 로컬에 추가: " + eventResponse.getEventTitle());
+                                    }
+                                } catch (Exception e) {
+                                    Log.e(TAG, "날짜 파싱 오류", e);
+                                }
                             }
                         }
 
@@ -206,37 +208,43 @@ public class CalendarFragment extends Fragment {
                 });
     }
 
-    private long convertToMillis(String isoDateString) {
-        if (isoDateString == null || isoDateString.isEmpty()) {
-            return -1;
-        }
-
-        try {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
-            Date date = sdf.parse(isoDateString);
-            return date == null ? -1 : date.getTime();
-        } catch (Exception e) {
-            Log.e(TAG, "날짜 변환 오류: " + isoDateString, e);
-            return -1;
-        }
-    }
-
     private void loadEventsForDate(long date) {
-        Log.d(TAG, "loadEventsForDate 시작: " + new Date(date));
+        Log.d(TAG, "loadEventsForDate 호출 - 날짜: " + new Date(date));
 
-        List<CalendarEvent> events = eventRepository.getEventsForDate(date);
-        Log.d(TAG, "Repository에서 로드된 이벤트 수: " + events.size());
+        Calendar startOfDay = Calendar.getInstance();
+        startOfDay.setTimeInMillis(date);
+        startOfDay.set(Calendar.HOUR_OF_DAY, 0);
+        startOfDay.set(Calendar.MINUTE, 0);
+        startOfDay.set(Calendar.SECOND, 0);
+        startOfDay.set(Calendar.MILLISECOND, 0);
 
+        Calendar endOfDay = Calendar.getInstance();
+        endOfDay.setTimeInMillis(date);
+        endOfDay.set(Calendar.HOUR_OF_DAY, 23);
+        endOfDay.set(Calendar.MINUTE, 59);
+        endOfDay.set(Calendar.SECOND, 59);
+        endOfDay.set(Calendar.MILLISECOND, 999);
+
+        long startTime = startOfDay.getTimeInMillis();
+        long endTime = endOfDay.getTimeInMillis();
+
+        Log.d(TAG, "검색 범위: " + new Date(startTime) + " ~ " + new Date(endTime));
+
+        List<CalendarEvent> allEvents = eventRepository.getAllEvents();
         currentEvents.clear();
-        currentEvents.addAll(events);
 
-        Log.d(TAG, "currentEvents 크기: " + currentEvents.size());
+        for (CalendarEvent event : allEvents) {
+            if (event.getDateTime() >= startTime && event.getDateTime() <= endTime) {
+                currentEvents.add(event);
+                Log.d(TAG, "이벤트 발견: " + event.getTitle() + " at " + new Date(event.getDateTime()));
+            }
+        }
+
+        Log.d(TAG, "선택된 날짜의 이벤트 수: " + currentEvents.size());
 
         if (eventAdapter != null) {
-            eventAdapter.updateEvents(new ArrayList<>(currentEvents));
+            eventAdapter.updateEvents(currentEvents);
             Log.d(TAG, "어댑터 업데이트 완료");
-        } else {
-            Log.e(TAG, "eventAdapter가 null입니다!");
         }
 
         updateEventListVisibility();
@@ -356,68 +364,63 @@ public class CalendarFragment extends Fragment {
         });
     }
 
-    private void showDateTimePicker(Calendar eventCalendar, TextView textView) {
-        int year = eventCalendar.get(Calendar.YEAR);
-        int month = eventCalendar.get(Calendar.MONTH);
-        int day = eventCalendar.get(Calendar.DAY_OF_MONTH);
+    private void showDateTimePicker(Calendar calendar, TextView textView) {
+        new DatePickerDialog(getContext(), R.style.DialogTheme,
+                (view, year, month, dayOfMonth) -> {
+                    calendar.set(Calendar.YEAR, year);
+                    calendar.set(Calendar.MONTH, month);
+                    calendar.set(Calendar.DAY_OF_MONTH, dayOfMonth);
 
-        DatePickerDialog datePickerDialog = new DatePickerDialog(getContext(), R.style.DialogTheme,
-                (view, selectedYear, selectedMonth, selectedDay) -> {
-                    eventCalendar.set(Calendar.YEAR, selectedYear);
-                    eventCalendar.set(Calendar.MONTH, selectedMonth);
-                    eventCalendar.set(Calendar.DAY_OF_MONTH, selectedDay);
-
-                    int hour = eventCalendar.get(Calendar.HOUR_OF_DAY);
-                    int minute = eventCalendar.get(Calendar.MINUTE);
-
-                    TimePickerDialog timePickerDialog = new TimePickerDialog(getContext(), R.style.DialogTheme,
-                            (timeView, selectedHour, selectedMinute) -> {
-                                eventCalendar.set(Calendar.HOUR_OF_DAY, selectedHour);
-                                eventCalendar.set(Calendar.MINUTE, selectedMinute);
-                                updateDateTimeDisplay(textView, eventCalendar.getTimeInMillis());
-                            }, hour, minute, true);
-
-                    timePickerDialog.show();
-                }, year, month, day);
-
-        datePickerDialog.show();
+                    new TimePickerDialog(getContext(), R.style.DialogTheme,
+                            (timeView, hourOfDay, minute) -> {
+                                calendar.set(Calendar.HOUR_OF_DAY, hourOfDay);
+                                calendar.set(Calendar.MINUTE, minute);
+                                updateDateTimeDisplay(textView, calendar.getTimeInMillis());
+                            },
+                            calendar.get(Calendar.HOUR_OF_DAY),
+                            calendar.get(Calendar.MINUTE),
+                            false
+                    ).show();
+                },
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)
+        ).show();
     }
 
     private void updateDateTimeDisplay(TextView textView, long dateTime) {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy년 MM월 dd일 HH:mm", Locale.getDefault());
-        textView.setText(sdf.format(new Date(dateTime)));
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
+        textView.setText(format.format(new Date(dateTime)));
     }
 
-    private void setupNotificationCheckboxes(LinearLayout container, CalendarEvent existingEvent) {
-        container.removeAllViews();
+    private void setupNotificationCheckboxes(LinearLayout layout, CalendarEvent existingEvent) {
+        layout.removeAllViews();
 
-        CalendarEvent.NotificationSetting.NotificationType[] types =
-                CalendarEvent.NotificationSetting.NotificationType.values();
+        for (CalendarEvent.NotificationSetting.NotificationType type :
+                CalendarEvent.NotificationSetting.NotificationType.values()) {
 
-        for (CalendarEvent.NotificationSetting.NotificationType type : types) {
             CheckBox checkBox = new CheckBox(getContext());
             checkBox.setText(type.getDisplayName());
-            checkBox.setTextColor(getResources().getColor(R.color.text_primary));
             checkBox.setTag(type);
 
             if (existingEvent != null && existingEvent.getNotificationSettings() != null) {
                 for (CalendarEvent.NotificationSetting setting : existingEvent.getNotificationSettings()) {
-                    if (setting.getType() == type) {
-                        checkBox.setChecked(setting.isEnabled());
+                    if (setting.getType() == type && setting.isEnabled()) {
+                        checkBox.setChecked(true);
                         break;
                     }
                 }
             }
 
-            container.addView(checkBox);
+            layout.addView(checkBox);
         }
     }
 
-    private List<CalendarEvent.NotificationSetting> collectNotificationSettings(LinearLayout container) {
+    private List<CalendarEvent.NotificationSetting> collectNotificationSettings(LinearLayout layout) {
         List<CalendarEvent.NotificationSetting> settings = new ArrayList<>();
 
-        for (int i = 0; i < container.getChildCount(); i++) {
-            View child = container.getChildAt(i);
+        for (int i = 0; i < layout.getChildCount(); i++) {
+            View child = layout.getChildAt(i);
             if (child instanceof CheckBox) {
                 CheckBox checkBox = (CheckBox) child;
                 CalendarEvent.NotificationSetting.NotificationType type =
@@ -448,7 +451,6 @@ public class CalendarFragment extends Fragment {
 
         Log.d(TAG, "이벤트 저장 완료, ID: " + eventId);
 
-        // 서버에 일정 추가
         createEventOnServer(title, description, dateTime);
 
         if (!notificationSettings.isEmpty()) {
@@ -549,6 +551,12 @@ public class CalendarFragment extends Fragment {
 
         eventRepository.updateEvent(event);
 
+        if (event.getServerId() != null) {
+            updateEventOnServer(event.getServerId(), title, description, dateTime);
+        } else {
+            Log.w(TAG, "서버 ID가 없어 로컬에만 수정됨");
+        }
+
         if (!notificationSettings.isEmpty()) {
             if (PermissionHelper.hasNotificationPermission(getContext()) &&
                     PermissionHelper.hasExactAlarmPermission(getContext())) {
@@ -564,6 +572,38 @@ public class CalendarFragment extends Fragment {
         Toast.makeText(getContext(), "일정이 수정되었습니다.", Toast.LENGTH_SHORT).show();
     }
 
+    private void updateEventOnServer(int serverId, String title, String description, long dateTime) {
+        if (ApiClient.getInstance() == null) {
+            Log.e(TAG, "ApiClient 없음");
+            return;
+        }
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+        String eventStartTime = sdf.format(new Date(dateTime));
+
+        CalendarEventUpdateRequest request = new CalendarEventUpdateRequest(title, eventStartTime);
+        request.setDescription(description);
+
+        ApiClient.getInstance().getApiService()
+                .updateCalendarEvent(serverId, request)
+                .enqueue(new Callback<CalendarEventResponse>() {
+                    @Override
+                    public void onResponse(Call<CalendarEventResponse> call,
+                                           Response<CalendarEventResponse> response) {
+                        if (response != null && response.isSuccessful()) {
+                            Log.d(TAG, "서버에 일정 수정 성공: ID=" + serverId);
+                        } else {
+                            Log.e(TAG, "서버 일정 수정 실패");
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<CalendarEventResponse> call, Throwable t) {
+                        Log.e(TAG, "서버 통신 실패", t);
+                    }
+                });
+    }
+
     private void showDeleteConfirmationDialog(CalendarEvent event) {
         new AlertDialog.Builder(getContext(), R.style.DialogTheme)
                 .setTitle("일정 삭제")
@@ -574,13 +614,10 @@ public class CalendarFragment extends Fragment {
     }
 
     private void deleteEvent(CalendarEvent event) {
-        // 시스템 알림 취소
         alarmManager.cancelEventNotifications(event);
 
-        // 로컬에서 삭제
         eventRepository.deleteEvent(event.getId());
 
-        // 서버에서도 삭제
         if (event.getServerId() != null) {
             deleteEventFromServer(event.getServerId());
         } else {
@@ -722,7 +759,7 @@ public class CalendarFragment extends Fragment {
                     public void onResponse(Call<List<CalendarEventResponse>> call,
                                            Response<List<CalendarEventResponse>> response) {
                         if (response != null && response.isSuccessful() && response.body() != null) {
-                            mapServerIdsToLocalEvents(response.body());
+                            Log.d(TAG, "서버 동기화 성공: " + response.body().size() + "개");
                         }
                     }
 
@@ -731,35 +768,5 @@ public class CalendarFragment extends Fragment {
                         Log.e(TAG, "서버 동기화 실패", t);
                     }
                 });
-    }
-
-    private void mapServerIdsToLocalEvents(List<CalendarEventResponse> serverEvents) {
-        List<CalendarEvent> localEvents = eventRepository.getAllEvents();
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
-
-        for (CalendarEvent localEvent : localEvents) {
-            if (localEvent.getServerId() != null) {
-                continue;
-            }
-
-            for (CalendarEventResponse serverEvent : serverEvents) {
-                if (!localEvent.getTitle().equals(serverEvent.getEventTitle())) {
-                    continue;
-                }
-
-                try {
-                    Date serverDate = sdf.parse(serverEvent.getEventStartTime());
-                    if (serverDate != null &&
-                            Math.abs(serverDate.getTime() - localEvent.getDateTime()) < 60000) {
-                        localEvent.setServerId(serverEvent.getId());
-                        eventRepository.updateEvent(localEvent);
-                        Log.d(TAG, "서버 ID 매핑: " + localEvent.getTitle() + " -> " + serverEvent.getId());
-                        break;
-                    }
-                } catch (Exception e) {
-                    Log.e(TAG, "날짜 파싱 오류", e);
-                }
-            }
-        }
     }
 }

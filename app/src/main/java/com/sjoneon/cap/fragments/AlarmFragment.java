@@ -34,6 +34,7 @@ import com.sjoneon.cap.repositories.AlarmRepository;
 import com.sjoneon.cap.utils.ApiClient;
 import com.sjoneon.cap.models.api.AlarmRequest;
 import com.sjoneon.cap.models.api.AlarmResponse;
+import com.sjoneon.cap.models.api.AlarmUpdateRequest;
 import com.sjoneon.cap.models.api.ApiResponse;
 
 import retrofit2.Call;
@@ -323,6 +324,34 @@ public class AlarmFragment extends Fragment {
                 });
     }
 
+    private void updateAlarmOnServer(int serverId, String label, String alarmTime) {
+        if (ApiClient.getInstance() == null) {
+            Log.e(TAG, "ApiClient 없음");
+            return;
+        }
+
+        AlarmUpdateRequest request = new AlarmUpdateRequest(alarmTime, label);
+
+        ApiClient.getInstance().getApiService()
+                .updateAlarm(serverId, request)
+                .enqueue(new Callback<AlarmResponse>() {
+                    @Override
+                    public void onResponse(Call<AlarmResponse> call,
+                                           Response<AlarmResponse> response) {
+                        if (response != null && response.isSuccessful()) {
+                            Log.d(TAG, "서버에 알람 수정 성공: ID=" + serverId);
+                        } else {
+                            Log.e(TAG, "서버 알람 수정 실패");
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<AlarmResponse> call, Throwable t) {
+                        Log.e(TAG, "서버 통신 실패", t);
+                    }
+                });
+    }
+
     @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -494,6 +523,21 @@ public class AlarmFragment extends Fragment {
                             soundEnabled, vibrationEnabled);
 
                     alarmRepository.updateAlarm(alarm);
+
+                    if (alarm.getServerId() != null) {
+                        Calendar calendar = Calendar.getInstance();
+                        String[] timeParts = alarm.getTime().split(":");
+                        calendar.set(Calendar.HOUR_OF_DAY, Integer.parseInt(timeParts[0]));
+                        calendar.set(Calendar.MINUTE, Integer.parseInt(timeParts[1]));
+                        calendar.set(Calendar.SECOND, 0);
+
+                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+                        String alarmTime = sdf.format(calendar.getTime());
+
+                        updateAlarmOnServer(alarm.getServerId(), label, alarmTime);
+                    } else {
+                        Log.w(TAG, "서버 ID가 없어 로컬에만 수정됨");
+                    }
 
                     if (alarm.isEnabled()) {
                         String[] timeParts = alarm.getTime().split(":");
