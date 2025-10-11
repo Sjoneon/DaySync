@@ -57,6 +57,11 @@ import retrofit2.Response;
 import java.util.ArrayList;
 import java.util.List;
 
+
+import com.sjoneon.cap.models.api.UserCreateRequest;
+import com.sjoneon.cap.models.api.UserCreateResponse;
+import com.sjoneon.cap.models.api.UserResponse;
+
 /**
  * 앱의 메인 액티비티
  * 네비게이션 드로어와 채팅 인터페이스, 프로필 기능을 관리하며,
@@ -127,6 +132,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         // ===== [새로 추가] AI 서비스 초기화 =====
         initializeAiServices();
         loadUserUuid();
+        checkAndSyncUserWithServer();
         checkRecordAudioPermission();
         // =========================================
 
@@ -785,5 +791,126 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             toolbar.setTitle(R.string.menu_alarm);
             Log.d(TAG, "AlarmFragment 새로고침 완료");
         }
+    }
+
+    /**
+     * 사용자 UUID가 서버에 등록되어 있는지 확인하고, 없으면 백그라운드로 등록하는 메서드
+     */
+    private void checkAndSyncUserWithServer() {
+        SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+        boolean needsSync = prefs.getBoolean("needs_server_sync", false);
+
+        if (!needsSync) {
+            Log.d(TAG, "서버 동기화 불필요");
+            return;
+        }
+
+        if (userUuid == null || userUuid.isEmpty()) {
+            Log.w(TAG, "UUID가 없어 서버 동기화 불가");
+            return;
+        }
+
+        Log.d(TAG, "백그라운드에서 서버 동기화 시작");
+
+        new Thread(() -> {
+            try {
+                Thread.sleep(2000);
+
+                runOnUiThread(() -> {
+                    verifyOrCreateUserOnServer();
+                });
+            } catch (InterruptedException e) {
+                Log.e(TAG, "서버 동기화 대기 중 인터럽트", e);
+            }
+        }).start();
+    }
+
+    /**
+     * 서버에 사용자가 있는지 확인하고, 없으면 생성하는 메서드
+     */
+    private void verifyOrCreateUserOnServer() {
+        if (apiService == null || userUuid == null) {
+            Log.e(TAG, "API 서비스 또는 UUID가 없습니다");
+            return;
+        }
+
+        Log.d(TAG, "서버에 사용자 존재 확인 중: " + userUuid);
+
+        apiService.getUser(userUuid).enqueue(new Callback<UserResponse>() {
+            @Override
+            public void onResponse(@NonNull Call<UserResponse> call, @NonNull Response<UserResponse> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Log.d(TAG, "사용자가 서버에 이미 등록되어 있음");
+                    updateSyncFlag(false);
+                } else if (response.code() == 404) {
+                    Log.w(TAG, "서버에 사용자 없음 - 자동 생성 시도");
+                    createUserOnServerBackground();
+                } else {
+                    Log.e(TAG, "사용자 조회 실패 - 응답 코드: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<UserResponse> call, @NonNull Throwable t) {
+                Log.e(TAG, "서버 사용자 조회 실패", t);
+            }
+        });
+    }
+
+    /**
+     * 백그라운드에서 서버에 사용자를 생성하는 메서드
+     */
+    private void createUserOnServerBackground() {
+        SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+        String nickname = prefs.getString("nickname", "사용자");
+
+        UserCreateRequest request = new UserCreateRequest(nickname, 1800);
+
+        Log.d(TAG, "백그라운드에서 서버에 사용자 생성 중...");
+
+        apiService.createUser(request).enqueue(new Callback<UserCreateResponse>() {
+            @Override
+            public void onResponse(@NonNull Call<UserCreateResponse> call, @NonNull Response<UserCreateResponse> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String serverUuid = response.body().getUuid();
+
+                    if (serverUuid != null && !serverUuid.isEmpty()) {
+                        SharedPreferences.Editor editor = prefs.edit();
+                        editor.putString("user_uuid", serverUuid);
+                        editor.putBoolean("needs_server_sync", false);
+                        editor.apply();
+
+                        userUuid = serverUuid;
+
+                        Log.d(TAG, "백그라운드 서버 등록 성공: " + serverUuid);
+
+                        runOnUiThread(() -> {
+                            Toast.makeText(MainActivity.this,
+                                    "서버 연결 완료",
+                                    Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                } else {
+                    Log.e(TAG, "백그라운드 서버 등록 실패 - 응답 코드: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<UserCreateResponse> call, @NonNull Throwable t) {
+                Log.e(TAG, "백그라운드 서버 등록 실패", t);
+            }
+        });
+    }
+
+    /**
+     * 서버 동기화 플래그를 업데이트하는 메서드
+     */
+    private void updateSyncFlag(boolean needsSync) {
+        SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putBoolean("needs_server_sync", needsSync);
+        editor.apply();
+
+        Log.d(TAG, "서버 동기화 플래그 업데이트: " + needsSync);
     }
 }

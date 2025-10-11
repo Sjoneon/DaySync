@@ -82,7 +82,7 @@ public class LoginActivity extends AppCompatActivity {
 
             if (!existingNickname.isEmpty()) {
                 etNickname.setText(existingNickname);
-                etNickname.setSelection(existingNickname.length()); // 커서를 끝으로 이동
+                etNickname.setSelection(existingNickname.length());
                 Log.d(TAG, "기존 닉네임 로드됨: " + existingNickname);
             }
         } catch (Exception e) {
@@ -260,6 +260,7 @@ public class LoginActivity extends AppCompatActivity {
             editor.putString("user_uuid", localUuid);
             editor.putString("nickname", nickname);
             editor.putBoolean("is_logged_in", true);
+            editor.putBoolean("needs_server_sync", true);
             editor.putLong("setup_time", System.currentTimeMillis());
             editor.apply();
 
@@ -303,7 +304,7 @@ public class LoginActivity extends AppCompatActivity {
                 Toast.LENGTH_SHORT).show();
 
         Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-        intent.putExtra("user_nickname", nickname); // 닉네임을 MainActivity에 전달
+        intent.putExtra("user_nickname", nickname);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
