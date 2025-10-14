@@ -116,4 +116,19 @@ public class AlarmRepository {
         }
         return null;
     }
+
+    /**
+     * 서버 ID로 알람 찾기
+     */
+    public synchronized AlarmItem getAlarmByServerId(Integer serverId) {
+        if (serverId == null) {
+            return null;
+        }
+        for (AlarmItem alarm : alarms) {
+            if (serverId.equals(alarm.getServerId())) {
+                return alarm;
+            }
+        }
+        return null;
+    }
 }

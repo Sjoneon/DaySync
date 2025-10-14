@@ -116,7 +116,7 @@ public class AlarmFragment extends Fragment {
                     public void onResponse(Call<List<AlarmResponse>> call,
                                            Response<List<AlarmResponse>> response) {
                         if (response != null && response.isSuccessful() && response.body() != null) {
-                            mapServerIdsToLocalAlarms(response.body());
+                            syncAlarmsWithServer(response.body());
                         }
                     }
 
@@ -127,34 +127,56 @@ public class AlarmFragment extends Fragment {
                 });
     }
 
-    private void mapServerIdsToLocalAlarms(List<AlarmResponse> serverAlarms) {
+    private void syncAlarmsWithServer(List<AlarmResponse> serverAlarms) {
         SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
         SimpleDateFormat serverFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
 
-        for (AlarmItem localAlarm : alarmList) {
-            if (localAlarm.getServerId() != null) {
-                continue;
-            }
+        int syncedCount = 0;
+        int addedCount = 0;
 
-            for (AlarmResponse serverAlarm : serverAlarms) {
-                if (!localAlarm.getLabel().equals(serverAlarm.getLabel())) {
-                    continue;
-                }
+        for (AlarmResponse serverAlarm : serverAlarms) {
+            try {
+                Date serverTime = serverFormat.parse(serverAlarm.getAlarmTime());
+                String timeString = timeFormat.format(serverTime);
 
-                try {
-                    Date serverTime = serverFormat.parse(serverAlarm.getAlarmTime());
-                    String serverTimeStr = timeFormat.format(serverTime);
+                AlarmItem existingAlarm = alarmRepository.getAlarmByServerId(serverAlarm.getId());
 
-                    if (serverTimeStr.equals(localAlarm.getTime())) {
-                        localAlarm.setServerId(serverAlarm.getId());
-                        alarmRepository.updateAlarm(localAlarm);
-                        Log.d(TAG, "서버 ID 매핑: " + localAlarm.getLabel() + " -> " + serverAlarm.getId());
-                        break;
+                if (existingAlarm != null) {
+                    // 기존 알람 업데이트
+                    existingAlarm.setTime(timeString);
+                    existingAlarm.setLabel(serverAlarm.getLabel());
+                    existingAlarm.setEnabled(serverAlarm.isEnabled());
+                    alarmRepository.updateAlarm(existingAlarm);
+                    syncedCount++;
+                } else {
+                    // 새로운 알람 추가
+                    int localId = (int) System.currentTimeMillis() + serverAlarm.getId();
+                    AlarmItem newAlarm = new AlarmItem(localId, timeString,
+                            serverAlarm.getLabel(), serverAlarm.isEnabled(), true, true);
+                    newAlarm.setServerId(serverAlarm.getId());
+
+                    alarmRepository.addAlarm(newAlarm);
+                    addedCount++;
+
+                    // 알람이 활성화되어 있으면 스케줄링
+                    if (serverAlarm.isEnabled()) {
+                        String[] timeParts = timeString.split(":");
+                        int hour = Integer.parseInt(timeParts[0]);
+                        int minute = Integer.parseInt(timeParts[1]);
+                        AlarmScheduler.scheduleAlarm(getContext(), localId,
+                                hour, minute, serverAlarm.getLabel());
                     }
-                } catch (Exception e) {
-                    Log.e(TAG, "시간 파싱 오류", e);
                 }
+            } catch (Exception e) {
+                Log.e(TAG, "알람 동기화 오류: " + serverAlarm.getId(), e);
             }
+        }
+
+        // UI 새로고침
+        loadAlarmsFromRepository();
+
+        if (addedCount > 0 || syncedCount > 0) {
+            Log.d(TAG, "동기화 완료: 추가 " + addedCount + "개, 업데이트 " + syncedCount + "개");
         }
     }
 
@@ -390,6 +412,8 @@ public class AlarmFragment extends Fragment {
         public boolean isVibrationEnabled() { return vibrationEnabled; }
         public Integer getServerId() { return serverId; }
 
+        public void setId(int id) { this.id = id; }
+        public void setTime(String time) { this.time = time; }
         public void setEnabled(boolean enabled) { isEnabled = enabled; }
         public void setLabel(String label) { this.label = label; }
         public void setSoundEnabled(boolean soundEnabled) { this.soundEnabled = soundEnabled; }
