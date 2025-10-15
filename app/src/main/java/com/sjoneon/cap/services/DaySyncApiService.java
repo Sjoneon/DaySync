@@ -14,6 +14,10 @@ import com.sjoneon.cap.models.api.CalendarEventUpdateRequest;
 import com.sjoneon.cap.models.api.AlarmUpdateRequest;
 import com.sjoneon.cap.models.api.AlarmRequest;
 import com.sjoneon.cap.models.api.AlarmResponse;
+
+import com.sjoneon.cap.models.api.SessionListResponse;
+import com.sjoneon.cap.models.api.MessageListResponse;
+
 import java.util.List;
 
 import retrofit2.Call;
@@ -30,12 +34,41 @@ import retrofit2.http.Path;
  */
 public interface DaySyncApiService {
 
+    // ========================================
+    // AI 채팅 API
+    // ========================================
+
     /**
      * AI 채팅 메시지 전송
      * POST /api/ai/chat
      */
     @POST("api/ai/chat")
     Call<ChatResponse> sendChatMessage(@Body ChatRequest request);
+
+    /**
+     * 사용자의 세션 목록 조회 (최근 15개)
+     * GET /api/ai/sessions/{user_uuid}
+     */
+    @GET("api/ai/sessions/{user_uuid}")
+    Call<SessionListResponse> getUserSessions(@Path("user_uuid") String userUuid);
+
+    /**
+     * 특정 세션의 메시지 목록 조회 (최대 50개)
+     * GET /api/ai/sessions/{session_id}/messages
+     */
+    @GET("api/ai/sessions/{session_id}/messages")
+    Call<MessageListResponse> getSessionMessages(@Path("session_id") int sessionId);
+
+    /**
+     * 세션 삭제
+     * DELETE /api/ai/sessions/{session_id}
+     */
+    @DELETE("api/ai/sessions/{session_id}")
+    Call<ApiResponse> deleteSession(@Path("session_id") int sessionId);
+
+    // ========================================
+    // 사용자 관리 API
+    // ========================================
 
     /**
      * 새 사용자 생성
@@ -50,7 +83,6 @@ public interface DaySyncApiService {
      */
     @GET("api/users/{uuid}")
     Call<UserResponse> getUser(@Path("uuid") String uuid);
-
 
     // ========================================
     // 일정 관리 API

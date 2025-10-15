@@ -42,39 +42,37 @@ import com.sjoneon.cap.fragments.WeatherFragment;
 import com.sjoneon.cap.helpers.NavigationCategoryHelper;
 import com.sjoneon.cap.helpers.PermissionHelper;
 import com.sjoneon.cap.models.local.Message;
-
-// ===== [새로 추가] AI 채팅 기능을 위한 import =====
 import com.sjoneon.cap.services.SpeechToTextService;
 import com.sjoneon.cap.services.DaySyncApiService;
 import com.sjoneon.cap.models.api.ChatRequest;
 import com.sjoneon.cap.models.api.ChatResponse;
-import com.sjoneon.cap.utils.ApiClient;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
-// =================================================
-
-import java.util.ArrayList;
-import java.util.List;
-
-
 import com.sjoneon.cap.models.api.UserCreateRequest;
 import com.sjoneon.cap.models.api.UserCreateResponse;
 import com.sjoneon.cap.models.api.UserResponse;
+import com.sjoneon.cap.models.api.SessionListResponse;
+import com.sjoneon.cap.models.api.MessageListResponse;
+import com.sjoneon.cap.models.api.SessionInfo;
+import com.sjoneon.cap.models.api.MessageInfo;
+import com.sjoneon.cap.utils.ApiClient;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 /**
  * 앱의 메인 액티비티
- * 네비게이션 드로어와 채팅 인터페이스, 프로필 기능을 관리하며,
- * 지도 등 다양한 프래그먼트를 호스팅합니다.
- * 권한 관리 기능 추가됨.
+ * 네비게이션 드로어와 채팅 인터페이스, 프로필 기능을 관리
  */
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
     private static final String TAG = "MainActivity";
-
-    // ===== [새로 추가] 음성 인식 권한 요청 코드 =====
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 101;
-    // ==============================================
 
     private DrawerLayout drawerLayout;
     private NavigationView navigationView;
@@ -86,23 +84,18 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private String userNickname;
     private ChatAdapter chatAdapter;
 
-    // 네비게이션 헤더 요소들
     private ImageView profileImageView;
     private TextView textViewUsername;
 
-    // 채팅 메시지 목록
     private List<Message> messageList = new ArrayList<>();
 
-    // AI 채팅 기능을 위한 필드
     private SpeechToTextService speechToTextService;
     private DaySyncApiService apiService;
     private String userUuid;
     private Integer sessionId;
 
-    // 키보드 처리를 위한 필드 추가
     private View inputLayout;
     private View chatContainer;
-    // ================================================
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -111,39 +104,30 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         Log.d(TAG, "MainActivity 생성 시작");
 
-        // 사용자 닉네임 가져오기
         SharedPreferences preferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
         userNickname = preferences.getString("nickname", getString(R.string.app_name));
 
-        // 뷰 초기화
         initializeViews();
 
-        // 툴바 설정
         setSupportActionBar(toolbar);
 
-        // 액션바에 홈 버튼 표시 (네비게이션 드로어 열기용)
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             getSupportActionBar().setHomeButtonEnabled(true);
         }
 
-        // 네비게이션 드로어 설정
         setupNavigationDrawer();
-
-        // 채팅 입력 및 버튼 리스너 설정
         setupChatInterface();
 
-        // AI 서비스 초기화
         initializeAiServices();
         loadUserUuid();
         checkAndSyncUserWithServer();
         checkRecordAudioPermission();
 
-        // 키보드 처리 설정 추가
         setupKeyboardHandling();
-
-        // 권한 체크 (약간의 지연 후 실행)
         checkPermissionsAfterDelay();
+
+        loadChatHistory();
 
         Log.d(TAG, "MainActivity 생성 완료");
     }
@@ -152,7 +136,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
      * 권한 체크 (지연 실행)
      */
     private void checkPermissionsAfterDelay() {
-        // UI가 완전히 로드된 후 권한 체크 (3초 후)
         new android.os.Handler().postDelayed(new Runnable() {
             @Override
             public void run() {
@@ -160,18 +143,17 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     Log.d(TAG, "권한 상태 체크 시작");
                     PermissionHelper.logPermissionStatus(MainActivity.this);
 
-                    // 권한이 없는 경우에만 다이얼로그 표시
                     if (!PermissionHelper.hasNotificationPermission(MainActivity.this) ||
                             !PermissionHelper.hasExactAlarmPermission(MainActivity.this)) {
                         showPermissionInfoDialog();
                     }
                 }
             }
-        }, 3000); // 3초 후 실행
+        }, 3000);
     }
 
     /**
-     * 권한 안내 다이얼로그 표시
+     * 권한 안내 다이얼로그
      */
     private void showPermissionInfoDialog() {
         new AlertDialog.Builder(this, R.style.DialogTheme)
@@ -193,13 +175,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
-        // ===== [기존] 알림 권한 처리 =====
         if (requestCode == PermissionHelper.REQUEST_NOTIFICATION_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.d(TAG, "알림 권한이 허용되었습니다");
                 Toast.makeText(this, "알림 권한이 허용되었습니다", Toast.LENGTH_SHORT).show();
 
-                // 정확한 알람 권한도 체크
                 if (!PermissionHelper.hasExactAlarmPermission(this)) {
                     PermissionHelper.requestExactAlarmPermission(this);
                 }
@@ -209,7 +189,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         }
 
-        // 음성 인식 권한 처리
         if (requestCode == REQUEST_RECORD_AUDIO_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.d(TAG, "음성 인식 권한 허용됨");
@@ -238,46 +217,38 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 뷰 초기화 메서드
+     * 뷰 초기화
      */
     private void initializeViews() {
-        // 툴바 및 드로어 요소 찾기
         toolbar = findViewById(R.id.toolbar);
         drawerLayout = findViewById(R.id.drawer_layout);
         navigationView = findViewById(R.id.nav_view);
 
-        // 채팅 인터페이스 요소 찾기
         recyclerView = findViewById(R.id.recyclerView);
         editTextMessage = findViewById(R.id.editTextMessage);
         buttonSend = findViewById(R.id.buttonSend);
         buttonVoice = findViewById(R.id.buttonVoice);
 
-        // 키보드 처리를 위한 레이아웃 찾기
         inputLayout = findViewById(R.id.inputLayout);
         chatContainer = findViewById(R.id.chat_container);
 
-        // 네비게이션 헤더에서 프로필 요소들 찾기
         View headerView = navigationView.getHeaderView(0);
         profileImageView = headerView.findViewById(R.id.profileImageView);
         textViewUsername = headerView.findViewById(R.id.textViewUsername);
 
-        // 네비게이션 헤더 초기 설정
         updateNavigationHeader();
 
-        // 프로필 이미지 클릭 리스너 설정
         setupProfileImageClickListener();
 
-        // 리사이클러 뷰 설정
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         chatAdapter = new ChatAdapter(messageList);
         recyclerView.setAdapter(chatAdapter);
 
-        // 환영 메시지 추가
         addWelcomeMessage();
     }
 
     /**
-     * 네비게이션 헤더를 업데이트하는 메서드
+     * 네비게이션 헤더 업데이트
      */
     public void updateNavigationHeader() {
         SharedPreferences preferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
@@ -289,8 +260,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 키보드 처리를 설정하는 메서드
-     * WindowInsets API를 사용하여 키보드 높이를 감지하고 UI를 조정합니다
+     * 키보드 처리 설정
      */
     private void setupKeyboardHandling() {
         if (chatContainer == null || inputLayout == null) {
@@ -303,12 +273,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 android.graphics.Insets imeInsets = insets.getInsets(android.view.WindowInsets.Type.ime());
                 int imeHeight = imeInsets.bottom;
 
-                // 키보드가 올라온 경우
                 if (imeHeight > 0) {
-                    // inputLayout을 키보드 위로 이동
                     inputLayout.setTranslationY(-imeHeight);
 
-                    // RecyclerView의 bottom padding 조정
                     recyclerView.setPadding(
                             recyclerView.getPaddingLeft(),
                             recyclerView.getPaddingTop(),
@@ -316,10 +283,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             imeHeight + inputLayout.getHeight()
                     );
 
-                    // 최신 메시지로 스크롤
                     scrollToBottom();
                 } else {
-                    // 키보드가 내려간 경우 원래대로
                     inputLayout.setTranslationY(0);
                     recyclerView.setPadding(
                             recyclerView.getPaddingLeft(),
@@ -332,16 +297,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 return insets;
             });
         } else {
-            // Android R 미만 버전을 위한 처리
             chatContainer.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
                 android.graphics.Rect r = new android.graphics.Rect();
                 chatContainer.getWindowVisibleDisplayFrame(r);
                 int screenHeight = chatContainer.getRootView().getHeight();
                 int keypadHeight = screenHeight - r.bottom;
 
-                // 키보드 높이가 화면의 15% 이상인 경우 키보드가 올라온 것으로 판단
                 if (keypadHeight > screenHeight * 0.15) {
-                    // 키보드가 올라온 경우
                     inputLayout.setTranslationY(-keypadHeight);
 
                     recyclerView.setPadding(
@@ -353,7 +315,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
                     scrollToBottom();
                 } else {
-                    // 키보드가 내려간 경우
                     inputLayout.setTranslationY(0);
                     recyclerView.setPadding(
                             recyclerView.getPaddingLeft(),
@@ -367,27 +328,20 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 프로필 이미지 클릭 리스너를 설정하는 메서드
+     * 프로필 이미지 클릭 리스너
      */
     private void setupProfileImageClickListener() {
         if (profileImageView != null) {
             profileImageView.setOnClickListener(v -> {
-                // 네비게이션 드로어 닫기
                 drawerLayout.closeDrawer(GravityCompat.START);
-
-                // 설정 Fragment로 이동
                 showFragment(new SettingsFragment());
                 toolbar.setTitle("개인설정");
             });
         }
 
-        // 사용자 이름도 클릭 가능하게 설정
         if (textViewUsername != null) {
             textViewUsername.setOnClickListener(v -> {
-                // 네비게이션 드로어 닫기
                 drawerLayout.closeDrawer(GravityCompat.START);
-
-                // 설정 Fragment로 이동
                 showFragment(new SettingsFragment());
                 toolbar.setTitle("개인설정");
             });
@@ -395,62 +349,50 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 네비게이션 드로어 설정 메서드
+     * 네비게이션 드로어 설정
      */
     private void setupNavigationDrawer() {
-        // 네비게이션 드로어 토글 설정
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
                 this, drawerLayout, toolbar,
                 R.string.navigation_drawer_open, R.string.navigation_drawer_close);
 
-        // 토글 아이콘(햄버거 메뉴) 색상 설정
         toggle.getDrawerArrowDrawable().setColor(ContextCompat.getColor(this, R.color.text_primary));
 
         drawerLayout.addDrawerListener(toggle);
         toggle.syncState();
 
-        // 네비게이션 뷰에 리스너 설정
         navigationView.setNavigationItemSelectedListener(this);
 
-        // 전체 메뉴 아이템 및 카테고리 텍스트 스타일 적용
         NavigationCategoryHelper.styleNavigationMenu(this, navigationView);
 
-        // 메뉴 아이콘 색상 설정
         navigationView.setItemIconTintList(ColorStateList.valueOf(
                 ContextCompat.getColor(this, R.color.text_primary)));
 
-        // 아이템 텍스트 색상 설정
         navigationView.setItemTextColor(ColorStateList.valueOf(
                 ContextCompat.getColor(this, R.color.text_primary)));
     }
 
     /**
-     * 채팅 인터페이스 설정 메서드
+     * 채팅 인터페이스 설정
      */
     private void setupChatInterface() {
-        // 메시지 전송 버튼 클릭 리스너
         buttonSend.setOnClickListener(v -> {
             String messageContent = editTextMessage.getText().toString().trim();
             if (!messageContent.isEmpty()) {
-                // 사용자 메시지 추가
                 sendMessage(messageContent);
                 editTextMessage.setText("");
             }
         });
 
-        // 음성 입력 버튼 클릭 리스너
         buttonVoice.setOnClickListener(v -> {
             toggleSpeechRecognition();
         });
-        // ==============================================
     }
 
-    // AI 서비스 초기화 메서드
     /**
-     * AI 서비스 초기화 (STT + API)
+     * AI 서비스 초기화
      */
     private void initializeAiServices() {
-        // STT 서비스 초기화
         speechToTextService = new SpeechToTextService(this);
         speechToTextService.setListener(new SpeechToTextService.SpeechRecognitionListener() {
             @Override
@@ -484,7 +426,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         });
 
-        // API 서비스 초기화
         apiService = ApiClient.getInstance().getApiService();
 
         Log.d(TAG, "AI 서비스 초기화 완료");
@@ -497,7 +438,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
         userUuid = prefs.getString("user_uuid", null);
 
-        // sessionId는 int로 저장되므로 -1을 기본값으로 사용
         int savedSessionId = prefs.getInt("session_id", -1);
         sessionId = (savedSessionId == -1) ? null : savedSessionId;
 
@@ -542,7 +482,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
      * 음성 인식 토글
      */
     private void toggleSpeechRecognition() {
-        // 권한 체크
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(this, "음성 인식 권한이 필요합니다", Toast.LENGTH_SHORT).show();
@@ -550,7 +489,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             return;
         }
 
-        // 음성 인식 시작/중지
         if (speechToTextService != null) {
             if (speechToTextService.isListening()) {
                 speechToTextService.stopListening();
@@ -563,22 +501,140 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
+     * 최근 대화 내역 불러오기
+     */
+    private void loadChatHistory() {
+        if (userUuid == null || userUuid.isEmpty()) {
+            Log.w(TAG, "UUID가 없어 대화 내역을 불러올 수 없습니다");
+            return;
+        }
+
+        if (apiService == null) {
+            Log.e(TAG, "API 서비스가 초기화되지 않았습니다");
+            return;
+        }
+
+        Log.d(TAG, "대화 내역 불러오기 시작: " + userUuid);
+
+        apiService.getUserSessions(userUuid).enqueue(new Callback<SessionListResponse>() {
+            @Override
+            public void onResponse(Call<SessionListResponse> call, Response<SessionListResponse> response) {
+                if (response == null || !response.isSuccessful()) {
+                    Log.w(TAG, "세션 목록 조회 실패: " + (response != null ? response.code() : "null response"));
+                    return;
+                }
+
+                SessionListResponse sessionListResponse = response.body();
+                if (sessionListResponse == null || !sessionListResponse.isSuccess()) {
+                    Log.w(TAG, "세션 응답이 null이거나 실패");
+                    return;
+                }
+
+                List<SessionInfo> sessions = sessionListResponse.getSessions();
+                if (sessions != null && !sessions.isEmpty()) {
+                    SessionInfo latestSession = sessions.get(0);
+                    sessionId = latestSession.getId();
+                    Log.d(TAG, "최근 세션 발견: " + sessionId);
+                    loadSessionMessages(sessionId);
+                } else {
+                    Log.d(TAG, "저장된 대화 내역이 없습니다");
+                }
+            }
+
+            @Override
+            public void onFailure(Call<SessionListResponse> call, Throwable t) {
+                Log.e(TAG, "세션 목록 조회 중 오류 발생", t);
+            }
+        });
+    }
+
+    /**
+     * 세션의 메시지 불러오기
+     */
+    private void loadSessionMessages(int sessionId) {
+        if (apiService == null) {
+            Log.e(TAG, "API 서비스가 초기화되지 않았습니다");
+            return;
+        }
+
+        apiService.getSessionMessages(sessionId).enqueue(new Callback<MessageListResponse>() {
+            @Override
+            public void onResponse(Call<MessageListResponse> call, Response<MessageListResponse> response) {
+                if (response == null || !response.isSuccessful()) {
+                    Log.w(TAG, "메시지 목록 조회 실패: " + (response != null ? response.code() : "null response"));
+                    return;
+                }
+
+                MessageListResponse messageListResponse = response.body();
+                if (messageListResponse == null || !messageListResponse.isSuccess()) {
+                    Log.w(TAG, "메시지 응답이 null이거나 실패");
+                    return;
+                }
+
+                List<MessageInfo> messages = messageListResponse.getMessages();
+                if (messages != null && !messages.isEmpty()) {
+                    messageList.clear();
+
+                    for (MessageInfo messageInfo : messages) {
+                        long timestamp = parseTimestamp(messageInfo.getCreatedAt());
+                        Message message = new Message(
+                                messageInfo.getContent(),
+                                messageInfo.isUser(),
+                                timestamp
+                        );
+                        messageList.add(message);
+                    }
+
+                    runOnUiThread(() -> {
+                        chatAdapter.notifyDataSetChanged();
+                        scrollToBottom();
+                    });
+
+                    Log.d(TAG, "메시지 " + messages.size() + "개 불러오기 완료");
+                } else {
+                    Log.d(TAG, "세션에 메시지가 없습니다");
+                }
+            }
+
+            @Override
+            public void onFailure(Call<MessageListResponse> call, Throwable t) {
+                Log.e(TAG, "메시지 목록 조회 중 오류 발생", t);
+            }
+        });
+    }
+
+    /**
+     * ISO 8601 타임스탬프를 밀리초로 변환
+     */
+    private long parseTimestamp(String isoTimestamp) {
+        if (isoTimestamp == null || isoTimestamp.isEmpty()) {
+            return System.currentTimeMillis();
+        }
+
+        try {
+            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+            Date date = format.parse(isoTimestamp);
+            return date != null ? date.getTime() : System.currentTimeMillis();
+        } catch (Exception e) {
+            Log.e(TAG, "타임스탬프 파싱 실패: " + isoTimestamp, e);
+            return System.currentTimeMillis();
+        }
+    }
+
+    /**
      * API로 메시지 전송
      */
     private void sendMessageToApi(String messageText) {
-        // UUID 체크
         if (userUuid == null) {
             Log.w(TAG, "사용자 UUID가 없습니다. API 호출 중단");
             Toast.makeText(this, "사용자 정보를 불러오는 중입니다", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // ChatRequest 생성 (context는 null)
         ChatRequest request = new ChatRequest(userUuid, messageText, sessionId);
 
         Log.d(TAG, "API 호출 시작 - UUID: " + userUuid + ", SessionID: " + sessionId);
 
-        // Retrofit 호출
         Call<ChatResponse> call = apiService.sendChatMessage(request);
         call.enqueue(new Callback<ChatResponse>() {
             @Override
@@ -588,7 +644,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     ChatResponse chatResponse = response.body();
 
                     if (chatResponse.isSuccess()) {
-                        // AI 응답을 채팅에 추가
                         String aiMessage = chatResponse.getAiResponse();
 
                         if (aiMessage != null && !aiMessage.isEmpty()) {
@@ -596,28 +651,23 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             Log.d(TAG, "AI 응답 수신: " + aiMessage);
                         }
 
-                        // 세션 ID 업데이트 (null 체크)
                         if (chatResponse.getSessionId() != null) {
                             sessionId = chatResponse.getSessionId();
                             saveUserInfo();
                             Log.d(TAG, "세션 ID 업데이트: " + sessionId);
                         }
 
-                        // ===== [새로 추가] Function Call 처리 =====
                         if (chatResponse.getFunctionCalled() != null) {
                             String functionName = chatResponse.getFunctionCalled();
                             Log.d(TAG, "Function 호출됨: " + functionName);
 
-                            // 함수에 따라 해당 Fragment 새로고침
                             if ("create_schedule".equals(functionName)) {
                                 refreshCalendarIfVisible();
                             } else if ("create_alarm".equals(functionName)) {
                                 refreshAlarmIfVisible();
                             }
                         }
-                        // ===========================================
                     } else {
-                        // 실패 응답 처리
                         String error = chatResponse.getError();
                         if (error != null && !error.isEmpty()) {
                             addAiMessage("오류: " + error);
@@ -628,7 +678,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         }
                     }
                 } else {
-                    // HTTP 오류 처리
                     addAiMessage("서버 응답 오류가 발생했습니다");
                     Log.e(TAG, "서버 응답 실패 - 코드: " + response.code());
                 }
@@ -636,7 +685,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
             @Override
             public void onFailure(@NonNull Call<ChatResponse> call, @NonNull Throwable t) {
-                // 네트워크 오류 처리
                 addAiMessage("네트워크 오류가 발생했습니다");
                 Log.e(TAG, "API 호출 실패", t);
                 Toast.makeText(MainActivity.this,
@@ -646,10 +694,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * AI 메시지를 채팅에 추가하는 헬퍼 메서드
+     * AI 메시지를 채팅에 추가
      */
     private void addAiMessage(String content) {
-        // ✅ trim()으로 앞뒤 공백 제거
         if (content != null) {
             content = content.trim();
         }
@@ -658,57 +705,33 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         chatAdapter.addMessage(aiMessage);
         scrollToBottom();
     }
-    // =============================================
 
     /**
-     * 환영 메시지 추가 메서드
+     * 환영 메시지 추가 (이전 대화가 없을 때만)
      */
     private void addWelcomeMessage() {
-        String welcomeMessage = getString(R.string.welcome_user, userNickname) + "\n무엇을 도와드릴까요?";
-        Message aiMessage = new Message(welcomeMessage, false);
-        messageList.add(aiMessage);
-        chatAdapter.notifyDataSetChanged();
-        scrollToBottom();
+        if (messageList.isEmpty()) {
+            String welcomeMessage = getString(R.string.welcome_user, userNickname) + "\n무엇을 도와드릴까요?";
+            Message aiMessage = new Message(welcomeMessage, false);
+            messageList.add(aiMessage);
+            chatAdapter.notifyDataSetChanged();
+            scrollToBottom();
+        }
     }
 
     /**
-     * 사용자 메시지 전송 및 AI 응답 처리 메서드
-     * @param content 메시지 내용
+     * 사용자 메시지 전송
      */
     private void sendMessage(String content) {
-        // 사용자 메시지 추가
         Message userMessage = new Message(content, true);
         chatAdapter.addMessage(userMessage);
         scrollToBottom();
 
-        // ===== [새로 추가] API로 메시지 전송 =====
         sendMessageToApi(content);
-        // =========================================
-
-        // AI 응답 처리 (실제 구현에서는 비동기 처리 필요)
-        // processAiResponse(content); // 이제 API로 대체되므로 주석 처리 가능
     }
 
     /**
-     * AI 응답 처리 메서드 (임시 구현)
-     * @param userMessage 사용자 메시지
-     */
-    private void processAiResponse(String userMessage) {
-        // 임시 응답 생성
-        String aiResponse = getString(R.string.ai_response_not_ready, userMessage);
-
-        // 실제 구현에서는 여기에 AI 처리 로직 추가
-
-        // 약간의 지연 후 AI 응답 표시 (실제 대화처럼 보이게)
-        recyclerView.postDelayed(() -> {
-            Message aiMessage = new Message(aiResponse, false);
-            chatAdapter.addMessage(aiMessage);
-            scrollToBottom();
-        }, 1000); // 1초 지연
-    }
-
-    /**
-     * 채팅 스크롤을 최신 메시지로 이동하는 메서드
+     * 채팅 스크롤을 최신 메시지로 이동
      */
     private void scrollToBottom() {
         if (messageList.size() > 0) {
@@ -718,65 +741,51 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-        // 네비게이션 메뉴 아이템 선택 처리
         int id = item.getItemId();
 
         if (id == R.id.nav_chat) {
-            // 채팅 화면 (기본 화면)
             showChatInterface();
             toolbar.setTitle(R.string.menu_chat);
         } else if (id == R.id.nav_calendar) {
-            // 일정 관리 화면으로 전환
             showFragment(new CalendarFragment());
             toolbar.setTitle(R.string.menu_calendar);
         } else if (id == R.id.nav_alarm) {
-            // 알람 설정 화면으로 전환
             showFragment(new AlarmFragment());
             toolbar.setTitle(R.string.menu_alarm);
         } else if (id == R.id.nav_route_info) {
-            // 경로 검색 화면으로 전환 (수정된 부분)
             showFragment(new RouteFragment());
             toolbar.setTitle("추천 경로 정보");
         } else if (id == R.id.nav_weather) {
-            // 날씨 정보 화면으로 전환
             showFragment(new WeatherFragment());
             toolbar.setTitle("날씨 정보");
         } else if (id == R.id.nav_notifications) {
-            // 알림 목록 화면으로 전환
             showFragment(new NotificationsFragment());
             toolbar.setTitle(R.string.menu_notifications);
         } else if (id == R.id.nav_settings) {
-            // 설정 화면으로 전환
             showFragment(new SettingsFragment());
             toolbar.setTitle("설정");
         } else if (id == R.id.nav_help) {
-            // 도움말 화면으로 전환 (Toast 대신 HelpFragment로 이동)
             showFragment(new HelpFragment());
             toolbar.setTitle("도움말");
         }
 
-        // 네비게이션 드로어 닫기
         drawerLayout.closeDrawer(GravityCompat.START);
         return true;
     }
 
     /**
-     * 뒤로 가기 버튼 처리 (수정된 부분)
+     * 뒤로 가기 버튼 처리
      */
     @Override
     public void onBackPressed() {
-        // 뒤로 가기 버튼이 눌렸을 때 네비게이션 드로어가 열려있으면 닫기
         if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
             drawerLayout.closeDrawer(GravityCompat.START);
         } else {
-            // 현재 프래그먼트가 있으면 채팅 화면으로 돌아가기
             Fragment currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
             if (currentFragment != null) {
-                // 백스택에 있는 Fragment가 있으면 이전으로 돌아가기
                 if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
                     getSupportFragmentManager().popBackStack();
 
-                    // 백스택이 비어있으면 채팅 화면으로
                     if (getSupportFragmentManager().getBackStackEntryCount() == 0) {
                         showChatInterface();
                         toolbar.setTitle(R.string.app_name);
@@ -792,8 +801,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 프래그먼트를 화면에 표시하는 메서드
-     * @param fragment 표시할 프래그먼트
+     * 프래그먼트 표시
      */
     public void showFragment(Fragment fragment) {
         View chatContainer = findViewById(R.id.chat_container);
@@ -805,13 +813,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 채팅 인터페이스를 다시 표시하는 메서드
+     * 채팅 인터페이스 표시
      */
     private void showChatInterface() {
         View chatContainer = findViewById(R.id.chat_container);
         chatContainer.setVisibility(View.VISIBLE);
 
-        // 현재 표시 중인 프래그먼트 제거
         Fragment currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
         if (currentFragment != null) {
             getSupportFragmentManager().beginTransaction()
@@ -823,26 +830,21 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     protected void onResume() {
         super.onResume();
-        // 화면이 다시 보여질 때 네비게이션 헤더 업데이트
         updateNavigationHeader();
     }
 
-    // ===== [새로 추가] onDestroy 메서드 =====
     @Override
     protected void onDestroy() {
         super.onDestroy();
 
-        // STT 서비스 정리
         if (speechToTextService != null) {
             speechToTextService.destroy();
             Log.d(TAG, "STT 서비스 정리 완료");
         }
     }
-    // =========================================
 
     /**
-     * 툴바 제목을 설정하는 메서드
-     * @param title 설정할 제목
+     * 툴바 제목 설정
      */
     public void setToolbarTitle(String title) {
         if (toolbar != null) {
@@ -851,14 +853,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 현재 CalendarFragment가 보이는 경우 새로고침
+     * CalendarFragment 새로고침
      */
     private void refreshCalendarIfVisible() {
         Fragment currentFragment = getSupportFragmentManager()
                 .findFragmentById(R.id.fragment_container);
 
         if (currentFragment instanceof CalendarFragment) {
-            // CalendarFragment를 새로 로드하여 업데이트된 일정 표시
             showFragment(new CalendarFragment());
             toolbar.setTitle(R.string.menu_calendar);
             Log.d(TAG, "CalendarFragment 새로고침 완료");
@@ -866,14 +867,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 현재 AlarmFragment가 보이는 경우 새로고침
+     * AlarmFragment 새로고침
      */
     private void refreshAlarmIfVisible() {
         Fragment currentFragment = getSupportFragmentManager()
                 .findFragmentById(R.id.fragment_container);
 
         if (currentFragment instanceof AlarmFragment) {
-            // AlarmFragment를 새로 로드하여 업데이트된 알람 표시
             showFragment(new AlarmFragment());
             toolbar.setTitle(R.string.menu_alarm);
             Log.d(TAG, "AlarmFragment 새로고침 완료");
@@ -881,7 +881,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 사용자 UUID가 서버에 등록되어 있는지 확인하고, 없으면 백그라운드로 등록하는 메서드
+     * 서버 동기화 확인
      */
     private void checkAndSyncUserWithServer() {
         SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
@@ -913,7 +913,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 서버에 사용자가 있는지 확인하고, 없으면 생성하는 메서드
+     * 서버에 사용자 확인 및 생성
      */
     private void verifyOrCreateUserOnServer() {
         if (apiService == null || userUuid == null) {
@@ -945,7 +945,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 백그라운드에서 서버에 사용자를 생성하는 메서드
+     * 백그라운드에서 서버에 사용자 생성
      */
     private void createUserOnServerBackground() {
         SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
@@ -990,7 +990,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     /**
-     * 서버 동기화 플래그를 업데이트하는 메서드
+     * 서버 동기화 플래그 업데이트
      */
     private void updateSyncFlag(boolean needsSync) {
         SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
