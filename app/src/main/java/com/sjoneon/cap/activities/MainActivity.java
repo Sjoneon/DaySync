@@ -15,6 +15,8 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.view.Menu;
+import android.view.MenuItem;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -54,6 +56,7 @@ import com.sjoneon.cap.models.api.MessageListResponse;
 import com.sjoneon.cap.models.api.SessionInfo;
 import com.sjoneon.cap.models.api.MessageInfo;
 import com.sjoneon.cap.utils.ApiClient;
+import com.sjoneon.cap.fragments.SessionListBottomSheet;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -999,5 +1002,85 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         editor.apply();
 
         Log.d(TAG, "서버 동기화 플래그 업데이트: " + needsSync);
+    }
+
+    /**
+     * Toolbar 메뉴 생성
+     */
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.toolbar_menu, menu);
+        return true;
+    }
+
+    /**
+     * Toolbar 메뉴 아이템 클릭 처리
+     */
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.action_session_list) {
+            showSessionListBottomSheet();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    /**
+     * 세션 목록 바텀시트 표시
+     */
+    private void showSessionListBottomSheet() {
+        if (userUuid == null) {
+            Toast.makeText(this, "사용자 정보를 불러올 수 없습니다", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        SessionListBottomSheet bottomSheet = SessionListBottomSheet.newInstance(userUuid, sessionId);
+        bottomSheet.setOnSessionActionListener(new SessionListBottomSheet.OnSessionActionListener() {
+            @Override
+            public void onSessionSelected(int selectedSessionId) {
+                switchToSession(selectedSessionId);
+            }
+
+            @Override
+            public void onNewChatRequested() {
+                startNewChat();
+            }
+
+            @Override
+            public void onCurrentSessionDeleted() {
+                startNewChat();
+            }
+        });
+
+        bottomSheet.show(getSupportFragmentManager(), "SessionListBottomSheet");
+    }
+
+    /**
+     * 다른 세션으로 전환
+     */
+    private void switchToSession(int newSessionId) {
+        sessionId = newSessionId;
+        saveUserInfo();
+
+        messageList.clear();
+        chatAdapter.notifyDataSetChanged();
+
+        loadSessionMessages(newSessionId);
+
+        Log.d(TAG, "세션 전환 완료: " + newSessionId);
+    }
+
+    /**
+     * 새 대화 시작
+     */
+    private void startNewChat() {
+        sessionId = null;
+        saveUserInfo();
+
+        messageList.clear();
+        chatAdapter.notifyDataSetChanged();
+
+        Toast.makeText(this, "새 대화를 시작합니다", Toast.LENGTH_SHORT).show();
+        Log.d(TAG, "새 대화 시작");
     }
 }

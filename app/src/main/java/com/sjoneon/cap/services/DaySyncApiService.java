@@ -3,6 +3,7 @@ package com.sjoneon.cap.services;
 import com.sjoneon.cap.models.api.ApiResponse;
 import com.sjoneon.cap.models.api.ChatRequest;
 import com.sjoneon.cap.models.api.ChatResponse;
+import com.sjoneon.cap.models.api.SessionUpdateRequest;
 import com.sjoneon.cap.models.api.UserCreateRequest;
 import com.sjoneon.cap.models.api.UserCreateResponse;
 import com.sjoneon.cap.models.api.UserResponse;
@@ -151,4 +152,14 @@ public interface DaySyncApiService {
      */
     @PUT("/api/schedule/alarms/{alarm_id}/toggle")
     Call<AlarmResponse> toggleAlarm(@Path("alarm_id") int alarmId);
+
+    /**
+     * 세션 제목 수정
+     * PUT /api/ai/sessions/{session_id}
+     */
+    @PUT("api/ai/sessions/{session_id}")
+    Call<ApiResponse> updateSession(
+            @Path("session_id") int sessionId,
+            @Body SessionUpdateRequest request
+    );
 }
