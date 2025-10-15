@@ -93,11 +93,15 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     // 채팅 메시지 목록
     private List<Message> messageList = new ArrayList<>();
 
-    // ===== [새로 추가] AI 채팅 기능을 위한 필드 =====
+    // AI 채팅 기능을 위한 필드
     private SpeechToTextService speechToTextService;
     private DaySyncApiService apiService;
     private String userUuid;
     private Integer sessionId;
+
+    // 키보드 처리를 위한 필드 추가
+    private View inputLayout;
+    private View chatContainer;
     // ================================================
 
     @Override
@@ -129,12 +133,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         // 채팅 입력 및 버튼 리스너 설정
         setupChatInterface();
 
-        // ===== [새로 추가] AI 서비스 초기화 =====
+        // AI 서비스 초기화
         initializeAiServices();
         loadUserUuid();
         checkAndSyncUserWithServer();
         checkRecordAudioPermission();
-        // =========================================
+
+        // 키보드 처리 설정 추가
+        setupKeyboardHandling();
 
         // 권한 체크 (약간의 지연 후 실행)
         checkPermissionsAfterDelay();
@@ -203,7 +209,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         }
 
-        // ===== [새로 추가] 음성 인식 권한 처리 =====
+        // 음성 인식 권한 처리
         if (requestCode == REQUEST_RECORD_AUDIO_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.d(TAG, "음성 인식 권한 허용됨");
@@ -213,7 +219,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 Toast.makeText(this, "음성 인식 권한이 필요합니다", Toast.LENGTH_SHORT).show();
             }
         }
-        // ============================================
     }
 
     /**
@@ -247,6 +252,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         buttonSend = findViewById(R.id.buttonSend);
         buttonVoice = findViewById(R.id.buttonVoice);
 
+        // 키보드 처리를 위한 레이아웃 찾기
+        inputLayout = findViewById(R.id.inputLayout);
+        chatContainer = findViewById(R.id.chat_container);
+
         // 네비게이션 헤더에서 프로필 요소들 찾기
         View headerView = navigationView.getHeaderView(0);
         profileImageView = headerView.findViewById(R.id.profileImageView);
@@ -276,6 +285,84 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         if (textViewUsername != null) {
             textViewUsername.setText(getString(R.string.welcome_user, userNickname));
+        }
+    }
+
+    /**
+     * 키보드 처리를 설정하는 메서드
+     * WindowInsets API를 사용하여 키보드 높이를 감지하고 UI를 조정합니다
+     */
+    private void setupKeyboardHandling() {
+        if (chatContainer == null || inputLayout == null) {
+            Log.e(TAG, "chatContainer 또는 inputLayout이 null입니다");
+            return;
+        }
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            chatContainer.setOnApplyWindowInsetsListener((v, insets) -> {
+                android.graphics.Insets imeInsets = insets.getInsets(android.view.WindowInsets.Type.ime());
+                int imeHeight = imeInsets.bottom;
+
+                // 키보드가 올라온 경우
+                if (imeHeight > 0) {
+                    // inputLayout을 키보드 위로 이동
+                    inputLayout.setTranslationY(-imeHeight);
+
+                    // RecyclerView의 bottom padding 조정
+                    recyclerView.setPadding(
+                            recyclerView.getPaddingLeft(),
+                            recyclerView.getPaddingTop(),
+                            recyclerView.getPaddingRight(),
+                            imeHeight + inputLayout.getHeight()
+                    );
+
+                    // 최신 메시지로 스크롤
+                    scrollToBottom();
+                } else {
+                    // 키보드가 내려간 경우 원래대로
+                    inputLayout.setTranslationY(0);
+                    recyclerView.setPadding(
+                            recyclerView.getPaddingLeft(),
+                            recyclerView.getPaddingTop(),
+                            recyclerView.getPaddingRight(),
+                            getResources().getDimensionPixelSize(R.dimen.padding_xlarge)
+                    );
+                }
+
+                return insets;
+            });
+        } else {
+            // Android R 미만 버전을 위한 처리
+            chatContainer.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+                android.graphics.Rect r = new android.graphics.Rect();
+                chatContainer.getWindowVisibleDisplayFrame(r);
+                int screenHeight = chatContainer.getRootView().getHeight();
+                int keypadHeight = screenHeight - r.bottom;
+
+                // 키보드 높이가 화면의 15% 이상인 경우 키보드가 올라온 것으로 판단
+                if (keypadHeight > screenHeight * 0.15) {
+                    // 키보드가 올라온 경우
+                    inputLayout.setTranslationY(-keypadHeight);
+
+                    recyclerView.setPadding(
+                            recyclerView.getPaddingLeft(),
+                            recyclerView.getPaddingTop(),
+                            recyclerView.getPaddingRight(),
+                            keypadHeight + inputLayout.getHeight()
+                    );
+
+                    scrollToBottom();
+                } else {
+                    // 키보드가 내려간 경우
+                    inputLayout.setTranslationY(0);
+                    recyclerView.setPadding(
+                            recyclerView.getPaddingLeft(),
+                            recyclerView.getPaddingTop(),
+                            recyclerView.getPaddingRight(),
+                            getResources().getDimensionPixelSize(R.dimen.padding_xlarge)
+                    );
+                }
+            });
         }
     }
 
@@ -351,14 +438,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         });
 
-        // ===== [수정됨] 음성 입력 버튼 클릭 리스너 =====
+        // 음성 입력 버튼 클릭 리스너
         buttonVoice.setOnClickListener(v -> {
             toggleSpeechRecognition();
         });
         // ==============================================
     }
 
-    // ===== [새로 추가] AI 서비스 초기화 메서드 =====
+    // AI 서비스 초기화 메서드
     /**
      * AI 서비스 초기화 (STT + API)
      */
