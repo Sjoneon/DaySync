@@ -18,6 +18,15 @@
     <string name="welcome_user">%s님, 환영합니다!</string>
     <string name="login_screen_error">로그인 화면 로드 중 오류가 발생했습니다.</string>
     <string name="login_process_error">로그인 처리 중 오류가 발생했습니다.</string>
+    <string name="already_used_question">이미 사용하신 적이 있으신가요?</string>
+    <string name="restore_data">데이터 복구하기</string>
+
+    <!-- 데이터 복구 화면 -->
+    <string name="restore_title">데이터 복구</string>
+    <string name="restore_description">이전에 저장한 복구 코드를\n입력해주세요.</string>
+    <string name="uuid_hint">복구 코드 (UUID)</string>
+    <string name="restore_button">복구하기</string>
+    <string name="back_button">뒤로가기</string>
 
     <!-- 스플래시 화면 -->
     <string name="splash_screen_error">스플래시 화면 로드 중 오류가 발생했습니다.</string>

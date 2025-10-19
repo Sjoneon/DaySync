@@ -31,6 +31,7 @@ public class LoginActivity extends AppCompatActivity {
     private static final String TAG = "LoginActivity";
     private EditText etNickname;
     private Button btnSubmit;
+    private Button btnRestoreData;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,10 +41,7 @@ public class LoginActivity extends AppCompatActivity {
             setContentView(R.layout.activity_login);
             Log.d(TAG, "setContentView 완료");
 
-            // 뷰 초기화
             initializeViews();
-
-            // 버튼 클릭 리스너 설정
             setupClickListeners();
 
         } catch (Exception e) {
@@ -58,17 +56,18 @@ public class LoginActivity extends AppCompatActivity {
     private void initializeViews() {
         etNickname = findViewById(R.id.etNickname);
         btnSubmit = findViewById(R.id.btnSubmit);
+        btnRestoreData = findViewById(R.id.btnRestoreData);
 
-        if (etNickname == null || btnSubmit == null) {
+        if (etNickname == null || btnSubmit == null || btnRestoreData == null) {
             Log.e(TAG, "View가 null입니다: etNickname=" + (etNickname == null) +
-                    ", btnSubmit=" + (btnSubmit == null));
+                    ", btnSubmit=" + (btnSubmit == null) +
+                    ", btnRestoreData=" + (btnRestoreData == null));
             Toast.makeText(this, "화면 로딩 중 오류가 발생했습니다.", Toast.LENGTH_SHORT).show();
             return;
         }
 
         Log.d(TAG, "View 초기화 완료");
 
-        // 기존 닉네임이 있는 경우 입력 필드에 표시
         loadExistingNickname();
     }
 
@@ -101,11 +100,25 @@ public class LoginActivity extends AppCompatActivity {
             }
         });
 
-        // Enter 키 입력 시에도 닉네임 제출 처리
         etNickname.setOnEditorActionListener((v, actionId, event) -> {
             processNicknameSubmission();
             return true;
         });
+
+        btnRestoreData.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showRestoreDialog();
+            }
+        });
+    }
+
+    /**
+     * 데이터 복구 화면으로 이동하는 메서드
+     */
+    private void showRestoreDialog() {
+        Intent intent = new Intent(LoginActivity.this, RestoreDataActivity.class);
+        startActivity(intent);
     }
 
     /**
@@ -115,12 +128,10 @@ public class LoginActivity extends AppCompatActivity {
         try {
             String nickname = etNickname.getText().toString().trim();
 
-            // 닉네임 유효성 검사
             if (!isValidNickname(nickname)) {
                 return;
             }
 
-            // 닉네임 저장 (서버 연동 포함)
             saveNickname(nickname);
 
         } catch (Exception e) {
@@ -160,14 +171,11 @@ public class LoginActivity extends AppCompatActivity {
     private void saveNickname(String nickname) {
         SharedPreferences preferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
 
-        // 기존 UUID 확인
         String existingUuid = preferences.getString("user_uuid", null);
 
         if (existingUuid == null) {
-            // UUID가 없으면 서버에 사용자 생성 요청
             createUserOnServer(nickname, preferences);
         } else {
-            // 이미 UUID가 있으면 닉네임만 업데이트하고 진행
             Log.d(TAG, "기존 UUID 사용: " + existingUuid);
             updateNicknameAndProceed(nickname, preferences);
         }
@@ -179,15 +187,12 @@ public class LoginActivity extends AppCompatActivity {
      * @param preferences SharedPreferences 인스턴스
      */
     private void createUserOnServer(String nickname, SharedPreferences preferences) {
-        // 가이드라인 준수: null 체크를 통한 방어적 프로그래밍
         if (ApiClient.getInstance() == null || ApiClient.getInstance().getApiService() == null) {
             Log.e(TAG, "API 클라이언트를 초기화할 수 없습니다");
-            // 서버 등록 실패 시 로컬에서만 UUID 생성 (fallback)
             fallbackLocalUuidCreation(nickname, preferences);
             return;
         }
 
-        // 서버에 사용자 생성 요청 (기존 생성자 사용)
         UserCreateRequest request = new UserCreateRequest(nickname, 1800);
 
         Log.d(TAG, "서버에 사용자 생성 요청 중...");
@@ -197,13 +202,10 @@ public class LoginActivity extends AppCompatActivity {
                 .enqueue(new Callback<UserCreateResponse>() {
                     @Override
                     public void onResponse(Call<UserCreateResponse> call, Response<UserCreateResponse> response) {
-                        // 가이드라인 준수: 단계별 null 체크
                         if (response != null && response.isSuccessful() && response.body() != null) {
                             String serverUuid = response.body().getUuid();
 
-                            // 가이드라인 준수: null 체크
                             if (serverUuid != null && !serverUuid.isEmpty()) {
-                                // 서버에서 받은 UUID 저장
                                 SharedPreferences.Editor editor = preferences.edit();
                                 editor.putString("user_uuid", serverUuid);
                                 editor.putString("nickname", nickname);
@@ -213,25 +215,21 @@ public class LoginActivity extends AppCompatActivity {
 
                                 Log.d(TAG, "서버에서 UUID 생성 성공: " + serverUuid);
 
-                                // MainActivity로 이동
                                 runOnUiThread(() -> navigateToMainActivity(nickname));
                             } else {
                                 Log.e(TAG, "서버 응답에 UUID가 없습니다");
                                 fallbackLocalUuidCreation(nickname, preferences);
                             }
                         } else {
-                            // 서버 응답 실패 시 에러 코드 로깅
                             int errorCode = response != null ? response.code() : -1;
                             Log.e(TAG, "서버 사용자 생성 실패 - 응답 코드: " + errorCode);
 
-                            // fallback: 로컬에서 UUID 생성
                             fallbackLocalUuidCreation(nickname, preferences);
                         }
                     }
 
                     @Override
                     public void onFailure(Call<UserCreateResponse> call, Throwable t) {
-                        // 가이드라인 준수: 예외 처리
                         Log.e(TAG, "서버 통신 실패", t);
 
                         runOnUiThread(() -> {
@@ -240,7 +238,6 @@ public class LoginActivity extends AppCompatActivity {
                                     Toast.LENGTH_SHORT).show();
                         });
 
-                        // fallback: 로컬에서 UUID 생성
                         fallbackLocalUuidCreation(nickname, preferences);
                     }
                 });
@@ -252,7 +249,6 @@ public class LoginActivity extends AppCompatActivity {
      * @param preferences SharedPreferences 인스턴스
      */
     private void fallbackLocalUuidCreation(String nickname, SharedPreferences preferences) {
-        // 가이드라인 준수: 방어적 프로그래밍
         try {
             String localUuid = UUID.randomUUID().toString();
 
@@ -267,7 +263,6 @@ public class LoginActivity extends AppCompatActivity {
             Log.w(TAG, "로컬에서 UUID 생성 (서버 미등록): " + localUuid);
             Log.w(TAG, "나중에 서버 연결 시 동기화가 필요합니다");
 
-            // MainActivity로 이동
             runOnUiThread(() -> navigateToMainActivity(nickname));
 
         } catch (Exception e) {
@@ -314,11 +309,9 @@ public class LoginActivity extends AppCompatActivity {
 
     /**
      * 뒤로 가기 버튼 처리
-     * 초기 설정 화면에서는 앱을 종료합니다.
      */
     @Override
     public void onBackPressed() {
-        // 초기 설정 화면에서는 앱 종료
         super.onBackPressed();
         finishAffinity();
     }
