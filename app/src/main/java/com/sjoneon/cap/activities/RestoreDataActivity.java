@@ -7,8 +7,17 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
+import android.content.Intent;
 
 import androidx.appcompat.app.AppCompatActivity;
+
+
+import com.sjoneon.cap.models.api.UserResponse;
+import com.sjoneon.cap.utils.ApiClient;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 import com.sjoneon.cap.R;
 
@@ -78,16 +87,81 @@ public class RestoreDataActivity extends AppCompatActivity {
             return;
         }
 
-        // TODO: 서버에 UUID 검증 요청 (다음 단계에서 구현)
-        // 현재는 임시로 SharedPreferences에 저장만 함
-        SharedPreferences preferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
-        SharedPreferences.Editor editor = preferences.edit();
-        editor.putString("user_uuid", uuid);
-        editor.putBoolean("is_logged_in", true);
-        editor.apply();
+        btnRestore.setEnabled(false);
+        Toast.makeText(this, "복구 중...", Toast.LENGTH_SHORT).show();
 
-        Toast.makeText(this, "복구 기능은 준비 중입니다", Toast.LENGTH_SHORT).show();
-        finish();
+        if (ApiClient.getInstance() == null || ApiClient.getInstance().getApiService() == null) {
+            Log.e(TAG, "API 클라이언트 초기화 실패");
+            runOnUiThread(() -> {
+                Toast.makeText(this, "네트워크 연결을 확인해주세요", Toast.LENGTH_SHORT).show();
+                btnRestore.setEnabled(true);
+            });
+            return;
+        }
+
+        ApiClient.getInstance().getApiService()
+                .getUser(uuid)
+                .enqueue(new Callback<UserResponse>() {
+                    @Override
+                    public void onResponse(Call<UserResponse> call, Response<UserResponse> response) {
+                        if (response != null && response.isSuccessful() && response.body() != null) {
+                            UserResponse userResponse = response.body();
+
+                            SharedPreferences preferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+                            SharedPreferences.Editor editor = preferences.edit();
+                            editor.putString("user_uuid", userResponse.getUuid());
+                            editor.putString("nickname", userResponse.getNickname());
+                            editor.putInt("prep_time", userResponse.getPrepTime());
+                            editor.putBoolean("is_logged_in", true);
+                            editor.putBoolean("needs_server_sync", false);
+                            editor.apply();
+
+                            Log.d(TAG, "데이터 복구 성공: " + userResponse.getNickname());
+
+                            runOnUiThread(() -> {
+                                Toast.makeText(RestoreDataActivity.this,
+                                        userResponse.getNickname() + "님, 복구되었습니다!",
+                                        Toast.LENGTH_SHORT).show();
+
+                                Intent intent = new Intent(RestoreDataActivity.this, MainActivity.class);
+                                intent.putExtra("user_nickname", userResponse.getNickname());
+                                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                                startActivity(intent);
+                                finish();
+                            });
+
+                        } else {
+                            int errorCode = response != null ? response.code() : -1;
+                            Log.e(TAG, "UUID 검증 실패 - 응답 코드: " + errorCode);
+
+                            runOnUiThread(() -> {
+                                String errorMsg;
+                                if (errorCode == 404) {
+                                    errorMsg = "존재하지 않는 복구 코드입니다";
+                                } else if (errorCode == 400) {
+                                    errorMsg = "잘못된 복구 코드 형식입니다";
+                                } else {
+                                    errorMsg = "복구에 실패했습니다. 다시 시도해주세요";
+                                }
+                                Toast.makeText(RestoreDataActivity.this, errorMsg, Toast.LENGTH_LONG).show();
+                                btnRestore.setEnabled(true);
+                                etUuid.requestFocus();
+                            });
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<UserResponse> call, Throwable t) {
+                        Log.e(TAG, "서버 통신 실패", t);
+
+                        runOnUiThread(() -> {
+                            Toast.makeText(RestoreDataActivity.this,
+                                    "서버 연결에 실패했습니다. 네트워크를 확인해주세요",
+                                    Toast.LENGTH_LONG).show();
+                            btnRestore.setEnabled(true);
+                        });
+                    }
+                });
     }
 
     /**
