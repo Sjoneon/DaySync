@@ -192,7 +192,7 @@ public class WeatherFragment extends Fragment {
 
     private void fetchVillageForecast(String apiKey, String baseDate, int retryCount) {
         String baseTime = getBaseTimeFor("village");
-        weatherApiService.getVillageForecast(apiKey, 1000, 1, "JSON", baseDate, baseTime, currentNx, currentNy)
+        weatherApiService.getVillageForecast(apiKey, 500, 1, "JSON", baseDate, baseTime, currentNx, currentNy)
                 .enqueue(new Callback<String>() {
                     @Override
                     public void onResponse(@NonNull Call<String> call, @NonNull Response<String> response) {

@@ -42,6 +42,8 @@ import com.sjoneon.cap.services.TagoApiService;
 import com.sjoneon.cap.services.TmapApiService;
 import com.sjoneon.cap.utils.BusDirectionAnalyzer;
 import com.sjoneon.cap.utils.TagoBusArrivalDeserializer;
+import com.sjoneon.cap.utils.TagoBusStopDeserializer;
+import com.sjoneon.cap.models.api.TmapPedestrianResponse;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -80,7 +82,7 @@ public class RouteFragment extends Fragment {
     private static final int DEFAULT_BUS_RIDE_TIME_MIN = 15;
     private static final int MAX_API_PAGES = 5;
     private static final int NEARBY_STOPS_COUNT = 50;
-    private static final int EXTENDED_SEARCH_RADIUS = 1000;
+    private static final int EXTENDED_SEARCH_RADIUS = 2000;
 
     // 새로운 버스 탑승 시간 계산 관련 상수
     private static final double DISTANCE_MULTIPLIER = 1.3;
@@ -167,6 +169,7 @@ public class RouteFragment extends Fragment {
 
         Gson tagoGson = new GsonBuilder()
                 .registerTypeAdapter(TagoBusArrivalResponse.Body.class, new TagoBusArrivalDeserializer())
+                .registerTypeAdapter(TagoBusStopResponse.Body.class, new TagoBusStopDeserializer())
                 .setLenient()
                 .create();
 
@@ -314,18 +317,220 @@ public class RouteFragment extends Fragment {
 
     private Location getCoordinatesFromAddress(String address) {
         try {
-            List<Address> addresses = geocoder.getFromLocationName(address, 1);
-            if (!addresses.isEmpty()) {
-                Address addr = addresses.get(0);
-                Location location = new Location("geocoder");
-                location.setLatitude(addr.getLatitude());
-                location.setLongitude(addr.getLongitude());
-                return location;
+            // 최대 5개의 검색 결과 조회
+            List<Address> addresses = geocoder.getFromLocationName(address, 5);
+
+            if (addresses == null || addresses.isEmpty()) {
+                Log.w(TAG, "주소 검색 결과 없음: " + address);
+                return null;
             }
+
+            Log.d(TAG, "주소 검색 결과 " + addresses.size() + "개: " + address);
+
+            // 입력 주소를 정규화하고 키워드 추출
+            String normalizedInput = normalizeAddressText(address);
+            String[] inputKeywords = extractAddressKeywords(address);
+
+            Address bestMatch = null;
+            int bestScore = -1;
+
+            // 각 검색 결과를 점수화하여 가장 적합한 결과 선택
+            for (Address addr : addresses) {
+                String locality = addr.getLocality();
+                String adminArea = addr.getAdminArea();
+                String featureName = addr.getFeatureName();
+                String fullAddress = addr.getAddressLine(0);
+
+                Log.d(TAG, String.format("검색 결과: %s, 지역: %s %s, 특징: %s",
+                        fullAddress, adminArea, locality, featureName));
+
+                int score = calculateAddressMatchScore(
+                        address, normalizedInput, inputKeywords,
+                        adminArea, locality, featureName, fullAddress
+                );
+
+                Log.d(TAG, String.format("매칭 점수: %d - %s", score, fullAddress));
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMatch = addr;
+                }
+            }
+
+            // 적합한 결과가 없으면 첫 번째 결과 사용
+            if (bestMatch == null) {
+                bestMatch = addresses.get(0);
+                Log.w(TAG, "최적 매칭 실패, 첫 번째 결과 사용: " + bestMatch.getAddressLine(0));
+            }
+
+            Location location = new Location("geocoder");
+            location.setLatitude(bestMatch.getLatitude());
+            location.setLongitude(bestMatch.getLongitude());
+
+            Log.i(TAG, String.format("최종 선택된 위치: %s (%.6f, %.6f)",
+                    bestMatch.getAddressLine(0),
+                    bestMatch.getLatitude(),
+                    bestMatch.getLongitude()));
+
+            return location;
+
         } catch (IOException e) {
             Log.e(TAG, "주소 -> 좌표 변환 실패: " + address, e);
         }
         return null;
+    }
+
+    /**
+     * 주소 문자열 정규화 (공백, 특수문자 제거 및 소문자 변환)
+     */
+    private String normalizeAddressText(String text) {
+        if (text == null) return "";
+        return text.replaceAll("\\s+", "")
+                .replaceAll("[·.-]", "")
+                .toLowerCase();
+    }
+
+    /**
+     * 주소에서 핵심 키워드 추출
+     */
+    private String[] extractAddressKeywords(String address) {
+        if (address == null) return new String[0];
+
+        String[] words = address.split("[\\s,]+");
+        List<String> keywords = new ArrayList<>();
+
+        for (String word : words) {
+            String cleaned = word.trim();
+            // 의미 있는 단어만 키워드로 사용 (2글자 이상)
+            if (cleaned.length() >= 2) {
+                keywords.add(normalizeAddressText(cleaned));
+            }
+        }
+
+        return keywords.toArray(new String[0]);
+    }
+
+    /**
+     * 주소 검색 결과의 적합도를 점수로 계산
+     */
+    private int calculateAddressMatchScore(String originalInput, String normalizedInput,
+                                           String[] inputKeywords,
+                                           String adminArea, String locality,
+                                           String featureName, String fullAddress) {
+        int score = 0;
+
+        // 충청북도/청주시 지역이면 우선 점수 부여
+        if (adminArea != null && adminArea.contains("충청북도")) {
+            score += 10;
+        }
+        if (locality != null && locality.contains("청주")) {
+            score += 5;
+        }
+
+        // 장소명(featureName)과 입력 주소의 유사도 계산
+        if (featureName != null && !featureName.isEmpty()) {
+            String normalizedFeature = normalizeAddressText(featureName);
+
+            // 완전 일치하면 가장 높은 점수
+            if (normalizedInput.equals(normalizedFeature)) {
+                score += 100;
+            }
+            // 입력이 장소명에 포함되면 중간 점수 (길이 차이 고려)
+            else if (normalizedFeature.contains(normalizedInput)) {
+                int lengthDiff = Math.abs(normalizedFeature.length() - normalizedInput.length());
+                score += Math.max(50 - lengthDiff * 5, 20);
+            }
+            // 장소명이 입력에 포함되면 낮은 점수
+            else if (normalizedInput.contains(normalizedFeature)) {
+                score += 40;
+            }
+        }
+
+        // 추출한 키워드들이 결과에 포함되는지 확인
+        if (inputKeywords.length > 0) {
+            String searchTarget = normalizeAddressText(
+                    (featureName != null ? featureName : "") +
+                            (fullAddress != null ? fullAddress : "")
+            );
+
+            int matchedKeywords = 0;
+            for (String keyword : inputKeywords) {
+                if (searchTarget.contains(keyword)) {
+                    matchedKeywords++;
+                    score += 15;
+                }
+            }
+
+            // 모든 키워드가 매칭되면 보너스 점수
+            if (matchedKeywords == inputKeywords.length) {
+                score += 30;
+            }
+
+            // 키워드 순서까지 일치하면 추가 점수
+            if (matchedKeywords == inputKeywords.length &&
+                    isKeywordOrderMatched(searchTarget, inputKeywords)) {
+                score += 20;
+            }
+        }
+
+        // 전체 주소 문자열과의 유사도도 고려
+        if (fullAddress != null) {
+            String normalizedFullAddress = normalizeAddressText(fullAddress);
+
+            if (normalizedFullAddress.contains(normalizedInput)) {
+                score += 25;
+            }
+
+            double similarity = calculateTextSimilarity(normalizedInput, normalizedFullAddress);
+            score += (int)(similarity * 20);
+        }
+
+        return score;
+    }
+
+    /**
+     * 키워드들이 대상 문자열에서 순서대로 나타나는지 확인
+     */
+    private boolean isKeywordOrderMatched(String target, String[] keywords) {
+        int lastIndex = -1;
+        for (String keyword : keywords) {
+            int currentIndex = target.indexOf(keyword);
+            if (currentIndex <= lastIndex) {
+                return false;
+            }
+            lastIndex = currentIndex;
+        }
+        return true;
+    }
+
+    /**
+     * 두 문자열의 유사도 계산 (0.0~1.0)
+     */
+    private double calculateTextSimilarity(String s1, String s2) {
+        if (s1 == null || s2 == null || s1.isEmpty() || s2.isEmpty()) {
+            return 0.0;
+        }
+
+        // 같은 위치의 문자가 일치하는 비율 계산
+        int commonChars = 0;
+        int minLength = Math.min(s1.length(), s2.length());
+
+        for (int i = 0; i < minLength; i++) {
+            if (s1.charAt(i) == s2.charAt(i)) {
+                commonChars++;
+            }
+        }
+
+        double positionSimilarity = (double) commonChars / Math.max(s1.length(), s2.length());
+
+        // 한 문자열이 다른 문자열을 포함하는 경우의 유사도
+        double containsSimilarity = 0.0;
+        if (s1.contains(s2) || s2.contains(s1)) {
+            containsSimilarity = (double) Math.min(s1.length(), s2.length()) /
+                    Math.max(s1.length(), s2.length());
+        }
+
+        return Math.max(positionSimilarity, containsSimilarity);
     }
 
     // ================================================================================================
@@ -1007,41 +1212,93 @@ public class RouteFragment extends Fragment {
         List<TagoBusStopResponse.BusStop> allStops = new ArrayList<>();
         Set<String> uniqueStopIds = new HashSet<>();
 
-        int[] radiusMeters = {1000};
-        int[] numOfRowsOptions = {30, 50, 100};
+        // API는 500m만 검색하므로, 여러 지점에서 검색하여 1km 범위 커버
+        double offset = 0.0045; // 약 500m
 
-        for (int radius : radiusMeters) {
-            for (int numOfRows : numOfRowsOptions) {
-                try {
-                    Response<TagoBusStopResponse> response = tagoApiService.getNearbyBusStops(
-                            BuildConfig.TAGO_API_KEY_DECODED,
-                            latitude, longitude,
-                            numOfRows, 1, "json"
-                    ).execute();
+        double[][] searchPoints = {
+                {latitude, longitude},              // 중심점
+                {latitude + offset, longitude},     // 북쪽 500m
+                {latitude - offset, longitude},     // 남쪽 500m
+                {latitude, longitude + offset},     // 동쪽 500m
+                {latitude, longitude - offset}      // 서쪽 500m
+        };
 
-                    if (response.isSuccessful() && response.body() != null) {
-                        List<TagoBusStopResponse.BusStop> stops = response.body().response.body.items.item;
+        Log.d(TAG, locationName + " 다중 지점 검색 시작 (총 " + searchPoints.length + "개 지점)");
 
-                        for (TagoBusStopResponse.BusStop stop : stops) {
-                            if (stop.nodeid != null && !uniqueStopIds.contains(stop.nodeid)) {
-                                double distance = calculateDistance(latitude, longitude,
-                                        stop.gpslati, stop.gpslong);
+        for (int i = 0; i < searchPoints.length; i++) {
+            double[] point = searchPoints[i];
+            try {
+                Response<TagoBusStopResponse> response = tagoApiService.getNearbyBusStops(
+                        BuildConfig.TAGO_API_KEY_DECODED,
+                        point[0], point[1],
+                        100, 1, "json"
+                ).execute();
 
-                                if (distance <= radius) {
-                                    uniqueStopIds.add(stop.nodeid);
-                                    allStops.add(stop);
-                                }
+                if (response.isSuccessful() && response.body() != null) {
+                    TagoBusStopResponse.Items itemsContainer = null;
+                    try {
+                        itemsContainer = new Gson().fromJson(
+                                response.body().response.body.items,
+                                TagoBusStopResponse.Items.class
+                        );
+                    } catch (Exception parseException) {
+                        Log.w(TAG, locationName + " 지점 " + (i+1) + " 파싱 실패", parseException);
+                        continue;
+                    }
+
+                    if (itemsContainer == null || itemsContainer.item == null) {
+                        continue;
+                    }
+
+                    List<TagoBusStopResponse.BusStop> stops = itemsContainer.item;
+                    Log.d(TAG, String.format("%s 지점 %d: %d개 정류장 발견", locationName, i+1, stops.size()));
+
+                    for (TagoBusStopResponse.BusStop stop : stops) {
+                        if (stop.nodeid != null && !uniqueStopIds.contains(stop.nodeid)) {
+                            // 원래 출발지/도착지와의 실제 거리 계산
+                            double distance = calculateDistance(latitude, longitude,
+                                    stop.gpslati, stop.gpslong);
+
+                            Log.v(TAG, String.format("%s 정류장: %s (%.0fm)",
+                                    locationName, stop.nodenm, distance));
+
+                            // 1000m 이내만 허용
+                            if (distance <= 1000) {
+                                uniqueStopIds.add(stop.nodeid);
+                                allStops.add(stop);
+                                Log.d(TAG, String.format("✓ %s 정류장 추가: %s (%.0fm)",
+                                        locationName, stop.nodenm, distance));
+                            } else {
+                                Log.v(TAG, String.format("✗ %s 정류장 제외 (거리초과): %s (%.0fm > 1000m)",
+                                        locationName, stop.nodenm, distance));
                             }
                         }
                     }
-
-                } catch (Exception e) {
-                    Log.w(TAG, locationName + " 정류장 검색 실패 - radius: " + radius + "m, rows: " + numOfRows, e);
                 }
+
+            } catch (Exception e) {
+                Log.w(TAG, locationName + " 지점 " + (i+1) + " 검색 실패", e);
             }
         }
 
-        Log.i(TAG, locationName + " 근처 정류장 " + allStops.size() + "개 발견");
+        // 거리순 정렬
+        Collections.sort(allStops, new Comparator<TagoBusStopResponse.BusStop>() {
+            @Override
+            public int compare(TagoBusStopResponse.BusStop a, TagoBusStopResponse.BusStop b) {
+                double distA = calculateDistance(latitude, longitude, a.gpslati, a.gpslong);
+                double distB = calculateDistance(latitude, longitude, b.gpslati, b.gpslong);
+                return Double.compare(distA, distB);
+            }
+        });
+
+        Log.i(TAG, locationName + " 근처 정류장 " + allStops.size() + "개 발견 (1000m 이내)");
+
+        // 최종 발견된 정류장 목록 출력
+        for (TagoBusStopResponse.BusStop stop : allStops) {
+            double dist = calculateDistance(latitude, longitude, stop.gpslati, stop.gpslong);
+            Log.d(TAG, String.format("  - %s (%.0fm, ID: %s)", stop.nodenm, dist, stop.nodeid));
+        }
+
         return allStops;
     }
 
@@ -1172,7 +1429,7 @@ public class RouteFragment extends Fragment {
         }
 
         // 5차: 좌표 기반 근접 매칭 (반경을 점진적으로 확대)
-        int[] radiusOptions = {50, 100, 200, 500}; // 점진적 확대
+        int[] radiusOptions = {50, 100, 200, 500, 1000}; // 점진적 확대
         for (int radius : radiusOptions) {
             for (int i = 0; i < stations.size(); i++) {
                 TagoBusRouteStationResponse.RouteStation station = stations.get(i);
@@ -1403,11 +1660,46 @@ public class RouteFragment extends Fragment {
     }
 
     private int calculateWalkingTime(Location fromLocation, TagoBusStopResponse.BusStop toStop) {
+        try {
+            // TMAP API로 실제 보행 경로 시간 계산
+            Response<TmapPedestrianResponse> response = tmapApiService.getPedestrianRoute(
+                    BuildConfig.TMAP_API_KEY,
+                    String.valueOf(fromLocation.getLongitude()),
+                    String.valueOf(fromLocation.getLatitude()),
+                    String.valueOf(toStop.gpslong),
+                    String.valueOf(toStop.gpslati),
+                    "출발지",
+                    "도착지"
+            ).execute();
+
+            if (response.isSuccessful() && response.body() != null &&
+                    response.body().getFeatures() != null && !response.body().getFeatures().isEmpty()) {
+
+                TmapPedestrianResponse.Feature firstFeature = response.body().getFeatures().get(0);
+                if (firstFeature.getProperties() != null) {
+                    int totalTimeSeconds = firstFeature.getProperties().getTotalTime();
+                    int walkingMinutes = (int) Math.ceil(totalTimeSeconds / 60.0);
+
+                    Log.d(TAG, String.format("TMAP API 도보 시간: %d분 (%d초)",
+                            walkingMinutes, totalTimeSeconds));
+
+                    return Math.max(1, walkingMinutes);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "TMAP API 호출 실패, 직선거리 계산 사용", e);
+        }
+
+        // API 실패 시 기존 방식 사용
         double distance = calculateDistance(
                 fromLocation.getLatitude(), fromLocation.getLongitude(),
                 toStop.gpslati, toStop.gpslong
         );
-        return Math.max(1, (int) Math.ceil(distance / 83.33)); // 5km/h 속도로 계산
+
+        int fallbackTime = Math.max(1, (int) Math.ceil(distance / 83.33));
+        Log.d(TAG, String.format("직선거리 기반 도보 시간: %d분 (%.0fm)", fallbackTime, distance));
+
+        return fallbackTime;
     }
 
     private int calculateOptimalBusRideTime(TagoBusStopResponse.BusStop startStop,
