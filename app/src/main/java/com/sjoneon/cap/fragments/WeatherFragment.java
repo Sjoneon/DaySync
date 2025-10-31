@@ -1,5 +1,3 @@
-// /app/src/main/java/com/sjoneon/cap/WeatherFragment.java
-
 package com.sjoneon.cap.fragments;
 
 import android.Manifest;
@@ -8,6 +6,8 @@ import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -56,14 +56,15 @@ import retrofit2.converter.scalars.ScalarsConverterFactory;
 import okhttp3.OkHttpClient;
 
 /**
- * 날씨 정보를 표시하는 프래그먼트 (단기예보 전용 최종 수정본)
+ * 날씨 정보를 표시하는 프래그먼트
  */
 public class WeatherFragment extends Fragment {
 
     private static final String TAG = "WeatherFragment";
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
-    private static final String KMA_API_BASE_URL = "http://apis.data.go.kr/1360000/";
+    private static final String KMA_API_BASE_URL = "https://apihub.kma.go.kr/api/typ02/openApi/";
     private static final int MAX_RETRY_COUNT = 3;
+    private static final int RETRY_DELAY_MS = 2000;
 
     // UI 요소
     private TextView textCurrentLocation, textCurrentTemp, textCurrentCondition, textPrecipitation, textHumidity, textWindSpeed;
@@ -79,7 +80,7 @@ public class WeatherFragment extends Fragment {
     private List<WeatherForecastItem> hourlyForecastList = new ArrayList<>();
     private List<WeeklyForecastItem> weeklyForecastList = new ArrayList<>();
     private Gson lenientGson;
-    private FusedLocationProviderClient fusedLocationClient;
+    private Handler retryHandler;
 
     // 위치 정보
     private int currentNx, currentNy;
@@ -103,6 +104,14 @@ public class WeatherFragment extends Fragment {
         checkPermissionAndLoadWeather();
     }
 
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (retryHandler != null) {
+            retryHandler.removeCallbacksAndMessages(null);
+        }
+    }
+
     private void initializeViews(View view) {
         textCurrentLocation = view.findViewById(R.id.textCurrentLocation);
         textCurrentTemp = view.findViewById(R.id.textCurrentTemp);
@@ -117,65 +126,113 @@ public class WeatherFragment extends Fragment {
 
     private void initializeServices() {
         lenientGson = new GsonBuilder().setLenient().create();
+        retryHandler = new Handler(Looper.getMainLooper());
 
-        // 타임아웃 설정이 있는 OkHttpClient 생성
+        // 타임아웃 60초로 증가
         OkHttpClient okHttpClient = new OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)  // 연결 타임아웃 30초
-                .readTimeout(30, TimeUnit.SECONDS)     // 읽기 타임아웃 30초
-                .writeTimeout(30, TimeUnit.SECONDS)    // 쓰기 타임아웃 30초
+                .connectTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
                 .build();
 
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(KMA_API_BASE_URL)
-                .client(okHttpClient)  // 타임아웃 설정이 포함된 클라이언트 추가
+                .client(okHttpClient)
                 .addConverterFactory(ScalarsConverterFactory.create())
                 .build();
         weatherApiService = retrofit.create(WeatherApiService.class);
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
-        geocoder = new Geocoder(getContext(), Locale.KOREAN);
+        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(requireContext());
+        geocoder = new Geocoder(requireContext(), Locale.KOREA);
     }
 
     private void setupRecyclerViews() {
         recyclerViewHourlyForecast.setLayoutManager(new LinearLayoutManager(getContext(), LinearLayoutManager.HORIZONTAL, false));
-        hourlyAdapter = new HourlyForecastAdapter(hourlyForecastList);
-        recyclerViewHourlyForecast.setAdapter(hourlyAdapter);
         recyclerViewWeeklyForecast.setLayoutManager(new LinearLayoutManager(getContext()));
+        hourlyAdapter = new HourlyForecastAdapter(hourlyForecastList);
         weeklyAdapter = new WeeklyForecastAdapter(weeklyForecastList);
+        recyclerViewHourlyForecast.setAdapter(hourlyAdapter);
         recyclerViewWeeklyForecast.setAdapter(weeklyAdapter);
     }
 
     private void checkPermissionAndLoadWeather() {
         if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST_CODE);
+            return;
+        }
+        loadCurrentLocation();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            loadCurrentLocation();
         } else {
-            getCurrentLocationAndFetchWeather();
+            setFallbackLocation();
+            fetchWeatherData();
         }
     }
 
-    private void getCurrentLocationAndFetchWeather() {
-        if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return;
-        fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), location -> {
+    private void loadCurrentLocation() {
+        if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            setFallbackLocation();
+            fetchWeatherData();
+            return;
+        }
+        fusedLocationProviderClient.getLastLocation().addOnSuccessListener(location -> {
             if (location != null) {
-                updateLocationInfo(location);
+                convertLatLngToGrid(location.getLatitude(), location.getLongitude());
+                updateLocationText(location.getLatitude(), location.getLongitude());
                 fetchWeatherData();
             } else {
-                Toast.makeText(getContext(), "현재 위치를 가져올 수 없어 기본 위치(청주)로 조회합니다.", Toast.LENGTH_SHORT).show();
                 setFallbackLocation();
                 fetchWeatherData();
             }
         }).addOnFailureListener(e -> {
-            Toast.makeText(getContext(), "위치 정보를 가져오는 데 실패했습니다.", Toast.LENGTH_SHORT).show();
+            Log.e(TAG, "위치 가져오기 실패", e);
             setFallbackLocation();
             fetchWeatherData();
         });
     }
 
-    private void updateLocationInfo(Location location) {
-        LatXLngY gridCoords = convertToGrid(location.getLatitude(), location.getLongitude());
-        currentNx = (int) gridCoords.x;
-        currentNy = (int) gridCoords.y;
+    private void convertLatLngToGrid(double lat, double lon) {
+        double RE = 6371.00877;
+        double GRID = 5.0;
+        double SLAT1 = 30.0;
+        double SLAT2 = 60.0;
+        double OLON = 126.0;
+        double OLAT = 38.0;
+        double XO = 43;
+        double YO = 136;
+
+        double DEGRAD = Math.PI / 180.0;
+        double re = RE / GRID;
+        double slat1 = SLAT1 * DEGRAD;
+        double slat2 = SLAT2 * DEGRAD;
+        double olon = OLON * DEGRAD;
+        double olat = OLAT * DEGRAD;
+
+        double sn = Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+        sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(sn);
+        double sf = Math.tan(Math.PI * 0.25 + slat1 * 0.5);
+        sf = Math.pow(sf, sn) * Math.cos(slat1) / sn;
+        double ro = Math.tan(Math.PI * 0.25 + olat * 0.5);
+        ro = re * sf / Math.pow(ro, sn);
+
+        double ra = Math.tan(Math.PI * 0.25 + (lat) * DEGRAD * 0.5);
+        ra = re * sf / Math.pow(ra, sn);
+        double theta = lon * DEGRAD - olon;
+        if (theta > Math.PI) theta -= 2.0 * Math.PI;
+        if (theta < -Math.PI) theta += 2.0 * Math.PI;
+        theta *= sn;
+
+        currentNx = (int) Math.floor(ra * Math.sin(theta) + XO + 0.5);
+        currentNy = (int) Math.floor(ro - ra * Math.cos(theta) + YO + 0.5);
+    }
+
+    private void updateLocationText(double lat, double lon) {
         try {
-            List<Address> addresses = geocoder.getFromLocation(location.getLatitude(), location.getLongitude(), 1);
+            List<Address> addresses = geocoder.getFromLocation(lat, lon, 1);
             if (addresses != null && !addresses.isEmpty()) {
                 Address address = addresses.get(0);
                 String adminArea = address.getAdminArea() != null ? address.getAdminArea() : "";
@@ -195,25 +252,30 @@ public class WeatherFragment extends Fragment {
     }
 
     private void fetchWeatherData() {
-        String apiKey = BuildConfig.KMA_API_KEY;
         String currentDate = new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Calendar.getInstance().getTime());
         shortTermData = null;
         weeklyForecastList.clear();
-        fetchVillageForecast(apiKey, currentDate, 0);
+        fetchVillageForecast(currentDate, 0);
     }
 
-    private void fetchVillageForecast(String apiKey, String baseDate, int retryCount) {
+    private void fetchVillageForecast(String baseDate, int retryCount) {
         String baseTime = getBaseTimeFor("village");
-        weatherApiService.getVillageForecast(apiKey, 500, 1, "JSON", baseDate, baseTime, currentNx, currentNy)
+        Log.d(TAG, "날씨 API 호출 시도 " + (retryCount + 1) + "/" + MAX_RETRY_COUNT +
+                " - baseDate: " + baseDate + ", baseTime: " + baseTime +
+                ", nx: " + currentNx + ", ny: " + currentNy);
+
+        weatherApiService.getVillageForecast(BuildConfig.KMA_API_HUB_KEY, 500, 1, "JSON", baseDate, baseTime, currentNx, currentNy)
                 .enqueue(new Callback<String>() {
                     @Override
                     public void onResponse(@NonNull Call<String> call, @NonNull Response<String> response) {
                         if (response.isSuccessful() && response.body() != null) {
+                            Log.d(TAG, "날씨 API 응답 성공");
                             shortTermData = lenientGson.fromJson(response.body(), JsonObject.class);
                             parseAndDisplayShortTermWeather();
                             parseAndDisplayWeeklyForecast();
                         } else if (retryCount < MAX_RETRY_COUNT) {
-                            fetchVillageForecast(apiKey, baseDate, retryCount + 1);
+                            Log.w(TAG, "날씨 API 응답 실패 (코드: " + response.code() + "), " + RETRY_DELAY_MS + "ms 후 재시도");
+                            retryHandler.postDelayed(() -> fetchVillageForecast(baseDate, retryCount + 1), RETRY_DELAY_MS);
                         } else {
                             handleApiError("단기예보", response);
                         }
@@ -221,7 +283,8 @@ public class WeatherFragment extends Fragment {
                     @Override
                     public void onFailure(@NonNull Call<String> call, @NonNull Throwable t) {
                         if (retryCount < MAX_RETRY_COUNT) {
-                            fetchVillageForecast(apiKey, baseDate, retryCount + 1);
+                            Log.w(TAG, "날씨 API 네트워크 실패, " + RETRY_DELAY_MS + "ms 후 재시도: " + t.getMessage());
+                            retryHandler.postDelayed(() -> fetchVillageForecast(baseDate, retryCount + 1), RETRY_DELAY_MS);
                         } else {
                             handleApiFailure("단기예보", t);
                         }
@@ -238,18 +301,21 @@ public class WeatherFragment extends Fragment {
             if(headerElement == null || !headerElement.isJsonObject()) return;
             String resultCode = headerElement.getAsJsonObject().get("resultCode").getAsString();
             if (!"00".equals(resultCode)) return;
+
             JsonElement bodyElement = responseObj.get("body");
             if(bodyElement == null || !bodyElement.isJsonObject()) return;
             JsonElement itemsElement = bodyElement.getAsJsonObject().get("items");
             if(itemsElement == null || !itemsElement.isJsonObject()) return;
             JsonElement itemElement = itemsElement.getAsJsonObject().get("item");
             if(itemElement == null || !itemElement.isJsonArray()) return;
+
             List<WeatherResponse.WeatherItem> items = lenientGson.fromJson(itemElement.getAsJsonArray(), new com.google.gson.reflect.TypeToken<List<WeatherResponse.WeatherItem>>() {}.getType());
             String currentFcstTime = items.stream().map(it -> it.fcstTime).findFirst().orElse("");
             Map<String, String> currentWeatherData = items.stream()
                     .filter(it -> it.fcstTime.equals(currentFcstTime))
                     .collect(Collectors.toMap(it -> it.category, it -> it.fcstValue, (v1, v2) -> v1));
             displayCurrentWeather(currentWeatherData);
+
             hourlyForecastList.clear();
             items.stream()
                     .collect(Collectors.groupingBy(item -> item.fcstTime))
@@ -280,7 +346,7 @@ public class WeatherFragment extends Fragment {
             Calendar cal = Calendar.getInstance();
             SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd", Locale.KOREAN);
 
-            for (int i = 0; i <= 2; i++) { // 오늘(0), 내일(1), 모레(2)
+            for (int i = 0; i <= 2; i++) {
                 cal.setTime(Calendar.getInstance().getTime());
                 cal.add(Calendar.DATE, i);
                 String date = sdf.format(cal.getTime());
@@ -425,8 +491,9 @@ public class WeatherFragment extends Fragment {
         }
         @Override public int getItemCount() { return forecasts.size(); }
         class ForecastViewHolder extends RecyclerView.ViewHolder {
-            TextView textDay, textCondition, textHighTemp, textLowTemp; ImageView imageIcon;
-            ForecastViewHolder(View itemView) {
+            TextView textDay, textHighTemp, textLowTemp, textCondition;
+            ImageView imageIcon;
+            public ForecastViewHolder(@NonNull View itemView) {
                 super(itemView);
                 textDay = itemView.findViewById(R.id.textForecastDay);
                 textCondition = itemView.findViewById(R.id.textForecastCondition);
@@ -477,44 +544,6 @@ public class WeatherFragment extends Fragment {
                 textPmRainChance = itemView.findViewById(R.id.textPmRainChance);
                 imagePmIcon = itemView.findViewById(R.id.imagePmIcon);
             }
-        }
-    }
-
-    private LatXLngY convertToGrid(double lat, double lng) {
-        double RE = 6371.00877; double GRID = 5.0; double SLAT1 = 30.0; double SLAT2 = 60.0;
-        double OLON = 126.0; double OLAT = 38.0; double XO = 43; double YO = 136;
-        double DEGRAD = Math.PI / 180.0;
-        double re = RE / GRID; double slat1 = SLAT1 * DEGRAD; double slat2 = SLAT2 * DEGRAD;
-        double olon = OLON * DEGRAD; double olat = OLAT * DEGRAD;
-        double sn = Math.tan(Math.PI * 0.25 + slat2 * 0.5) / Math.tan(Math.PI * 0.25 + slat1 * 0.5);
-        sn = Math.log(Math.cos(slat1) / Math.cos(slat2)) / Math.log(sn);
-        double sf = Math.tan(Math.PI * 0.25 + slat1 * 0.5);
-        sf = Math.pow(sf, sn) * Math.cos(slat1) / sn;
-        double ro = Math.tan(Math.PI * 0.25 + olat * 0.5);
-        ro = re * sf / Math.pow(ro, sn);
-        LatXLngY rs = new LatXLngY(); rs.lat = lat; rs.lng = lng;
-        double ra = Math.tan(Math.PI * 0.25 + (lat) * DEGRAD * 0.5);
-        ra = re * sf / Math.pow(ra, sn);
-        double theta = lng * DEGRAD - olon;
-        if (theta > Math.PI) theta -= 2.0 * Math.PI;
-        if (theta < -Math.PI) theta += 2.0 * Math.PI;
-        theta *= sn;
-        rs.x = Math.floor(ra * Math.sin(theta) + XO + 0.5);
-        rs.y = Math.floor(ro - ra * Math.cos(theta) + YO + 0.5);
-        return rs;
-    }
-
-    private static class LatXLngY { public double lat, lng, x, y; }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE && (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
-            getCurrentLocationAndFetchWeather();
-        } else {
-            Toast.makeText(getContext(), "위치 권한이 거부되어 기본 위치로 조회합니다.", Toast.LENGTH_LONG).show();
-            setFallbackLocation();
-            fetchWeatherData();
         }
     }
 }

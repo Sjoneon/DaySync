@@ -27,11 +27,14 @@ android {
         // 기존 기상청 API 키
         buildConfigField("String", "KMA_API_KEY", "\"${properties.getProperty("KMA_API_KEY")}\"")
 
+        // 기상청 API Hub 키
+        buildConfigField("String", "KMA_API_HUB_KEY", "\"${properties.getProperty("KMA_API_HUB_KEY")}\"")
+
         // 네이버 API 키
         buildConfigField("String", "NAVER_CLIENT_ID", "\"${properties.getProperty("NAVER_CLIENT_ID")}\"")
         buildConfigField("String", "NAVER_CLIENT_SECRET", "\"${properties.getProperty("NAVER_CLIENT_SECRET")}\"")
 
-        // TMAP API 키 추가
+        // TMAP API 키
         buildConfigField("String", "TMAP_API_KEY", "\"${properties.getProperty("TMAP_API_KEY")}\"")
 
         // 국토교통부(TAGO) API 키 (인코딩/디코딩)
@@ -78,10 +81,9 @@ dependencies {
     // Scalars Converter (응답을 String 등 기본 타입으로 받기 위함)
     implementation("com.squareup.retrofit2:converter-scalars:2.9.0")
 
-    // ===== [새로 추가] AI 채팅 기능을 위한 OkHttp & Logging Interceptor =====
+    // AI 채팅 기능을 위한 OkHttp & Logging Interceptor
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-    // =====================================================================
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
