@@ -82,7 +82,7 @@ public class RouteFragment extends Fragment {
     private static final int AVERAGE_BUS_SPEED_BETWEEN_STOPS_MIN = 2;
     private static final int MAX_ROUTES_TO_SHOW = 10;
     private static final int DEFAULT_BUS_RIDE_TIME_MIN = 15;
-    private static final int MAX_API_PAGES = 5;
+    private static final int MAX_API_PAGES = 2;
     private static final int NEARBY_STOPS_COUNT = 50;
     private static final int EXTENDED_SEARCH_RADIUS = 2000;
 
@@ -1217,21 +1217,21 @@ public class RouteFragment extends Fragment {
     // 10. 정류장 및 버스 정보 수집 메서드들 (기존 메서드 유지)
     // ================================================================================================
 
-    private List<TagoBusStopResponse.BusStop> searchBusStopsInMultipleRadii(double latitude, double longitude, String locationName) {
-        // 캐시 키 생성 (소수점 6자리까지 사용하여 약 10cm 정밀도)
-        String cacheKey = String.format(Locale.US, "%.6f_%.6f", latitude, longitude);
+    private List<TagoBusStopResponse.BusStop> searchBusStopsInMultipleRadii(
+            double latitude, double longitude, String locationName) {
 
-        // 캐시된 결과가 있으면 반환
+        // 캐시 확인
+        String cacheKey = String.format(Locale.US, "%.6f_%.6f", latitude, longitude);
         if (busStopSearchCache.containsKey(cacheKey)) {
             List<TagoBusStopResponse.BusStop> cachedStops = busStopSearchCache.get(cacheKey);
-            Log.d(TAG, locationName + " 캐시된 정류장 사용: " + cachedStops.size() + "개");
+            Log.d(TAG, locationName + " 캐시 사용: " + cachedStops.size() + "개");
             return new ArrayList<>(cachedStops);
         }
 
         List<TagoBusStopResponse.BusStop> allStops = new ArrayList<>();
         Set<String> uniqueStopIds = new HashSet<>();
 
-        // API는 500m만 검색하므로, 여러 지점에서 검색하여 1km 범위 커버
+        // API 500m 제한으로 여러 지점 검색하여 1km 범위 커버
         double offset = 0.0045; // 약 500m
 
         double[][] searchPoints = {
@@ -1242,7 +1242,7 @@ public class RouteFragment extends Fragment {
                 {latitude, longitude - offset}      // 서쪽 500m
         };
 
-        Log.d(TAG, locationName + " 다중 지점 검색 시작 (총 " + searchPoints.length + "개 지점)");
+        Log.d(TAG, locationName + " 다중 지점 검색 (1km 범위 커버)");
 
         for (int i = 0; i < searchPoints.length; i++) {
             double[] point = searchPoints[i];
@@ -1260,28 +1260,24 @@ public class RouteFragment extends Fragment {
                                 response.body().response.body.items,
                                 TagoBusStopResponse.Items.class
                         );
-                    } catch (Exception parseException) {
-                        Log.w(TAG, locationName + " 지점 " + (i+1) + " 파싱 실패", parseException);
+                    } catch (Exception e) {
+                        Log.w(TAG, locationName + " 지점 " + (i+1) + " 파싱 실패", e);
                         continue;
                     }
 
-                    if (itemsContainer == null || itemsContainer.item == null) {
-                        continue;
-                    }
+                    if (itemsContainer != null && itemsContainer.item != null) {
+                        for (TagoBusStopResponse.BusStop stop : itemsContainer.item) {
+                            if (stop.nodeid != null && !uniqueStopIds.contains(stop.nodeid)) {
+                                // 실제 중심점과의 거리 계산하여 1km 이내만 선택
+                                double distance = calculateDistance(
+                                        latitude, longitude,
+                                        stop.gpslati, stop.gpslong
+                                );
 
-                    List<TagoBusStopResponse.BusStop> stops = itemsContainer.item;
-                    Log.d(TAG, String.format("%s 지점 %d: %d개 정류장 발견", locationName, i+1, stops.size()));
-
-                    for (TagoBusStopResponse.BusStop stop : stops) {
-                        if (stop.nodeid != null && !uniqueStopIds.contains(stop.nodeid)) {
-                            // 원래 출발지/도착지와의 실제 거리 계산
-                            double distance = calculateDistance(latitude, longitude,
-                                    stop.gpslati, stop.gpslong);
-
-                            // 1000m 이내만 허용
-                            if (distance <= 1000) {
-                                uniqueStopIds.add(stop.nodeid);
-                                allStops.add(stop);
+                                if (distance <= 1000) {
+                                    uniqueStopIds.add(stop.nodeid);
+                                    allStops.add(stop);
+                                }
                             }
                         }
                     }
@@ -1302,21 +1298,21 @@ public class RouteFragment extends Fragment {
             }
         });
 
-        // 가장 가까운 정류장만 선택 (성능 최적화)
-        List<TagoBusStopResponse.BusStop> selectedStops = allStops.size() > MAX_STOPS_PER_LOCATION
-                ? allStops.subList(0, MAX_STOPS_PER_LOCATION)
-                : allStops;
+        // 가까운 순으로 제한
+        List<TagoBusStopResponse.BusStop> selectedStops =
+                allStops.size() > MAX_STOPS_PER_LOCATION
+                        ? allStops.subList(0, MAX_STOPS_PER_LOCATION)
+                        : allStops;
 
-        Log.i(TAG, String.format("%s 근처 정류장 %d개 발견 -> 가까운 %d개 선택",
-                locationName, allStops.size(), selectedStops.size()));
+        Log.i(TAG, locationName + " 근처 " + selectedStops.size() + "개 정류장 발견");
 
         // 선택된 정류장 목록 출력
         for (TagoBusStopResponse.BusStop stop : selectedStops) {
             double dist = calculateDistance(latitude, longitude, stop.gpslati, stop.gpslong);
-            Log.d(TAG, String.format("  - %s (%.0fm, ID: %s)", stop.nodenm, dist, stop.nodeid));
+            Log.d(TAG, String.format("  - %s (%.0fm)", stop.nodenm, dist));
         }
 
-        // 선택된 정류장만 캐시에 저장
+        // 캐시 저장
         List<TagoBusStopResponse.BusStop> resultStops = new ArrayList<>(selectedStops);
         busStopSearchCache.put(cacheKey, resultStops);
 
@@ -1328,59 +1324,67 @@ public class RouteFragment extends Fragment {
         Set<String> uniqueBusIds = new HashSet<>();
 
         try {
-            int[] numOfRowsOptions = {50, 100, 200};
+            // 200개씩 최대 2페이지만 호출
+            int numOfRows = 200;
+            int maxPages = 2;
 
-            for (int numOfRows : numOfRowsOptions) {
-                for (int page = 1; page <= MAX_API_PAGES; page++) {
-                    try {
-                        Response<TagoBusArrivalResponse> response = tagoApiService.getBusArrivalInfo(
-                                BuildConfig.TAGO_API_KEY_DECODED,
-                                stop.citycode,
-                                stop.nodeid,
-                                numOfRows, page, "json"
-                        ).execute();
+            for (int page = 1; page <= maxPages; page++) {
+                try {
+                    Response<TagoBusArrivalResponse> response =
+                            tagoApiService.getBusArrivalInfo(
+                                    BuildConfig.TAGO_API_KEY_DECODED,
+                                    stop.citycode,
+                                    stop.nodeid,
+                                    numOfRows,
+                                    page,
+                                    "json"
+                            ).execute();
 
-                        if (!response.isSuccessful() || response.body() == null) {
-                            break;
-                        }
-
-                        TagoBusArrivalResponse.ItemsContainer itemsContainer = null;
-                        try {
-                            itemsContainer = new Gson().fromJson(response.body().response.body.items, TagoBusArrivalResponse.ItemsContainer.class);
-                        } catch (Exception e) {
-                            Log.w(TAG, "JSON 파싱 실패 - numOfRows: " + numOfRows + ", page: " + page);
-                            continue;
-                        }
-
-                        if (itemsContainer == null || itemsContainer.item == null) {
-                            break;
-                        }
-
-                        for (TagoBusArrivalResponse.BusArrival bus : itemsContainer.item) {
-                            if (bus.routeid != null && bus.routeno != null) {
-                                String busKey = bus.routeno + "_" + bus.routeid;
-                                if (!uniqueBusIds.contains(busKey)) {
-                                    uniqueBusIds.add(busKey);
-                                    allBuses.add(bus);
-                                }
-                            }
-                        }
-
-                        if (itemsContainer.item.size() < numOfRows) {
-                            break;
-                        }
-
-                    } catch (Exception e) {
-                        Log.w(TAG, "API 호출 실패 - page: " + page + ", numOfRows: " + numOfRows, e);
+                    if (!response.isSuccessful() || response.body() == null) {
                         break;
                     }
+
+                    TagoBusArrivalResponse.ItemsContainer itemsContainer = null;
+                    try {
+                        itemsContainer = new Gson().fromJson(
+                                response.body().response.body.items,
+                                TagoBusArrivalResponse.ItemsContainer.class
+                        );
+                    } catch (Exception e) {
+                        Log.w(TAG, "JSON 파싱 실패 - page: " + page);
+                        continue;
+                    }
+
+                    if (itemsContainer == null || itemsContainer.item == null) {
+                        break;
+                    }
+
+                    // 중복 제거하며 버스 목록 추가
+                    for (TagoBusArrivalResponse.BusArrival bus : itemsContainer.item) {
+                        if (bus.routeid != null && bus.routeno != null) {
+                            String busKey = bus.routeno + "_" + bus.routeid;
+                            if (!uniqueBusIds.contains(busKey)) {
+                                uniqueBusIds.add(busKey);
+                                allBuses.add(bus);
+                            }
+                        }
+                    }
+
+                    // 결과가 200개 미만이면 더 이상 페이지 없음
+                    if (itemsContainer.item.size() < numOfRows) {
+                        break;
+                    }
+
+                } catch (Exception e) {
+                    Log.w(TAG, "API 호출 실패 - page: " + page, e);
+                    break;
                 }
             }
 
-            Log.d(TAG, "정류장 " + stop.nodenm + "에서 최종 " + allBuses.size() + "개 고유 버스 수집 완료");
+            Log.d(TAG, "정류장 " + stop.nodenm + "에서 총 " + allBuses.size() + "개 버스 수집");
 
         } catch (Exception e) {
-            Log.e(TAG, "버스 정보 수집 중 예외 발생", e);
+            Log.e(TAG, "버스 정보 수집 중 예외", e);
         }
 
         return allBuses;
@@ -1396,17 +1400,15 @@ public class RouteFragment extends Fragment {
     private int findStationIndex(List<TagoBusRouteStationResponse.RouteStation> stations,
                                  TagoBusStopResponse.BusStop targetStop) {
 
-        // 캐시 키 생성
         String cacheKey = targetStop.nodeid + "_" + stations.hashCode();
 
-        // 캐시된 결과가 있으면 반환
         if (stationIndexCache.containsKey(cacheKey)) {
             return stationIndexCache.get(cacheKey);
         }
 
         int resultIndex = -1;
 
-        // 1차: 정류장 ID 정확 매칭 (가장 신뢰도 높음)
+        // 1단계: ID 정확 매칭
         for (int i = 0; i < stations.size(); i++) {
             TagoBusRouteStationResponse.RouteStation station = stations.get(i);
             if (station.nodeid != null && station.nodeid.equals(targetStop.nodeid)) {
@@ -1416,11 +1418,14 @@ public class RouteFragment extends Fragment {
             }
         }
 
-        // 2차: 정류장명 정확 매칭
+        // 2단계: 이름 유사도 매칭
         for (int i = 0; i < stations.size(); i++) {
             TagoBusRouteStationResponse.RouteStation station = stations.get(i);
-            if (station.nodenm != null && targetStop.nodenm != null) {
-                if (station.nodenm.equals(targetStop.nodenm)) {
+            String stationName = station.nodenm;
+            if (stationName != null && targetStop.nodenm != null) {
+                // 정류장 이름이 포함 관계면 매칭
+                if (stationName.contains(targetStop.nodenm) || targetStop.nodenm.contains(stationName)) {
+                    Log.d(TAG, "이름 기반 매칭 성공: " + stationName + " ≈ " + targetStop.nodenm);
                     resultIndex = i;
                     stationIndexCache.put(cacheKey, resultIndex);
                     return resultIndex;
@@ -1428,13 +1433,17 @@ public class RouteFragment extends Fragment {
             }
         }
 
-        // 3차: 정류장명 정규화 매칭
-        String normalizedTargetName = normalizeStopName(targetStop.nodenm);
+        // 3단계: 좌표 기반 매칭 (50m 이내)
         for (int i = 0; i < stations.size(); i++) {
             TagoBusRouteStationResponse.RouteStation station = stations.get(i);
-            if (station.nodenm != null) {
-                String normalizedStationName = normalizeStopName(station.nodenm);
-                if (normalizedStationName.equals(normalizedTargetName)) {
+            if (station.gpslati > 0 && station.gpslong > 0) {
+                double distance = calculateDistance(
+                        targetStop.gpslati, targetStop.gpslong,
+                        station.gpslati, station.gpslong
+                );
+                if (distance <= 50) {
+                    Log.d(TAG, "좌표 기반 매칭 성공: " + station.nodenm +
+                            " (거리: " + String.format("%.1fm", distance) + ")");
                     resultIndex = i;
                     stationIndexCache.put(cacheKey, resultIndex);
                     return resultIndex;
@@ -1442,50 +1451,7 @@ public class RouteFragment extends Fragment {
             }
         }
 
-        // 4차: 부분 문자열 매칭
-        if (targetStop.nodenm != null && targetStop.nodenm.length() >= 2) {
-            String targetCore = targetStop.nodenm.replaceAll("정류장|정류소|버스정류장|앞|뒤|입구|출구", "").trim();
-            for (int i = 0; i < stations.size(); i++) {
-                TagoBusRouteStationResponse.RouteStation station = stations.get(i);
-                if (station.nodenm != null) {
-                    String stationCore = station.nodenm.replaceAll("정류장|정류소|버스정류장|앞|뒤|입구|출구", "").trim();
-                    if (targetCore.length() >= 2 && stationCore.contains(targetCore)) {
-                        resultIndex = i;
-                        stationIndexCache.put(cacheKey, resultIndex);
-                        return resultIndex;
-                    }
-                    if (stationCore.length() >= 2 && targetCore.contains(stationCore)) {
-                        resultIndex = i;
-                        stationIndexCache.put(cacheKey, resultIndex);
-                        return resultIndex;
-                    }
-                }
-            }
-        }
-
-        // 5차: 좌표 기반 근접 매칭 (점진적 확대)
-        int[] radiusOptions = {50, 100, 200, 500};
-        for (int radius : radiusOptions) {
-            for (int i = 0; i < stations.size(); i++) {
-                TagoBusRouteStationResponse.RouteStation station = stations.get(i);
-                if (station.gpslati > 0 && station.gpslong > 0) {
-                    double distance = calculateDistance(
-                            station.gpslati, station.gpslong,
-                            targetStop.gpslati, targetStop.gpslong
-                    );
-                    if (distance <= radius) {
-                        resultIndex = i;
-                        stationIndexCache.put(cacheKey, resultIndex);
-                        return resultIndex;
-                    }
-                }
-            }
-        }
-
-        // 매칭 실패
-        Log.w(TAG, "정류장 매칭 실패: " + targetStop.nodenm + " (ID: " + targetStop.nodeid + ")");
-        stationIndexCache.put(cacheKey, -1);
-        return -1;
+        return resultIndex;
     }
 
     /**
