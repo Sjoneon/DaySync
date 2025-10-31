@@ -45,12 +45,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.concurrent.TimeUnit;
 
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.scalars.ScalarsConverterFactory;
+
+import okhttp3.OkHttpClient;
 
 /**
  * 날씨 정보를 표시하는 프래그먼트 (단기예보 전용 최종 수정본)
@@ -113,14 +116,23 @@ public class WeatherFragment extends Fragment {
     }
 
     private void initializeServices() {
+        lenientGson = new GsonBuilder().setLenient().create();
+
+        // 타임아웃 설정이 있는 OkHttpClient 생성
+        OkHttpClient okHttpClient = new OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)  // 연결 타임아웃 30초
+                .readTimeout(30, TimeUnit.SECONDS)     // 읽기 타임아웃 30초
+                .writeTimeout(30, TimeUnit.SECONDS)    // 쓰기 타임아웃 30초
+                .build();
+
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(KMA_API_BASE_URL)
+                .client(okHttpClient)  // 타임아웃 설정이 포함된 클라이언트 추가
                 .addConverterFactory(ScalarsConverterFactory.create())
                 .build();
         weatherApiService = retrofit.create(WeatherApiService.class);
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
         geocoder = new Geocoder(getContext(), Locale.KOREAN);
-        lenientGson = new GsonBuilder().setLenient().create();
     }
 
     private void setupRecyclerViews() {
