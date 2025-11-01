@@ -367,42 +367,85 @@ public class BusDirectionAnalyzer {
      */
     private static int findStationIndexEnhanced(List<TagoBusRouteStationResponse.RouteStation> routeStations,
                                                 TagoBusStopResponse.BusStop targetStop) {
+        Log.d(TAG, "=== 정류장 인덱스 찾기 시작 ===");
+        Log.d(TAG, "목표: " + targetStop.nodenm + " (ID: " + targetStop.nodeid + ")");
+        Log.d(TAG, "좌표: lat=" + targetStop.gpslati + ", lng=" + targetStop.gpslong);
+        Log.d(TAG, "노선 정류장 수: " + routeStations.size());
+
         // 1단계: ID로 정확 매칭
+        Log.d(TAG, "1단계: ID 매칭 시도");
         for (int i = 0; i < routeStations.size(); i++) {
             if (routeStations.get(i).nodeid != null &&
                     routeStations.get(i).nodeid.equals(targetStop.nodeid)) {
+                Log.d(TAG, "✅ ID 매칭 성공: " + routeStations.get(i).nodenm + " (인덱스: " + i + ")");
                 return i;
             }
         }
+        Log.d(TAG, "ID 매칭 실패");
 
         // 2단계: 이름 유사도 매칭
+        Log.d(TAG, "2단계: 이름 매칭 시도");
         for (int i = 0; i < routeStations.size(); i++) {
             String stationName = routeStations.get(i).nodenm;
             if (stationName != null && targetStop.nodenm != null) {
                 if (stationName.contains(targetStop.nodenm) || targetStop.nodenm.contains(stationName)) {
-                    Log.d(TAG, "이름 기반 매칭: " + stationName + " ≈ " + targetStop.nodenm);
+                    Log.d(TAG, "✅ 이름 매칭 성공: " + stationName + " ≈ " + targetStop.nodenm + " (인덱스: " + i + ")");
                     return i;
                 }
             }
         }
+        Log.d(TAG, "이름 매칭 실패");
 
         // 3단계: 좌표 기반 매칭 (50m 이내)
+        Log.d(TAG, "3단계: 좌표 매칭 시도 (50m 이내)");
+
+        // 목표 정류장 좌표 체크
+        if (targetStop.gpslati == 0 || targetStop.gpslong == 0) {
+            Log.w(TAG, "❌ 목표 정류장 좌표가 0 → 좌표 매칭 불가");
+            return -1;
+        }
+
+        int validCoordCount = 0;
+        double minDistance = Double.MAX_VALUE;
+        String closestStation = "";
+
         for (int i = 0; i < routeStations.size(); i++) {
             TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
-            if (station.gpslati > 0 && station.gpslong > 0 &&
-                    targetStop.gpslati > 0 && targetStop.gpslong > 0) {
-                double distance = calculateDistance(
-                        targetStop.gpslati, targetStop.gpslong,
-                        station.gpslati, station.gpslong
-                );
-                if (distance <= 50) {
-                    Log.d(TAG, "좌표 기반 매칭: " + station.nodenm +
-                            " (거리: " + String.format("%.1fm", distance) + ")");
-                    return i;
-                }
+
+            // 좌표가 유효한지 확인
+            if (station.gpslati == 0 || station.gpslong == 0) {
+                continue;
+            }
+
+            validCoordCount++;
+
+            double distance = calculateDistance(
+                    targetStop.gpslati, targetStop.gpslong,
+                    station.gpslati, station.gpslong
+            );
+
+            // 최단거리 추적
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestStation = station.nodenm;
+            }
+
+            // 200m 이내는 로그 출력
+            if (distance <= 200) {
+                Log.d(TAG, String.format("  근처: %s (%.1fm, 인덱스: %d)",
+                        station.nodenm, distance, i));
+            }
+
+            if (distance <= 50) {
+                Log.d(TAG, String.format("✅ 좌표 매칭 성공: %s (%.1fm, 인덱스: %d)",
+                        station.nodenm, distance, i));
+                return i;
             }
         }
 
+        Log.w(TAG, String.format("좌표 유효 정류장: %d개, 최단거리: %s (%.1fm)",
+                validCoordCount, closestStation, minDistance));
+        Log.w(TAG, "❌ 모든 매칭 실패");
         return -1;
     }
 
@@ -423,14 +466,18 @@ public class BusDirectionAnalyzer {
      * 두 지점 간 거리 계산 (Haversine)
      */
     private static double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-        final int R = 6371000;
-        double latDistance = Math.toRadians(lat2 - lat1);
-        double lonDistance = Math.toRadians(lon2 - lon1);
-        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        final int EARTH_RADIUS = 6371000; // 미터 단위
+
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
+
+        return EARTH_RADIUS * c;
     }
 
     // 지원 클래스들
