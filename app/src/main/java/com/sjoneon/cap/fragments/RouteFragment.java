@@ -835,6 +835,13 @@ public class RouteFragment extends Fragment {
                 return false;
             }
 
+            // 좌표 추정 경로 필터링
+            if (directionInfo.directionDescription.contains("좌표추정")) {
+                Log.w(TAG, String.format("%s번: 좌표 추정 경로 - 도착지 정류장이 노선에 없어 경로 제외",
+                        bus.routeno));
+                return false;
+            }
+
             // 5. 수정된 신뢰도 기반 3단계 판정 로직
             if (directionInfo.confidence >= 70) {
                 // 높은 신뢰도: BusDirectionAnalyzer 결과 신뢰
@@ -985,6 +992,13 @@ public class RouteFragment extends Fragment {
                     Log.d(TAG, String.format("%s번 → %s: 회차 구간 감지, 다음 도착지 시도",
                             bus.routeno, endStop.nodenm));
                     continue;  // ✅ 다음 도착지로 계속 시도
+                }
+
+                // 좌표 추정 경로는 제외
+                if (directionInfo.directionDescription.contains("좌표추정")) {
+                    Log.d(TAG, String.format("%s번 → %s: 좌표 추정 경로 제외, 다음 도착지 시도",
+                            bus.routeno, endStop.nodenm));
+                    continue;
                 }
 
                 // 노선에서 도착지 정류장 찾기
