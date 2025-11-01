@@ -1,5 +1,3 @@
-// app/src/main/java/com/sjoneon/cap/utils/BusDirectionAnalyzer.java
-
 package com.sjoneon.cap.utils;
 
 import android.util.Log;
@@ -14,8 +12,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * 버스 회차 방향을 정확히 분석하는 클래스 (회차 구간 방향 판정 문제 해결)
- * A-B-A 회차 노선에서 현재 버스가 어느 구간(A→B 또는 B→A)을 운행 중인지 정확히 판별
+ * 버스 회차 방향을 정확히 분석하는 클래스
+ * 동명 정류장(상행/하행)을 모두 검색하여 회차점 통과 없는 최적 경로 선택
  */
 public class BusDirectionAnalyzer {
     private static final String TAG = "BusDirectionAnalyzer";
@@ -52,7 +50,7 @@ public class BusDirectionAnalyzer {
     }
 
     /**
-     * 종합적인 회차 방향 분석
+     * 종합적인 회차 방향 분석 (동명 정류장 모두 검증)
      */
     public static RouteDirectionInfo analyzeRouteDirection(
             TagoBusStopResponse.BusStop startStop,
@@ -70,32 +68,131 @@ public class BusDirectionAnalyzer {
         TerminalInfo terminalInfo = analyzeTerminals(routeStations);
         Log.d(TAG, "회차점 분석: " + terminalInfo.toString());
 
-        // 정류장 인덱스 찾기
-        int startIndex = findStationIndexEnhanced(routeStations, startStop);
-        int endIndex = findStationIndexEnhanced(routeStations, endStop);
+        // 출발지와 도착지의 모든 정류장 인덱스 찾기
+        List<Integer> startIndices = findAllStationIndices(routeStations, startStop);
+        List<Integer> endIndices = findAllStationIndices(routeStations, endStop);
 
-        if (startIndex == -1 || endIndex == -1) {
-            Log.w(TAG, "정류장 인덱스 찾기 실패: start=" + startIndex + ", end=" + endIndex);
-            return new RouteDirectionInfo(false, "UNKNOWN", "회차 버스", 0);
+        if (startIndices.isEmpty() || endIndices.isEmpty()) {
+            Log.w(TAG, "정류장 인덱스 찾기 실패: 출발지=" + startIndices.size() + "개, 도착지=" + endIndices.size() + "개");
+            return new RouteDirectionInfo(false, "UNKNOWN", "정류장 정보 없음", 0);
         }
 
-        // 현재 운행 방향 분석
-        DirectionAnalysisResult directionResult = analyzeCurrentDirectionEnhanced(
-                startIndex, endIndex, terminalInfo, routeStations, bus.routeno);
+        Log.d(TAG, String.format("출발지 '%s' 후보: %d개, 도착지 '%s' 후보: %d개",
+                startStop.nodenm, startIndices.size(), endStop.nodenm, endIndices.size()));
 
-        // 다중 방향 분석
-        List<DirectionAnalysis> analyses = new ArrayList<>();
-        analyses.add(analyzeByBasicDirection(startIndex, endIndex, routeStations));
-        analyses.add(analyzeByTerminalPositionFixed(startIndex, endIndex, terminalInfo, routeStations, directionResult));
-        analyses.add(analyzeByStationOrder(startIndex, endIndex, routeStations));
-        analyses.add(analyzeByCoordinatesFixed(startStop, endStop, routeStations, startIndex, endIndex));
+        // 모든 조합 중 회차점을 넘지 않는 최적 경로 찾기
+        RouteDirectionInfo bestRoute = null;
+        int bestStartIndex = -1;
+        int bestEndIndex = -1;
 
-        // 종합 판정
-        return synthesizeAnalysisEnhanced(analyses, bus.routeno, directionResult);
+        for (int startIndex : startIndices) {
+            for (int endIndex : endIndices) {
+                Log.d(TAG, String.format("경로 검증 중: 출발(%d) -> 도착(%d)", startIndex, endIndex));
+
+                // 회차점 통과 여부 검증
+                boolean crossesTurnaround = checkIfCrossesTurnaround(startIndex, endIndex, terminalInfo, routeStations);
+
+                if (!crossesTurnaround) {
+                    Log.i(TAG, String.format("유효한 경로 발견: 출발(%d) -> 도착(%d) [회차점 미통과]", startIndex, endIndex));
+
+                    // 현재 운행 방향 분석
+                    DirectionAnalysisResult directionResult = analyzeCurrentDirectionEnhanced(
+                            startIndex, endIndex, terminalInfo, routeStations, bus.routeno);
+
+                    // 다중 방향 분석
+                    List<DirectionAnalysis> analyses = new ArrayList<>();
+                    analyses.add(analyzeByBasicDirection(startIndex, endIndex, routeStations));
+                    analyses.add(analyzeByTerminalPositionFixed(startIndex, endIndex, terminalInfo, routeStations, directionResult));
+                    analyses.add(analyzeByStationOrder(startIndex, endIndex, routeStations));
+                    analyses.add(analyzeByCoordinatesFixed(startStop, endStop, routeStations, startIndex, endIndex));
+
+                    // 종합 판정
+                    RouteDirectionInfo currentRoute = synthesizeAnalysisEnhanced(analyses, bus.routeno, directionResult);
+
+                    // 최적 경로 선택 (신뢰도가 더 높은 경로 우선)
+                    if (bestRoute == null || currentRoute.confidence > bestRoute.confidence) {
+                        bestRoute = currentRoute;
+                        bestStartIndex = startIndex;
+                        bestEndIndex = endIndex;
+                    }
+                } else {
+                    Log.d(TAG, String.format("회차점 통과 경로: 출발(%d) -> 도착(%d) [제외됨]", startIndex, endIndex));
+                }
+            }
+        }
+
+        if (bestRoute != null) {
+            Log.i(TAG, String.format("%s번 버스 최적 경로 선택: 출발(%d) -> 도착(%d), 신뢰도: %d%%",
+                    bus.routeno, bestStartIndex, bestEndIndex, bestRoute.confidence));
+            return bestRoute;
+        }
+
+        // 모든 조합이 회차점을 통과하는 경우
+        Log.w(TAG, String.format("%s번: 모든 경로가 회차점 통과 - 승차 불가", bus.routeno));
+        return new RouteDirectionInfo(false, "회차구간통과",
+                "회차점을 넘어가는 경로 (승차 불가)", 0);
     }
 
     /**
-     * 회차점/종점 분석 (중복 제거 로직 적용)
+     * 회차점 통과 여부 검증
+     */
+    private static boolean checkIfCrossesTurnaround(int startIndex, int endIndex,
+                                                    TerminalInfo terminalInfo,
+                                                    List<TagoBusRouteStationResponse.RouteStation> routeStations) {
+
+        // 편도 버스는 회차점 통과 검증 불필요
+        if (terminalInfo.middleTerminals.isEmpty()) {
+            String startName = terminalInfo.startTerminal.name;
+            String endName = terminalInfo.endTerminal.name;
+
+            if (startName.equals(endName)) {
+                // 회차 버스지만 중간 회차점을 못 찾은 경우
+                int estimatedTurnaroundIndex = routeStations.size() / 2;
+
+                Log.d(TAG, String.format("회차점 추정: 인덱스 %d (전체 %d개 정류장)",
+                        estimatedTurnaroundIndex, routeStations.size()));
+
+                // 출발지와 도착지가 회차점을 사이에 두는지 확인
+                if (startIndex < estimatedTurnaroundIndex && endIndex > estimatedTurnaroundIndex) {
+                    Log.w(TAG, String.format("회차점 통과 감지: 출발(%d) < 회차점(%d) < 도착(%d)",
+                            startIndex, estimatedTurnaroundIndex, endIndex));
+                    return true;
+                }
+
+                if (startIndex > estimatedTurnaroundIndex && endIndex < estimatedTurnaroundIndex) {
+                    Log.w(TAG, String.format("역방향 회차점 통과 감지: 도착(%d) < 회차점(%d) < 출발(%d)",
+                            endIndex, estimatedTurnaroundIndex, startIndex));
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // 회차점이 발견된 경우
+        for (TerminalPoint turnaround : terminalInfo.middleTerminals) {
+            int turnaroundIndex = turnaround.index;
+
+            // 출발지와 도착지가 회차점을 사이에 두는지 확인
+            if (startIndex < turnaroundIndex && endIndex > turnaroundIndex) {
+                Log.w(TAG, String.format("회차점 '%s' 통과 감지: 출발(%d) < 회차점(%d) < 도착(%d)",
+                        turnaround.name, startIndex, turnaroundIndex, endIndex));
+                return true;
+            }
+
+            // 역방향으로 회차점을 넘는 경우
+            if (startIndex > turnaroundIndex && endIndex < turnaroundIndex) {
+                Log.w(TAG, String.format("역방향 회차점 '%s' 통과 감지: 도착(%d) < 회차점(%d) < 출발(%d)",
+                        turnaround.name, endIndex, turnaroundIndex, startIndex));
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 회차점/종점 분석
      */
     private static TerminalInfo analyzeTerminals(List<TagoBusRouteStationResponse.RouteStation> routeStations) {
         TerminalInfo terminalInfo = new TerminalInfo();
@@ -110,277 +207,203 @@ public class BusDirectionAnalyzer {
         // 중복 방지
         Set<String> addedTerminals = new HashSet<>();
 
-        // 이전 정류장의 방향 정보
         String prevDirection = null;
-        boolean hasDirectionInfo = false; // updowncd 정보 유무 확인
+        boolean hasDirectionInfo = false;
 
         // 1차: updowncd로 방향 전환 감지
         for (int i = 1; i < routeStations.size() - 1; i++) {
             TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
             String stationName = station.nodenm;
 
-            if (addedTerminals.contains(stationName)) {
-                continue;
-            }
-
-            String currentDirection = station.getDirectionInfo();
-
-            // 방향 정보가 있는지 확인
-            if (!currentDirection.equals("UNKNOWN")) {
+            if (station.updowncd != null && !station.updowncd.isEmpty() && !station.updowncd.equals("0")) {
                 hasDirectionInfo = true;
-            }
 
-            // 방향 전환 감지
-            if (prevDirection != null &&
-                    !prevDirection.equals("UNKNOWN") &&
-                    !currentDirection.equals("UNKNOWN") &&
-                    !prevDirection.equals(currentDirection)) {
+                if (prevDirection != null && !prevDirection.equals(station.updowncd)) {
+                    if (!addedTerminals.contains(stationName)) {
+                        terminalInfo.middleTerminals.add(new TerminalPoint(stationName, i));
+                        addedTerminals.add(stationName);
+                        Log.d(TAG, String.format("회차점 발견 (방향전환): %s (인덱스: %d, %s -> %s)",
+                                stationName, i, prevDirection, station.updowncd));
+                    }
+                }
 
-                terminalInfo.middleTerminals.add(new TerminalPoint(stationName, i));
-                addedTerminals.add(stationName);
-
-                Log.d(TAG, String.format("방향 전환 회차점: %s (인덱스: %d, %s→%s)",
-                        stationName, i, prevDirection, currentDirection));
-            }
-
-            if (!currentDirection.equals("UNKNOWN")) {
-                prevDirection = currentDirection;
+                prevDirection = station.updowncd;
             }
         }
 
-        // 2차 폴백: updowncd 정보가 없는 경우
-        if (!hasDirectionInfo) {
-            Log.w(TAG, "방향 정보(updowncd)가 없어 폴백 전략 사용");
+        // 2차: 방향 정보가 없으면 이름 기반 탐지
+        if (!hasDirectionInfo || terminalInfo.middleTerminals.isEmpty()) {
+            Log.d(TAG, "방향 정보 없음 - 정류장 이름 기반 회차점 탐지");
 
-            String startName = terminalInfo.startTerminal.name;
-            String endName = terminalInfo.endTerminal.name;
+            for (int i = 1; i < routeStations.size() - 1; i++) {
+                String stationName = routeStations.get(i).nodenm;
 
-            // 시작점과 끝점의 이름이 같은 경우만 회차 버스로 판단
-            if (startName.equals(endName)) {
-                Log.d(TAG, "시작점과 종점 이름이 동일: " + startName + " - 회차 버스로 판단");
-
-                // 중간 지점을 회차점으로 추정
-                int midPoint = routeStations.size() / 2;
-                String midStationName = routeStations.get(midPoint).nodenm;
-
-                terminalInfo.middleTerminals.add(new TerminalPoint(midStationName, midPoint));
-                Log.d(TAG, "중간 지점을 회차점으로 추정: " + midStationName + " (인덱스: " + midPoint + ")");
-            } else {
-                Log.d(TAG, "편도 노선으로 판단 (시작: " + startName + ", 종점: " + endName + ")");
+                if (stationName != null &&
+                        (stationName.contains("종점") || stationName.contains("터미널"))) {
+                    if (!addedTerminals.contains(stationName)) {
+                        terminalInfo.middleTerminals.add(new TerminalPoint(stationName, i));
+                        addedTerminals.add(stationName);
+                        Log.d(TAG, String.format("회차점 발견 (이름기반): %s (인덱스: %d)",
+                                stationName, i));
+                    }
+                }
             }
         }
 
         Log.d(TAG, String.format("회차점 분석 완료: 총 %d개 회차점 발견", terminalInfo.middleTerminals.size()));
-
         return terminalInfo;
     }
 
     /**
-     * 현재 운행 방향 분석 (회차 구간 판정 로직 개선)
-     *
-     * [수정 내용]
-     * - 문제: 중간 회차점이 여러 개일 때 첫 번째 회차점만 고려하여 잘못된 판정
-     * - 해결: 출발지와 도착지가 어느 구간에 있는지 정확히 판단하는 로직으로 변경
+     * 현재 운행 방향 분석
      */
     private static DirectionAnalysisResult analyzeCurrentDirectionEnhanced(
             int startIndex, int endIndex, TerminalInfo terminalInfo,
             List<TagoBusRouteStationResponse.RouteStation> routeStations, String busNumber) {
 
         DirectionAnalysisResult result = new DirectionAnalysisResult();
-        int totalStations = routeStations.size();
 
-        if (!terminalInfo.middleTerminals.isEmpty()) {
-            // 출발지와 도착지가 어느 회차점 구간에 속하는지 판단
-            int startSegment = -1;
-            int endSegment = -1;
-
-            // 출발지가 어느 구간에 속하는지 찾기
-            for (int i = 0; i < terminalInfo.middleTerminals.size(); i++) {
-                int terminalIdx = terminalInfo.middleTerminals.get(i).index;
-
-                if (startIndex < terminalIdx) {
-                    startSegment = i;
-                    break;
-                }
-            }
-            if (startSegment == -1) {
-                // 모든 회차점보다 뒤에 있음 (마지막 구간)
-                startSegment = terminalInfo.middleTerminals.size();
-            }
-
-            // 도착지가 어느 구간에 속하는지 찾기
-            for (int i = 0; i < terminalInfo.middleTerminals.size(); i++) {
-                int terminalIdx = terminalInfo.middleTerminals.get(i).index;
-
-                if (endIndex < terminalIdx) {
-                    endSegment = i;
-                    break;
-                }
-            }
-            if (endSegment == -1) {
-                // 모든 회차점보다 뒤에 있음 (마지막 구간)
-                endSegment = terminalInfo.middleTerminals.size();
-            }
-
-            Log.d(TAG, String.format("%s번 구간 분석: start구간=%d, end구간=%d, 회차점개수=%d, startIdx=%d, endIdx=%d",
-                    busNumber, startSegment, endSegment, terminalInfo.middleTerminals.size(), startIndex, endIndex));
-
-            // 구간 판정
-            if (startSegment == endSegment) {
-                // 같은 구간 내에서 이동 - 정상 운행
-                if (startIndex < endIndex) {
-                    result.isForwardDirection = true;
-                    result.currentSegment = "전반부";
-
-                    // 목적지 설정
-                    if (endSegment < terminalInfo.middleTerminals.size()) {
-                        // 다음 회차점 방향
-                        result.destinationName = extractDirectionFromStationName(
-                                terminalInfo.middleTerminals.get(endSegment).name);
-                    } else {
-                        // 종점 방향
-                        result.destinationName = extractDirectionFromStationName(
-                                terminalInfo.endTerminal.name);
-                    }
-                    result.directionDescription = result.destinationName + "방면 (상행)";
-                } else {
-                    // 같은 구간인데 역방향
-                    result.isForwardDirection = false;
-                    result.currentSegment = "후반부";
-                    result.destinationName = extractDirectionFromStationName(
-                            routeStations.get(0).nodenm);
-                    result.directionDescription = result.destinationName + "방면 (하행)";
-                }
-
-            } else if (startSegment < endSegment) {
-                // 출발지 구간 < 도착지 구간 - 회차점을 넘어가는 정상 운행
-                result.isForwardDirection = true;
-                result.currentSegment = "전반부";
-
-                // 도착지가 속한 구간의 목적지 설정
-                if (endSegment < terminalInfo.middleTerminals.size()) {
-                    result.destinationName = extractDirectionFromStationName(
-                            terminalInfo.middleTerminals.get(endSegment).name);
-                } else {
-                    result.destinationName = extractDirectionFromStationName(
-                            terminalInfo.endTerminal.name);
-                }
-                result.directionDescription = result.destinationName + "방면 (상행)";
-
-            } else {
-                // startSegment > endSegment - 회차 후 역방향 운행
-                result.isForwardDirection = false;
-                result.currentSegment = "회차 구간";
-                result.destinationName = extractDirectionFromStationName(
-                        routeStations.get(0).nodenm);
-                result.directionDescription = "회차 대기 필요";
-            }
-
-        } else {
-            // 회차점이 없는 경우
+        if (terminalInfo.middleTerminals.isEmpty()) {
             result.isForwardDirection = startIndex < endIndex;
             result.currentSegment = result.isForwardDirection ? "전반부" : "후반부";
-            result.destinationName = extractDirectionFromStationName(
-                    routeStations.get(startIndex < endIndex ? totalStations - 1 : 0).nodenm);
-            result.directionDescription = result.destinationName + "방면 (" +
-                    (startIndex < endIndex ? "상행" : "하행") + ")";
+            result.destinationName = result.isForwardDirection ?
+                    terminalInfo.endTerminal.name : terminalInfo.startTerminal.name;
+            result.directionDescription = result.destinationName + "방면";
+        } else {
+            TerminalPoint firstTurnaround = terminalInfo.middleTerminals.get(0);
+
+            if (startIndex < firstTurnaround.index && endIndex < firstTurnaround.index) {
+                result.isForwardDirection = true;
+                result.currentSegment = "1구간";
+                result.destinationName = firstTurnaround.name;
+                result.directionDescription = firstTurnaround.name + "방면 (상행)";
+            } else if (startIndex > firstTurnaround.index && endIndex > firstTurnaround.index) {
+                result.isForwardDirection = true;
+                result.currentSegment = "2구간";
+                result.destinationName = terminalInfo.endTerminal.name;
+                result.directionDescription = terminalInfo.endTerminal.name + "방면 (상행)";
+            } else {
+                result.currentSegment = "회차구간";
+                result.directionDescription = "회차점을 넘어가는 구간";
+            }
         }
 
         return result;
     }
 
     /**
-     * 회차점 위치 기반 분석
+     * 노선에서 동일한 이름을 가진 모든 정류장의 인덱스 찾기
+     * 예: "질구지" 검색 시 index 18과 41 모두 반환
+     */
+    private static List<Integer> findAllStationIndices(
+            List<TagoBusRouteStationResponse.RouteStation> routeStations,
+            TagoBusStopResponse.BusStop targetStop) {
+
+        List<Integer> indices = new ArrayList<>();
+        List<Integer> partialMatchIndices = new ArrayList<>();
+
+        Log.d(TAG, "=== 모든 정류장 인덱스 찾기 시작 ===");
+        Log.d(TAG, "목표: " + targetStop.nodenm + " (ID: " + targetStop.nodeid + ")");
+        Log.d(TAG, "노선 정류장 수: " + routeStations.size());
+
+        if (targetStop.nodenm == null || targetStop.nodenm.trim().isEmpty()) {
+            Log.w(TAG, "목표 정류장 이름이 없음");
+            return indices;
+        }
+
+        String targetName = targetStop.nodenm.trim();
+
+        // 1단계: 정확한 매칭 우선 검색
+        for (int i = 0; i < routeStations.size(); i++) {
+            TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
+
+            if (station.nodenm == null) {
+                continue;
+            }
+
+            String stationName = station.nodenm.trim();
+
+            // 정확히 이름이 같은 경우만 추가
+            if (stationName.equals(targetName)) {
+                indices.add(i);
+                Log.d(TAG, String.format("매칭 성공: '%s' (인덱스: %d)", stationName, i));
+            }
+            // 부분 매칭은 별도 리스트에 저장 (정확한 매칭이 없을 때만 사용)
+            else if (stationName.contains(targetName) || targetName.contains(stationName)) {
+                partialMatchIndices.add(i);
+                Log.d(TAG, String.format("부분 매칭 발견: '%s' ≈ '%s' (인덱스: %d)", stationName, targetName, i));
+            }
+        }
+
+        // 정확한 매칭이 없으면 부분 매칭 사용
+        if (indices.isEmpty() && !partialMatchIndices.isEmpty()) {
+            Log.w(TAG, "정확한 매칭 없음 - 부분 매칭 사용");
+            indices.addAll(partialMatchIndices);
+        }
+
+        if (!indices.isEmpty()) {
+            Log.i(TAG, String.format("'%s' 정류장 총 %d개 발견: %s",
+                    targetName, indices.size(), indices.toString()));
+        } else {
+            Log.w(TAG, String.format("'%s' 정류장을 찾을 수 없음", targetName));
+        }
+
+        return indices;
+    }
+
+    /**
+     * 기본 방향 분석
+     */
+    private static DirectionAnalysis analyzeByBasicDirection(int startIndex, int endIndex,
+                                                             List<TagoBusRouteStationResponse.RouteStation> routeStations) {
+        DirectionAnalysis analysis = new DirectionAnalysis("기본방향");
+        analysis.isValid = startIndex < endIndex;
+        analysis.confidence = 70;
+        analysis.segment = analysis.isValid ? "정방향" : "역방향";
+        analysis.reason = String.format("출발(%d) → 도착(%d)", startIndex, endIndex);
+        return analysis;
+    }
+
+    /**
+     * 터미널 위치 분석
      */
     private static DirectionAnalysis analyzeByTerminalPositionFixed(
             int startIndex, int endIndex, TerminalInfo terminalInfo,
             List<TagoBusRouteStationResponse.RouteStation> routeStations,
             DirectionAnalysisResult directionResult) {
 
-        DirectionAnalysis analysis = new DirectionAnalysis("TERMINAL_POSITION");
+        DirectionAnalysis analysis = new DirectionAnalysis("터미널위치");
 
-        try {
-            if (directionResult.currentSegment.contains("후반부") ||
-                    directionResult.currentSegment.contains("회차 구간") ||
-                    !directionResult.isForwardDirection) {
-
-                analysis.isValid = false;
-                analysis.segment = "회차 대기 필요";
-                analysis.confidence = 85;
-                analysis.reason = "회차 구간에서 목적지 도달 불가";
-
-                Log.w(TAG, String.format("회차 구간 판정: %s → %s, 정류장 순서: %d → %d",
-                        routeStations.get(startIndex).nodenm, routeStations.get(endIndex).nodenm,
-                        startIndex, endIndex));
-
-            } else {
-                analysis.isValid = startIndex < endIndex;
-                analysis.segment = directionResult.currentSegment;
-                analysis.confidence = 80;
-                analysis.reason = "회차점 기반 정방향 운행 확인";
-            }
-
-        } catch (Exception e) {
-            Log.e(TAG, "회차점 분석 실패", e);
-            analysis.isValid = false;
-            analysis.confidence = 0;
-            analysis.reason = "회차점 분석 오류";
+        if (terminalInfo.middleTerminals.isEmpty()) {
+            analysis.isValid = true;
+            analysis.confidence = 50;
+            analysis.segment = "편도노선";
+            analysis.reason = "회차점 없음";
+            return analysis;
         }
+
+        TerminalPoint turnaround = terminalInfo.middleTerminals.get(0);
+        boolean beforeTurnaround = startIndex < turnaround.index && endIndex < turnaround.index;
+        boolean afterTurnaround = startIndex > turnaround.index && endIndex > turnaround.index;
+
+        analysis.isValid = beforeTurnaround || afterTurnaround;
+        analysis.confidence = analysis.isValid ? 90 : 10;
+        analysis.segment = beforeTurnaround ? "1구간" : (afterTurnaround ? "2구간" : "회차구간");
+        analysis.reason = String.format("회차점(%d) 기준 분석", turnaround.index);
 
         return analysis;
     }
 
     /**
-     * 기본 방향 정보 기반 분석
+     * 정류장 순서 분석
      */
-    private static DirectionAnalysis analyzeByBasicDirection(
-            int startIndex, int endIndex,
-            List<TagoBusRouteStationResponse.RouteStation> routeStations) {
-
-        DirectionAnalysis analysis = new DirectionAnalysis("BASIC_DIRECTION");
-
-        try {
-            boolean isForward = startIndex < endIndex;
-
-            analysis.isValid = isForward;
-            analysis.confidence = 40;
-            analysis.segment = isForward ? "전반부" : "후반부";
-            analysis.reason = "기본 순서 기반 판정";
-
-        } catch (Exception e) {
-            Log.e(TAG, "기본 방향 분석 실패", e);
-            analysis.isValid = false;
-            analysis.confidence = 0;
-            analysis.reason = "기본 방향 분석 오류";
-        }
-
-        return analysis;
-    }
-
-    /**
-     * 정류장 순서 기반 분석
-     */
-    private static DirectionAnalysis analyzeByStationOrder(
-            int startIndex, int endIndex,
-            List<TagoBusRouteStationResponse.RouteStation> routeStations) {
-
-        DirectionAnalysis analysis = new DirectionAnalysis("STATION_ORDER");
-
-        try {
-            boolean isValid = startIndex < endIndex;
-
-            analysis.isValid = isValid;
-            analysis.segment = isValid ? "정방향" : "역방향";
-            analysis.confidence = 70;
-            analysis.reason = "정류장 순서 기반 판정";
-
-        } catch (Exception e) {
-            Log.e(TAG, "정류장 순서 분석 실패", e);
-            analysis.isValid = false;
-            analysis.confidence = 0;
-            analysis.reason = "정류장 순서 분석 오류";
-        }
-
+    private static DirectionAnalysis analyzeByStationOrder(int startIndex, int endIndex,
+                                                           List<TagoBusRouteStationResponse.RouteStation> routeStations) {
+        DirectionAnalysis analysis = new DirectionAnalysis("정류장순서");
+        analysis.isValid = startIndex < endIndex;
+        analysis.confidence = 80;
+        analysis.segment = analysis.isValid ? "순차구간" : "역순구간";
+        analysis.reason = String.format("인덱스 차이: %d", Math.abs(endIndex - startIndex));
         return analysis;
     }
 
@@ -393,53 +416,36 @@ public class BusDirectionAnalyzer {
             List<TagoBusRouteStationResponse.RouteStation> routeStations,
             int startIndex, int endIndex) {
 
-        DirectionAnalysis analysis = new DirectionAnalysis("COORDINATES");
+        DirectionAnalysis analysis = new DirectionAnalysis("좌표분석");
 
-        try {
-            if (startIndex == -1 || endIndex == -1) {
-                analysis.isValid = false;
-                analysis.confidence = 0;
-                analysis.reason = "좌표 정보 부족";
-                return analysis;
-            }
-
-            double totalDistance = 0;
-            for (int i = startIndex; i < endIndex && i < routeStations.size() - 1; i++) {
-                TagoBusRouteStationResponse.RouteStation current = routeStations.get(i);
-                TagoBusRouteStationResponse.RouteStation next = routeStations.get(i + 1);
-
-                double distance = calculateDistance(
-                        current.gpslati, current.gpslong,
-                        next.gpslati, next.gpslong
-                );
-                totalDistance += distance;
-            }
-
-            analysis.isValid = totalDistance > 0;
-            analysis.confidence = 60;
-            analysis.segment = "좌표 기반";
-            analysis.reason = String.format("경로 거리: %.1fm", totalDistance);
-
-        } catch (Exception e) {
-            Log.e(TAG, "좌표 분석 실패", e);
-            analysis.isValid = false;
-            analysis.confidence = 0;
-            analysis.reason = "좌표 분석 오류";
+        if (startStop.gpslati == 0 || endStop.gpslati == 0) {
+            analysis.isValid = true;
+            analysis.confidence = 30;
+            analysis.segment = "좌표없음";
+            analysis.reason = "좌표 정보 부족";
+            return analysis;
         }
+
+        double startLat = startStop.gpslati;
+        double endLat = endStop.gpslati;
+
+        analysis.isValid = true;
+        analysis.confidence = 60;
+        analysis.segment = startLat < endLat ? "북향" : "남향";
+        analysis.reason = String.format("위도 변화: %.4f", endLat - startLat);
 
         return analysis;
     }
 
     /**
-     * 종합 판정
+     * 종합 분석 결과 합성
      */
     private static RouteDirectionInfo synthesizeAnalysisEnhanced(
-            List<DirectionAnalysis> analyses, String busNumber,
-            DirectionAnalysisResult directionResult) {
+            List<DirectionAnalysis> analyses, String busNumber, DirectionAnalysisResult directionResult) {
 
-        int totalConfidence = 0;
         int validCount = 0;
         int invalidCount = 0;
+        int totalConfidence = 0;
         StringBuilder reasonBuilder = new StringBuilder();
 
         for (DirectionAnalysis analysis : analyses) {
@@ -470,93 +476,6 @@ public class BusDirectionAnalyzer {
     }
 
     /**
-     * 개선된 정류장 인덱스 찾기 (ID, 이름, 좌표 기반)
-     */
-    private static int findStationIndexEnhanced(List<TagoBusRouteStationResponse.RouteStation> routeStations,
-                                                TagoBusStopResponse.BusStop targetStop) {
-        Log.d(TAG, "=== 정류장 인덱스 찾기 시작 ===");
-        Log.d(TAG, "목표: " + targetStop.nodenm + " (ID: " + targetStop.nodeid + ")");
-        Log.d(TAG, "좌표: lat=" + targetStop.gpslati + ", lng=" + targetStop.gpslong);
-        Log.d(TAG, "노선 정류장 수: " + routeStations.size());
-
-        // 1단계: ID로 정확 매칭
-        Log.d(TAG, "1단계: ID 매칭 시도");
-        for (int i = 0; i < routeStations.size(); i++) {
-            if (routeStations.get(i).nodeid != null &&
-                    routeStations.get(i).nodeid.equals(targetStop.nodeid)) {
-                Log.d(TAG, "✅ ID 매칭 성공: " + routeStations.get(i).nodenm + " (인덱스: " + i + ")");
-                return i;
-            }
-        }
-        Log.d(TAG, "ID 매칭 실패");
-
-        // 2단계: 이름 유사도 매칭
-        Log.d(TAG, "2단계: 이름 매칭 시도");
-        for (int i = 0; i < routeStations.size(); i++) {
-            String stationName = routeStations.get(i).nodenm;
-            if (stationName != null && targetStop.nodenm != null) {
-                if (stationName.contains(targetStop.nodenm) || targetStop.nodenm.contains(stationName)) {
-                    Log.d(TAG, "✅ 이름 매칭 성공: " + stationName + " ≈ " + targetStop.nodenm + " (인덱스: " + i + ")");
-                    return i;
-                }
-            }
-        }
-        Log.d(TAG, "이름 매칭 실패");
-
-        // 3단계: 좌표 기반 매칭 (50m 이내)
-        Log.d(TAG, "3단계: 좌표 매칭 시도 (50m 이내)");
-
-        // 목표 정류장 좌표 체크
-        if (targetStop.gpslati == 0 || targetStop.gpslong == 0) {
-            Log.w(TAG, "❌ 목표 정류장 좌표가 0 → 좌표 매칭 불가");
-            return -1;
-        }
-
-        int validCoordCount = 0;
-        double minDistance = Double.MAX_VALUE;
-        String closestStation = "";
-
-        for (int i = 0; i < routeStations.size(); i++) {
-            TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
-
-            // 좌표가 유효한지 확인
-            if (station.gpslati == 0 || station.gpslong == 0) {
-                continue;
-            }
-
-            validCoordCount++;
-
-            double distance = calculateDistance(
-                    targetStop.gpslati, targetStop.gpslong,
-                    station.gpslati, station.gpslong
-            );
-
-            // 최단거리 추적
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestStation = station.nodenm;
-            }
-
-            // 200m 이내는 로그 출력
-            if (distance <= 200) {
-                Log.d(TAG, String.format("  근처: %s (%.1fm, 인덱스: %d)",
-                        station.nodenm, distance, i));
-            }
-
-            if (distance <= 50) {
-                Log.d(TAG, String.format("✅ 좌표 매칭 성공: %s (%.1fm, 인덱스: %d)",
-                        station.nodenm, distance, i));
-                return i;
-            }
-        }
-
-        Log.w(TAG, String.format("좌표 유효 정류장: %d개, 최단거리: %s (%.1fm)",
-                validCoordCount, closestStation, minDistance));
-        Log.w(TAG, "❌ 모든 매칭 실패");
-        return -1;
-    }
-
-    /**
      * 정류장 이름에서 방향 정보 추출
      */
     private static String extractDirectionFromStationName(String stationName) {
@@ -573,7 +492,7 @@ public class BusDirectionAnalyzer {
      * 두 지점 간 거리 계산 (Haversine)
      */
     private static double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-        final int EARTH_RADIUS = 6371000; // 미터 단위
+        final int EARTH_RADIUS = 6371000;
 
         double dLat = Math.toRadians(lat2 - lat1);
         double dLon = Math.toRadians(lon2 - lon1);

@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="@dimen/margin_small"
+    android:layout_marginBottom="@dimen/margin_medium"
     app:cardBackgroundColor="@color/background_card"
     app:cardCornerRadius="@dimen/corner_radius"
     app:cardElevation="2dp">
@@ -12,90 +12,267 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:animateLayoutChanges="true"
-        android:padding="@dimen/padding_xlarge">
+        android:padding="@dimen/padding_large">
 
+        <!-- 버스 노선 정보 (강조) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
-            <LinearLayout
+            android:orientation="horizontal"
+            android:layout_marginBottom="@dimen/margin_small"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/textRouteType"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
-                <TextView
-                    android:id="@+id/textRouteType"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="대중교통"
-                    android:textColor="@color/text_primary"
-                    android:textSize="@dimen/text_size_large"
-                    android:textStyle="bold" />
-                <TextView
-                    android:id="@+id/textRouteSummary"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/margin_small"
-                    android:text="총 이동 시간: 계산 중..."
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_size_medium" />
-            </LinearLayout>
+                android:text="841번 버스"
+                android:textColor="@color/text_primary"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
             <TextView
-                android:id="@+id/textDepartureTime"
+                android:id="@+id/textTotalTime"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical"
-                android:text="도착 정보 없음"
-                android:textColor="@color/text_tertiary"
-                android:textSize="@dimen/text_size_medium" />
+                android:text="64분"
+                android:textColor="@color/primary_color"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
         </LinearLayout>
 
+        <!-- 경로 요약 정보 -->
+        <TextView
+            android:id="@+id/textRouteSummary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/margin_small"
+            android:text="질구지 → 서원대학교 목만관"
+            android:textColor="@color/text_secondary"
+            android:textSize="15sp"
+            android:lineSpacingExtra="2dp" />
+
+        <!-- 출발 시간 정보 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="@dimen/margin_medium">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="도착 예정"
+                android:textColor="@color/text_tertiary"
+                android:textSize="14sp"
+                android:layout_marginEnd="@dimen/margin_small" />
+
+            <TextView
+                android:id="@+id/textDepartureTime"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="15:30"
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+
+        <!-- 구분선 -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:layout_marginTop="@dimen/margin_medium"
-            android:layout_marginBottom="@dimen/margin_medium"
-            android:background="@color/divider_color" />
+            android:background="@color/divider_color"
+            android:layout_marginTop="@dimen/margin_small"
+            android:layout_marginBottom="@dimen/margin_medium" />
 
+        <!-- 상세 경로 정보 (펼침 영역) -->
         <LinearLayout
             android:id="@+id/layoutRouteDetail"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:visibility="gone"> <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="상세 정보가 여기에 표시됩니다."
-            android:textColor="@color/text_primary"/>
+            android:visibility="gone"
+            android:layout_marginBottom="@dimen/margin_medium">
+
+            <!-- 도보 → 출발 정류장 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="@dimen/margin_small"
+                android:paddingStart="@dimen/padding_medium"
+                android:paddingEnd="@dimen/padding_medium">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="1."
+                    android:textColor="@color/text_tertiary"
+                    android:textSize="14sp"
+                    android:layout_marginEnd="@dimen/margin_small" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/textWalkToStart"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="도보 6분"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/textStartStopName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="→ 질구지 정류장"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        android:layout_marginTop="2dp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- 버스 탑승 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="@dimen/margin_small"
+                android:paddingStart="@dimen/padding_medium"
+                android:paddingEnd="@dimen/padding_medium">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="2."
+                    android:textColor="@color/text_tertiary"
+                    android:textSize="14sp"
+                    android:layout_marginEnd="@dimen/margin_small" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/textBusInfo"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="841번 탑승 (46분)"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/textBusDirection"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="미평사거리(궁뜰로)방면 (상행)"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        android:layout_marginTop="2dp" />
+
+                    <TextView
+                        android:id="@+id/textBusWaitTime"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="대기시간 2분"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="12sp"
+                        android:layout_marginTop="2dp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- 하차 → 도보 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/padding_medium"
+                android:paddingEnd="@dimen/padding_medium">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="3."
+                    android:textColor="@color/text_tertiary"
+                    android:textSize="14sp"
+                    android:layout_marginEnd="@dimen/margin_small" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/textEndStopName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="서원대학교 목만관 정류장 하차"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/textWalkToEnd"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="→ 도보 10분"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        android:layout_marginTop="2dp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
 
         </LinearLayout>
 
+        <!-- 버튼 영역 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/margin_medium"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:gravity="center">
+
             <Button
                 android:id="@+id/buttonExpandRoute"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="@dimen/margin_small"
                 android:layout_weight="1"
-                android:background="@color/background_input"
+                android:layout_marginEnd="@dimen/margin_small"
+                android:background="@drawable/rounded_button_background"
                 android:text="@string/show_details"
                 android:textColor="@color/text_primary"
-                android:textSize="@dimen/text_size_small" />
+                android:textSize="14sp"
+                android:padding="@dimen/padding_medium" />
+
             <Button
                 android:id="@+id/buttonStartNavigation"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="@dimen/margin_small"
                 android:layout_weight="1"
-                android:background="@color/background_input"
+                android:layout_marginStart="@dimen/margin_small"
+                android:background="@drawable/rounded_button_background"
                 android:text="@string/start_navigation"
                 android:textColor="@color/text_primary"
-                android:textSize="@dimen/text_size_small" />
+                android:textSize="14sp"
+                android:padding="@dimen/padding_medium" />
+
         </LinearLayout>
+
     </LinearLayout>
+
 </androidx.cardview.widget.CardView>

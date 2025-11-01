@@ -828,7 +828,6 @@ public class RouteFragment extends Fragment {
             // 407번, 412번 같은 회차 구간 문제를 확실히 해결
             if (directionInfo.currentSegment.contains("회차") ||
                     directionInfo.currentSegment.contains("후반부") ||
-                    directionInfo.directionDescription.contains("하행") ||
                     !directionInfo.isForwardDirection) {
 
                 Log.w(TAG, String.format("%s번: 회차 구간 감지 - 승차 불가 (구간: %s, 방향: %s)",
@@ -940,10 +939,11 @@ public class RouteFragment extends Fragment {
     /**
      * 개선된 방향성을 고려한 노선 매칭
      */
-    private RouteMatchResult findDirectionalRouteMatchEnhanced(TagoBusStopResponse.BusStop startStop,
-                                                               List<TagoBusStopResponse.BusStop> endStops,
-                                                               Set<String> destinationKeywords,
-                                                               TagoBusArrivalResponse.BusArrival bus) {
+    private RouteMatchResult findDirectionalRouteMatchEnhanced(
+            TagoBusStopResponse.BusStop startStop,
+            List<TagoBusStopResponse.BusStop> endStops,
+            Set<String> destinationKeywords,
+            TagoBusArrivalResponse.BusArrival bus) {
         try {
             Log.d(TAG, "" + bus.routeno + "번 버스 개선된 방향성 검증 시작");
 
@@ -958,7 +958,8 @@ public class RouteFragment extends Fragment {
                 return null;
             }
 
-            List<TagoBusRouteStationResponse.RouteStation> routeStations = routeResponse.body().response.body.items.item;
+            List<TagoBusRouteStationResponse.RouteStation> routeStations =
+                    routeResponse.body().response.body.items.item;
 
             int startIndex = findStationIndex(routeStations, startStop);
             if (startIndex == -1) {
@@ -966,47 +967,37 @@ public class RouteFragment extends Fragment {
                 return null;
             }
 
-            // BusDirectionAnalyzer로 정확한 방향 정보 미리 분석
-            TagoBusStopResponse.BusStop tempEndStop = endStops.isEmpty() ?
-                    createTempEndStop() : endStops.get(0);
-
-            BusDirectionAnalyzer.RouteDirectionInfo directionInfo =
-                    BusDirectionAnalyzer.analyzeRouteDirection(startStop, tempEndStop, bus, routeStations);
-
-            Log.d(TAG, bus.routeno + "번 사전 방향 분석: " + directionInfo.directionDescription);
-
-            // 회차 구간이면 미리 거부
-            if (directionInfo.currentSegment.contains("회차") ||
-                    directionInfo.currentSegment.contains("후반부") ||
-                    !directionInfo.isForwardDirection) {
-
-                Log.w(TAG, String.format("%s번: 사전 회차 구간 감지 - 노선 매칭 중단", bus.routeno));
-                return null;
-            }
-
-            // 목적지 정류장 찾기 (기존 로직 유지)
+            // ✅ 개선: 모든 도착지 정류장에 대해 방향 분석 시도
             for (TagoBusStopResponse.BusStop endStop : endStops) {
+
+                // 각 도착지 정류장으로 방향 분석
+                BusDirectionAnalyzer.RouteDirectionInfo directionInfo =
+                        BusDirectionAnalyzer.analyzeRouteDirection(startStop, endStop, bus, routeStations);
+
+                Log.d(TAG, String.format("%s번 → %s 방향 분석: %s",
+                        bus.routeno, endStop.nodenm, directionInfo.directionDescription));
+
+                // 회차 구간이면 다음 도착지로 시도
+                if (directionInfo.currentSegment.contains("회차") ||
+                        directionInfo.currentSegment.contains("후반부") ||
+                        !directionInfo.isForwardDirection) {
+
+                    Log.d(TAG, String.format("%s번 → %s: 회차 구간 감지, 다음 도착지 시도",
+                            bus.routeno, endStop.nodenm));
+                    continue;  // ✅ 다음 도착지로 계속 시도
+                }
+
+                // 노선에서 도착지 정류장 찾기
                 int endIndex = findStationIndex(routeStations, endStop);
                 if (endIndex != -1 && endIndex > startIndex) {
+                    Log.i(TAG, String.format("%s번: 유효한 경로 발견 → %s",
+                            bus.routeno, endStop.nodenm));
                     return new RouteMatchResult(endStop, directionInfo.directionDescription);
                 }
             }
 
-            // 수정된 좌표 기반 목적지 찾기 (기존 메서드명 추정)
-            for (TagoBusStopResponse.BusStop endStop : endStops) {
-                // 기존 코드에서 좌표 기반 매칭 로직을 찾아서 사용
-                double distance = calculateDistance(startStop.gpslati, startStop.gpslong,
-                        endStop.gpslati, endStop.gpslong);
-
-                if (distance <= 500) { // 500m 이내
-                    int endIndex = findStationIndex(routeStations, endStop);
-                    if (endIndex != -1 && endIndex > startIndex) {
-                        return new RouteMatchResult(endStop, directionInfo.directionDescription);
-                    }
-                }
-            }
-
-            Log.d(TAG, bus.routeno + "번: 올바른 방향의 도착지 정류장 없음");
+            // 모든 도착지 정류장 시도했지만 실패
+            Log.d(TAG, bus.routeno + "번: 모든 도착지 정류장에서 유효한 경로를 찾지 못함");
             return null;
 
         } catch (Exception e) {
@@ -1014,6 +1005,7 @@ public class RouteFragment extends Fragment {
             return null;
         }
     }
+
 
     /**
      * 회차 방향성 검증이 포함된 완전 개선된 버스 탐색
@@ -1971,7 +1963,7 @@ public class RouteFragment extends Fragment {
     }
 
     // ================================================================================================
-    // 15. RecyclerView 어댑터 (기존 어댑터 유지)
+    // 15. RecyclerView 어댑터 (개선된 버전)
     // ================================================================================================
 
     private class RouteAdapter extends RecyclerView.Adapter<RouteAdapter.RouteViewHolder> {
@@ -1996,48 +1988,48 @@ public class RouteFragment extends Fragment {
         public void onBindViewHolder(@NonNull RouteViewHolder holder, int position) {
             RouteInfo route = routes.get(position);
 
-            // 정확한 방향 정보가 포함된 버스 정보 표시
-            holder.textRouteType.setText(route.getDetailedRouteInfo());
+            // 버스 노선 정보
+            holder.textRouteType.setText(route.getBusNumber() + "번");
 
-            // 승차 정류장 정보 + 총 시간
-            String summaryText = route.getBoardingInfo() + "\n" + route.getRouteSummary();
-            holder.textRouteSummary.setText(summaryText);
+            // 총 소요 시간 (색상을 명시적으로 흰색으로 설정)
+            holder.textTotalTime.setText(route.getDuration() + "분");
+            holder.textTotalTime.setTextColor(
+                    ContextCompat.getColor(holder.itemView.getContext(), R.color.text_primary)
+            );
 
-            // 도착 시간 정보
+            // 경로 요약 (출발 → 도착)
+            holder.textRouteSummary.setText(route.getStopInfo());
+
+            // 도착 예정 시간
             holder.textDepartureTime.setText(route.getDepartureTimeInfo());
 
             // 상세 정보 표시/숨김
             holder.layoutRouteDetail.setVisibility(route.isExpanded() ? View.VISIBLE : View.GONE);
             holder.buttonExpandRoute.setText(route.isExpanded() ? "간략히 보기" : "상세 보기");
 
-            // 상세 정보에는 전체 경로 표시
+            // 상세 정보 바인딩
             if (route.isExpanded()) {
-                // 기존 상세 정보 제거
-                holder.layoutRouteDetail.removeAllViews();
+                // 1단계: 도보 → 출발 정류장
+                holder.textWalkToStart.setText(String.format("도보 %d분", route.getWalkingTimeToStartStop()));
+                holder.textStartStopName.setText(String.format("→ %s 정류장", route.getStartStopName()));
 
-                // 경로 상세 정보 추가
-                TextView routeDetailText = new TextView(holder.itemView.getContext());
-                routeDetailText.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.text_primary));
-                routeDetailText.setTextSize(14);
-                routeDetailText.setPadding(16, 8, 16, 8);
+                // 2단계: 버스 탑승
+                holder.textBusInfo.setText(String.format("%s번 탑승 (%d분)",
+                        route.getBusNumber(), route.getBusRideTime()));
 
-                String detailInfo = String.format(
-                        "버스 경로: %s\n" +
-                                "도보 %d분 → %s에서 승차\n" +
-                                "%d분 대기 → %d분 버스 이용 (%s)\n" +
-                                "%s에서 하차 → 도보 %d분",
-                        route.getStopInfo(),
-                        route.getWalkingTimeToStartStop(),
-                        route.getStartStopName(),
-                        route.getBusWaitTime(),
-                        route.getBusRideTime(),
-                        route.getDirectionInfo(), // 정확한 방향 정보 표시
-                        route.getEndStopName(),
-                        route.getWalkingTimeToDestination()
-                );
+                // 방향 정보가 있으면 표시
+                if (route.getDirectionInfo() != null && !route.getDirectionInfo().equals("방향 정보 없음")) {
+                    holder.textBusDirection.setText(route.getDirectionInfo());
+                    holder.textBusDirection.setVisibility(View.VISIBLE);
+                } else {
+                    holder.textBusDirection.setVisibility(View.GONE);
+                }
 
-                routeDetailText.setText(detailInfo);
-                holder.layoutRouteDetail.addView(routeDetailText);
+                holder.textBusWaitTime.setText(String.format("대기시간 %d분", route.getBusWaitTime()));
+
+                // 3단계: 하차 → 도보
+                holder.textEndStopName.setText(String.format("%s 정류장 하차", route.getEndStopName()));
+                holder.textWalkToEnd.setText(String.format("→ 도보 %d분", route.getWalkingTimeToDestination()));
             }
 
             // 클릭 리스너
@@ -2051,15 +2043,36 @@ public class RouteFragment extends Fragment {
         }
 
         class RouteViewHolder extends RecyclerView.ViewHolder {
-            TextView textRouteType, textRouteSummary, textDepartureTime;
+            // 기본 정보
+            TextView textRouteType, textTotalTime, textRouteSummary, textDepartureTime;
+
+            // 상세 정보
+            TextView textWalkToStart, textStartStopName;
+            TextView textBusInfo, textBusDirection, textBusWaitTime;
+            TextView textEndStopName, textWalkToEnd;
+
             Button buttonExpandRoute, buttonStartNavigation;
             LinearLayout layoutRouteDetail;
 
             RouteViewHolder(@NonNull View itemView) {
                 super(itemView);
+
+                // 기본 정보 뷰 바인딩
                 textRouteType = itemView.findViewById(R.id.textRouteType);
+                textTotalTime = itemView.findViewById(R.id.textTotalTime);
                 textRouteSummary = itemView.findViewById(R.id.textRouteSummary);
                 textDepartureTime = itemView.findViewById(R.id.textDepartureTime);
+
+                // 상세 정보 뷰 바인딩 (새로운 레이아웃 사용 시)
+                textWalkToStart = itemView.findViewById(R.id.textWalkToStart);
+                textStartStopName = itemView.findViewById(R.id.textStartStopName);
+                textBusInfo = itemView.findViewById(R.id.textBusInfo);
+                textBusDirection = itemView.findViewById(R.id.textBusDirection);
+                textBusWaitTime = itemView.findViewById(R.id.textBusWaitTime);
+                textEndStopName = itemView.findViewById(R.id.textEndStopName);
+                textWalkToEnd = itemView.findViewById(R.id.textWalkToEnd);
+
+                // 버튼 및 레이아웃
                 buttonExpandRoute = itemView.findViewById(R.id.buttonExpandRoute);
                 buttonStartNavigation = itemView.findViewById(R.id.buttonStartNavigation);
                 layoutRouteDetail = itemView.findViewById(R.id.layoutRouteDetail);
