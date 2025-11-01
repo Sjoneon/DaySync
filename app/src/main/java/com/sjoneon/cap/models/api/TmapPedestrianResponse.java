@@ -1,13 +1,11 @@
 package com.sjoneon.cap.models.api;
 
 import com.google.gson.annotations.SerializedName;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import java.util.ArrayList;
 import java.util.List;
 
-/**
- * TMAP 보행자 경로 API 응답 데이터 클래스 (수정된 버전)
- * coordinates 필드를 유연하게 처리하도록 개선
- */
 public class TmapPedestrianResponse {
     @SerializedName("features")
     private List<Feature> features;
@@ -16,9 +14,6 @@ public class TmapPedestrianResponse {
         return features;
     }
 
-    /**
-     * GeoJSON Feature 클래스
-     */
     public static class Feature {
         @SerializedName("properties")
         private Properties properties;
@@ -35,41 +30,37 @@ public class TmapPedestrianResponse {
         }
     }
 
-    /**
-     * 경로 속성 정보 클래스
-     */
     public static class Properties {
         @SerializedName("totalTime")
-        private int totalTime; // 총 소요 시간 (초 단위)
+        private int totalTime;
 
         @SerializedName("totalDistance")
-        private int totalDistance; // 총 거리 (미터 단위)
+        private int totalDistance;
 
         @SerializedName("index")
-        private int index; // 경로 인덱스
+        private int index;
 
         @SerializedName("pointIndex")
-        private int pointIndex; // 포인트 인덱스
+        private int pointIndex;
 
         @SerializedName("name")
-        private String name; // 경로명
+        private String name;
 
         @SerializedName("description")
-        private String description; // 경로 설명
+        private String description;
 
         @SerializedName("direction")
-        private String direction; // 방향 정보
+        private String direction;
 
         @SerializedName("intersectionName")
-        private String intersectionName; // 교차로명
+        private String intersectionName;
 
         @SerializedName("turnType")
-        private int turnType; // 회전 타입
+        private int turnType;
 
         @SerializedName("pointType")
-        private String pointType; // 포인트 타입
+        private String pointType;
 
-        // Getter 메서드들
         public int getTotalTime() {
             return totalTime;
         }
@@ -111,16 +102,12 @@ public class TmapPedestrianResponse {
         }
     }
 
-    /**
-     * GeoJSON Geometry 클래스 (수정된 버전)
-     * coordinates를 JsonElement로 처리하여 유연성 확보
-     */
     public static class Geometry {
         @SerializedName("type")
-        private String type; // Geometry 타입 (예: "LineString", "Point")
+        private String type;
 
         @SerializedName("coordinates")
-        private JsonElement coordinates; // 좌표 데이터 (유연한 구조)
+        private JsonElement coordinates;
 
         public String getType() {
             return type;
@@ -132,7 +119,6 @@ public class TmapPedestrianResponse {
 
         /**
          * coordinates를 안전하게 파싱하여 좌표 배열로 반환
-         * @return 좌표 배열 (실패 시 null)
          */
         public List<List<Double>> getCoordinatesAsList() {
             if (coordinates == null || coordinates.isJsonNull()) {
@@ -140,27 +126,54 @@ public class TmapPedestrianResponse {
             }
 
             try {
-                // TMAP API는 다양한 coordinates 구조를 가질 수 있음
                 if (coordinates.isJsonArray()) {
-                    // 배열인 경우 처리
                     return parseCoordinatesArray(coordinates);
                 } else {
-                    // 다른 구조인 경우 null 반환
                     return null;
                 }
             } catch (Exception e) {
-                // 파싱 실패 시 null 반환
                 return null;
             }
         }
 
         /**
-         * JsonElement 배열을 좌표 리스트로 변환
+         * JsonElement 배열을 좌표 리스트로 변환 (구현 완료)
          */
         private List<List<Double>> parseCoordinatesArray(JsonElement coordsElement) {
-            // 구현은 복잡하므로 일단 null 반환
-            // 실제로는 JsonElement를 적절히 파싱해야 함
-            return null;
+            List<List<Double>> result = new ArrayList<>();
+
+            try {
+                if (!coordsElement.isJsonArray()) {
+                    return result;
+                }
+
+                JsonArray coordsArray = coordsElement.getAsJsonArray();
+
+                for (JsonElement element : coordsArray) {
+                    if (element.isJsonArray()) {
+                        JsonArray coordPair = element.getAsJsonArray();
+                        List<Double> pair = new ArrayList<>();
+
+                        // 각 좌표 쌍을 추출 (일반적으로 [경도, 위도])
+                        for (JsonElement coord : coordPair) {
+                            if (coord.isJsonPrimitive() && coord.getAsJsonPrimitive().isNumber()) {
+                                pair.add(coord.getAsDouble());
+                            }
+                        }
+
+                        // 최소 2개의 값(경도, 위도)이 있어야 유효한 좌표
+                        if (pair.size() >= 2) {
+                            result.add(pair);
+                        }
+                    }
+                }
+
+            } catch (Exception e) {
+                // 파싱 실패 시 빈 리스트 반환
+                return new ArrayList<>();
+            }
+
+            return result;
         }
     }
 }

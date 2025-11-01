@@ -1630,7 +1630,15 @@ public class RouteFragment extends Fragment {
                 routeInfo.setWalkingTimeToStartStop(walkToStartMin);
                 routeInfo.setBusRideTime(busRideMin);
                 routeInfo.setWalkingTimeToDestination(walkToEndMin);
-                routeInfo.setDirectionInfo(enhancedDirectionInfo); // 🆕 정확한 방향 정보 설정
+                routeInfo.setDirectionInfo(enhancedDirectionInfo); // 정확한 방향 정보 설정
+
+                // 길안내를 위한 좌표 정보 설정
+                routeInfo.setStartStopLat(startStop.gpslati);
+                routeInfo.setStartStopLng(startStop.gpslong);
+                routeInfo.setEndStopLat(endStop.gpslati);
+                routeInfo.setEndStopLng(endStop.gpslong);
+                routeInfo.setDestinationLat(endLocation.getLatitude());
+                routeInfo.setDestinationLng(endLocation.getLongitude());
 
                 Log.i(TAG, String.format("완전 개선된 경로 정보 생성: %s번 버스 %s, 총 %d분",
                         bus.routeno, enhancedDirectionInfo, totalDurationMin));
@@ -1846,6 +1854,41 @@ public class RouteFragment extends Fragment {
         }
     }
 
+    /**
+     * navigateToNavigation 메서드
+     */
+    private void navigateToNavigation(RouteInfo route) {
+        if (getActivity() instanceof MainActivity) {
+            NavigationFragment navigationFragment = new NavigationFragment();
+            Bundle args = new Bundle();
+
+            // 경로 정보 전달
+            args.putString("start_stop_name", route.getStartStopName());
+            args.putString("end_stop_name", route.getEndStopName());
+            args.putString("bus_number", route.getBusNumber());
+            args.putString("direction_info", route.getDirectionInfo());
+
+            // 좌표 정보 전달
+            args.putDouble("start_stop_lat", route.getStartStopLat());
+            args.putDouble("start_stop_lng", route.getStartStopLng());
+            args.putDouble("end_stop_lat", route.getEndStopLat());
+            args.putDouble("end_stop_lng", route.getEndStopLng());
+            args.putDouble("destination_lat", route.getDestinationLat());
+            args.putDouble("destination_lng", route.getDestinationLng());
+
+            navigationFragment.setArguments(args);
+
+            getActivity().getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.fragment_container, navigationFragment)
+                    .addToBackStack(null)
+                    .commit();
+
+            if (((MainActivity) getActivity()).getSupportActionBar() != null) {
+                ((MainActivity) getActivity()).getSupportActionBar().setTitle("길 안내");
+            }
+        }
+    }
+
     private void toggleRouteDetails(int position) {
         RouteInfo route = routeList.get(position);
         route.setExpanded(!route.isExpanded());
@@ -1869,6 +1912,14 @@ public class RouteFragment extends Fragment {
         private boolean isExpanded = false;
         private String directionInfo;
 
+        // [추가] 길안내를 위한 좌표 정보
+        private double startStopLat;
+        private double startStopLng;
+        private double endStopLat;
+        private double endStopLng;
+        private double destinationLat;
+        private double destinationLng;
+
         public RouteInfo(String type, int duration, int busWaitTime, String busNumber, String startStopName, String endStopName) {
             this.type = type;
             this.duration = duration;
@@ -1891,12 +1942,28 @@ public class RouteFragment extends Fragment {
         public boolean isExpanded() { return isExpanded; }
         public String getDirectionInfo() { return directionInfo; }
 
+        // [추가] 좌표 정보 Getters
+        public double getStartStopLat() { return startStopLat; }
+        public double getStartStopLng() { return startStopLng; }
+        public double getEndStopLat() { return endStopLat; }
+        public double getEndStopLng() { return endStopLng; }
+        public double getDestinationLat() { return destinationLat; }
+        public double getDestinationLng() { return destinationLng; }
+
         // Setters
         public void setBusRideTime(int busRideTime) { this.busRideTime = busRideTime; }
         public void setWalkingTimeToStartStop(int time) { this.walkingTimeToStartStop = time; }
         public void setWalkingTimeToDestination(int time) { this.walkingTimeToDestination = time; }
         public void setExpanded(boolean expanded) { this.isExpanded = expanded; }
         public void setDirectionInfo(String directionInfo) { this.directionInfo = directionInfo; }
+
+        // [추가] 좌표 정보 Setters
+        public void setStartStopLat(double lat) { this.startStopLat = lat; }
+        public void setStartStopLng(double lng) { this.startStopLng = lng; }
+        public void setEndStopLat(double lat) { this.endStopLat = lat; }
+        public void setEndStopLng(double lng) { this.endStopLng = lng; }
+        public void setDestinationLat(double lat) { this.destinationLat = lat; }
+        public void setDestinationLng(double lng) { this.destinationLng = lng; }
 
         public String getRouteSummary() {
             int totalWalkTime = walkingTimeToStartStop + walkingTimeToDestination;
@@ -1988,16 +2055,16 @@ public class RouteFragment extends Fragment {
         public void onBindViewHolder(@NonNull RouteViewHolder holder, int position) {
             RouteInfo route = routes.get(position);
 
-            // 버스 노선 정보
+            // 버스 번호만 표시
             holder.textRouteType.setText(route.getBusNumber() + "번");
 
-            // 총 소요 시간 (색상을 명시적으로 흰색으로 설정)
+            // 총 소요 시간 표시 (흰색)
             holder.textTotalTime.setText(route.getDuration() + "분");
             holder.textTotalTime.setTextColor(
                     ContextCompat.getColor(holder.itemView.getContext(), R.color.text_primary)
             );
 
-            // 경로 요약 (출발 → 도착)
+            // 경로 요약 (정류장 간 화살표)
             holder.textRouteSummary.setText(route.getStopInfo());
 
             // 도착 예정 시간
@@ -2007,34 +2074,43 @@ public class RouteFragment extends Fragment {
             holder.layoutRouteDetail.setVisibility(route.isExpanded() ? View.VISIBLE : View.GONE);
             holder.buttonExpandRoute.setText(route.isExpanded() ? "간략히 보기" : "상세 보기");
 
-            // 상세 정보 바인딩
+            // 상세 정보에는 전체 경로 표시
             if (route.isExpanded()) {
-                // 1단계: 도보 → 출발 정류장
-                holder.textWalkToStart.setText(String.format("도보 %d분", route.getWalkingTimeToStartStop()));
-                holder.textStartStopName.setText(String.format("→ %s 정류장", route.getStartStopName()));
+                // 기존 상세 정보 제거
+                holder.layoutRouteDetail.removeAllViews();
 
-                // 2단계: 버스 탑승
-                holder.textBusInfo.setText(String.format("%s번 탑승 (%d분)",
-                        route.getBusNumber(), route.getBusRideTime()));
+                // 경로 상세 정보 추가
+                TextView routeDetailText = new TextView(holder.itemView.getContext());
+                routeDetailText.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.text_primary));
+                routeDetailText.setTextSize(14);
+                routeDetailText.setPadding(16, 8, 16, 8);
 
-                // 방향 정보가 있으면 표시
-                if (route.getDirectionInfo() != null && !route.getDirectionInfo().equals("방향 정보 없음")) {
-                    holder.textBusDirection.setText(route.getDirectionInfo());
-                    holder.textBusDirection.setVisibility(View.VISIBLE);
-                } else {
-                    holder.textBusDirection.setVisibility(View.GONE);
-                }
+                String detailInfo = String.format(
+                        "버스 경로: %s\n" +
+                                "도보 %d분 → %s에서 승차\n" +
+                                "%d분 대기 → %d분 버스 이용 (%s)\n" +
+                                "%s에서 하차 → 도보 %d분",
+                        route.getStopInfo(),
+                        route.getWalkingTimeToStartStop(),
+                        route.getStartStopName(),
+                        route.getBusWaitTime(),
+                        route.getBusRideTime(),
+                        route.getDirectionInfo(),
+                        route.getEndStopName(),
+                        route.getWalkingTimeToDestination()
+                );
 
-                holder.textBusWaitTime.setText(String.format("대기시간 %d분", route.getBusWaitTime()));
-
-                // 3단계: 하차 → 도보
-                holder.textEndStopName.setText(String.format("%s 정류장 하차", route.getEndStopName()));
-                holder.textWalkToEnd.setText(String.format("→ 도보 %d분", route.getWalkingTimeToDestination()));
+                routeDetailText.setText(detailInfo);
+                holder.layoutRouteDetail.addView(routeDetailText);
             }
 
-            // 클릭 리스너
+            // [수정] 클릭 리스너
             holder.buttonExpandRoute.setOnClickListener(v -> detailListener.onToggle(position));
-            holder.buttonStartNavigation.setOnClickListener(v -> listener.onNavigate(route));
+
+            // [수정] 길안내 버튼 클릭 시 NavigationFragment로 이동
+            holder.buttonStartNavigation.setOnClickListener(v -> {
+                navigateToNavigation(route);
+            });
         }
 
         @Override
