@@ -107,74 +107,181 @@ public class BusDirectionAnalyzer {
                 routeStations.get(routeStations.size() - 1).nodenm,
                 routeStations.size() - 1);
 
-        // 같은 회차점이 연속으로 나타나는 경우 방지
+        // 중복 방지
         Set<String> addedTerminals = new HashSet<>();
 
-        for (int i = 1; i < routeStations.size() - 1; i++) {
-            String stationName = routeStations.get(i).nodenm;
+        // 이전 정류장의 방향 정보
+        String prevDirection = null;
+        boolean hasDirectionInfo = false; // updowncd 정보 유무 확인
 
-            // 이미 추가한 회차점은 스킵
+        // 1차: updowncd로 방향 전환 감지
+        for (int i = 1; i < routeStations.size() - 1; i++) {
+            TagoBusRouteStationResponse.RouteStation station = routeStations.get(i);
+            String stationName = station.nodenm;
+
             if (addedTerminals.contains(stationName)) {
                 continue;
             }
 
-            if (stationName.contains("종점") || stationName.contains("터미널") ||
-                    stationName.contains("차고지") || stationName.contains("공영차고")) {
+            String currentDirection = station.getDirectionInfo();
+
+            // 방향 정보가 있는지 확인
+            if (!currentDirection.equals("UNKNOWN")) {
+                hasDirectionInfo = true;
+            }
+
+            // 방향 전환 감지
+            if (prevDirection != null &&
+                    !prevDirection.equals("UNKNOWN") &&
+                    !currentDirection.equals("UNKNOWN") &&
+                    !prevDirection.equals(currentDirection)) {
+
                 terminalInfo.middleTerminals.add(new TerminalPoint(stationName, i));
                 addedTerminals.add(stationName);
-                Log.d(TAG, "중간 회차점 발견: " + stationName + " (인덱스: " + i + ")");
+
+                Log.d(TAG, String.format("방향 전환 회차점: %s (인덱스: %d, %s→%s)",
+                        stationName, i, prevDirection, currentDirection));
+            }
+
+            if (!currentDirection.equals("UNKNOWN")) {
+                prevDirection = currentDirection;
             }
         }
+
+        // 2차 폴백: updowncd 정보가 없는 경우
+        if (!hasDirectionInfo) {
+            Log.w(TAG, "방향 정보(updowncd)가 없어 폴백 전략 사용");
+
+            String startName = terminalInfo.startTerminal.name;
+            String endName = terminalInfo.endTerminal.name;
+
+            // 시작점과 끝점의 이름이 같은 경우만 회차 버스로 판단
+            if (startName.equals(endName)) {
+                Log.d(TAG, "시작점과 종점 이름이 동일: " + startName + " - 회차 버스로 판단");
+
+                // 중간 지점을 회차점으로 추정
+                int midPoint = routeStations.size() / 2;
+                String midStationName = routeStations.get(midPoint).nodenm;
+
+                terminalInfo.middleTerminals.add(new TerminalPoint(midStationName, midPoint));
+                Log.d(TAG, "중간 지점을 회차점으로 추정: " + midStationName + " (인덱스: " + midPoint + ")");
+            } else {
+                Log.d(TAG, "편도 노선으로 판단 (시작: " + startName + ", 종점: " + endName + ")");
+            }
+        }
+
+        Log.d(TAG, String.format("회차점 분석 완료: 총 %d개 회차점 발견", terminalInfo.middleTerminals.size()));
 
         return terminalInfo;
     }
 
     /**
-     * 현재 운행 방향 분석
+     * 현재 운행 방향 분석 (회차 구간 판정 로직 개선)
+     *
+     * [수정 내용]
+     * - 문제: 중간 회차점이 여러 개일 때 첫 번째 회차점만 고려하여 잘못된 판정
+     * - 해결: 출발지와 도착지가 어느 구간에 있는지 정확히 판단하는 로직으로 변경
      */
     private static DirectionAnalysisResult analyzeCurrentDirectionEnhanced(
             int startIndex, int endIndex, TerminalInfo terminalInfo,
             List<TagoBusRouteStationResponse.RouteStation> routeStations, String busNumber) {
 
         DirectionAnalysisResult result = new DirectionAnalysisResult();
-
         int totalStations = routeStations.size();
-        int midPoint = totalStations / 2;
 
         if (!terminalInfo.middleTerminals.isEmpty()) {
-            TerminalPoint firstTerminal = terminalInfo.middleTerminals.get(0);
-            int terminalIndex = firstTerminal.index;
+            // 출발지와 도착지가 어느 회차점 구간에 속하는지 판단
+            int startSegment = -1;
+            int endSegment = -1;
 
-            if (startIndex < terminalIndex && endIndex < terminalIndex) {
-                // 첫 번째 구간 (시점→회차점)
+            // 출발지가 어느 구간에 속하는지 찾기
+            for (int i = 0; i < terminalInfo.middleTerminals.size(); i++) {
+                int terminalIdx = terminalInfo.middleTerminals.get(i).index;
+
+                if (startIndex < terminalIdx) {
+                    startSegment = i;
+                    break;
+                }
+            }
+            if (startSegment == -1) {
+                // 모든 회차점보다 뒤에 있음 (마지막 구간)
+                startSegment = terminalInfo.middleTerminals.size();
+            }
+
+            // 도착지가 어느 구간에 속하는지 찾기
+            for (int i = 0; i < terminalInfo.middleTerminals.size(); i++) {
+                int terminalIdx = terminalInfo.middleTerminals.get(i).index;
+
+                if (endIndex < terminalIdx) {
+                    endSegment = i;
+                    break;
+                }
+            }
+            if (endSegment == -1) {
+                // 모든 회차점보다 뒤에 있음 (마지막 구간)
+                endSegment = terminalInfo.middleTerminals.size();
+            }
+
+            Log.d(TAG, String.format("%s번 구간 분석: start구간=%d, end구간=%d, 회차점개수=%d, startIdx=%d, endIdx=%d",
+                    busNumber, startSegment, endSegment, terminalInfo.middleTerminals.size(), startIndex, endIndex));
+
+            // 구간 판정
+            if (startSegment == endSegment) {
+                // 같은 구간 내에서 이동 - 정상 운행
+                if (startIndex < endIndex) {
+                    result.isForwardDirection = true;
+                    result.currentSegment = "전반부";
+
+                    // 목적지 설정
+                    if (endSegment < terminalInfo.middleTerminals.size()) {
+                        // 다음 회차점 방향
+                        result.destinationName = extractDirectionFromStationName(
+                                terminalInfo.middleTerminals.get(endSegment).name);
+                    } else {
+                        // 종점 방향
+                        result.destinationName = extractDirectionFromStationName(
+                                terminalInfo.endTerminal.name);
+                    }
+                    result.directionDescription = result.destinationName + "방면 (상행)";
+                } else {
+                    // 같은 구간인데 역방향
+                    result.isForwardDirection = false;
+                    result.currentSegment = "후반부";
+                    result.destinationName = extractDirectionFromStationName(
+                            routeStations.get(0).nodenm);
+                    result.directionDescription = result.destinationName + "방면 (하행)";
+                }
+
+            } else if (startSegment < endSegment) {
+                // 출발지 구간 < 도착지 구간 - 회차점을 넘어가는 정상 운행
                 result.isForwardDirection = true;
                 result.currentSegment = "전반부";
-                result.destinationName = extractDirectionFromStationName(
-                        routeStations.get(terminalIndex).nodenm);
+
+                // 도착지가 속한 구간의 목적지 설정
+                if (endSegment < terminalInfo.middleTerminals.size()) {
+                    result.destinationName = extractDirectionFromStationName(
+                            terminalInfo.middleTerminals.get(endSegment).name);
+                } else {
+                    result.destinationName = extractDirectionFromStationName(
+                            terminalInfo.endTerminal.name);
+                }
                 result.directionDescription = result.destinationName + "방면 (상행)";
 
-            } else if (startIndex > terminalIndex && endIndex > terminalIndex) {
-                // 두 번째 구간 (회차점→종점)
-                result.isForwardDirection = false;
-                result.currentSegment = "후반부";
-                result.destinationName = extractDirectionFromStationName(
-                        routeStations.get(routeStations.size() - 1).nodenm);
-                result.directionDescription = result.destinationName + "방면 (하행)";
-
             } else {
-                // 회차 구간 (startIndex와 endIndex가 회차점을 넘어감)
+                // startSegment > endSegment - 회차 후 역방향 운행
                 result.isForwardDirection = false;
                 result.currentSegment = "회차 구간";
                 result.destinationName = extractDirectionFromStationName(
-                        routeStations.get(terminalIndex).nodenm);
+                        routeStations.get(0).nodenm);
                 result.directionDescription = "회차 대기 필요";
             }
+
         } else {
             // 회차점이 없는 경우
             result.isForwardDirection = startIndex < endIndex;
             result.currentSegment = result.isForwardDirection ? "전반부" : "후반부";
             result.destinationName = extractDirectionFromStationName(
-                    routeStations.get(startIndex < endIndex ? routeStations.size() - 1 : 0).nodenm);
+                    routeStations.get(startIndex < endIndex ? totalStations - 1 : 0).nodenm);
             result.directionDescription = result.destinationName + "방면 (" +
                     (startIndex < endIndex ? "상행" : "하행") + ")";
         }
