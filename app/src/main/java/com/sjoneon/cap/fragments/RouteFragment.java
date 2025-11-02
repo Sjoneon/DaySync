@@ -90,7 +90,7 @@ public class RouteFragment extends Fragment {
     private static final int EXTENDED_SEARCH_RADIUS = 2000;
 
     // 성능 최적화: 각 출발지/도착지 근처에서 검색할 최대 정류장 개수
-    private static final int MAX_STOPS_PER_LOCATION = 14;
+    private static final int MAX_STOPS_PER_LOCATION = 20;
 
     // 새로운 버스 탑승 시간 계산 관련 상수
     private static final double DISTANCE_MULTIPLIER = 1.3;
@@ -1326,10 +1326,10 @@ public class RouteFragment extends Fragment {
 
         Log.i(TAG, locationName + " 근처 " + selectedStops.size() + "개 정류장 발견");
 
-        // 선택된 정류장 목록 출력
+        // 선택된 정류장 목록 출력 (디버깅용)
         for (TagoBusStopResponse.BusStop stop : selectedStops) {
             double dist = calculateDistance(latitude, longitude, stop.gpslati, stop.gpslong);
-            Log.d(TAG, String.format("  - %s (%.0fm)", stop.nodenm, dist));
+            Log.d(TAG, String.format("  - %s (%.0fm) [ID: %s]", stop.nodenm, dist, stop.nodeid));
         }
 
         // 캐시 저장
@@ -1641,15 +1641,24 @@ public class RouteFragment extends Fragment {
             try {
                 int walkToStartMin = calculateWalkingTime(startLocation, startStop);
                 int walkToEndMin = calculateWalkingTime(endLocation, endStop);
-                int busWaitMin = Math.max(1, bus.arrtime / 60);
+                int busArrivalMin = Math.max(1, bus.arrtime / 60);
+
+                // 도보 시간보다 버스 도착 시간이 짧으면 탈 수 없으므로 제외
+                if (busArrivalMin < walkToStartMin) {
+                    Log.w(TAG, String.format("%s번 버스: 도보 시간(%d분) > 버스 도착(%d분) - 탑승 불가능, 경로 제외",
+                            bus.routeno, walkToStartMin, busArrivalMin));
+                    mainHandler.post(() -> callback.onError());
+                    return;
+                }
+
                 int busRideMin = calculateOptimalBusRideTime(startStop, endStop, bus.routeid, bus.routeno);
 
-                int totalDurationMin = walkToStartMin + busWaitMin + busRideMin + walkToEndMin;
+                int totalDurationMin = walkToStartMin + busArrivalMin + busRideMin + walkToEndMin;
 
                 RouteInfo routeInfo = new RouteInfo(
                         "대중교통",
                         totalDurationMin,
-                        busWaitMin,
+                        busArrivalMin,
                         bus.routeno,
                         startStop.nodenm,
                         endStop.nodenm
@@ -1734,6 +1743,13 @@ public class RouteFragment extends Fragment {
             // 정류장 개수 기반 계산
             int stopsBasedTime = calculateBusRideTimeByStops(startStop, endStop, routeId);
 
+            // 정류장 개수가 비정상적으로 많으면 (회차 경로 가능성) 거리 기반만 사용
+            if (stopsBasedTime > 60) {
+                Log.w(TAG, String.format("%s번: 정류장 기반 시간(%d분)이 비정상적으로 큼 - 거리 기반만 사용",
+                        busNumber, stopsBasedTime));
+                stopsBasedTime = 0;
+            }
+
             // 두 값의 가중평균
             int baseTime;
             if (stopsBasedTime > 0) {
@@ -1785,6 +1801,13 @@ public class RouteFragment extends Fragment {
 
                 if (startIndex != -1 && endIndex != -1 && endIndex > startIndex) {
                     int stopCount = endIndex - startIndex;
+
+                    // 정류장 개수가 50개 이상이면 회차 경로 가능성이 높으므로 무시
+                    if (stopCount > 50) {
+                        Log.w(TAG, String.format("정류장 개수 과다(%d개) - 회차 경로 가능성, 계산 제외", stopCount));
+                        return 0;
+                    }
+
                     return (int) Math.ceil(stopCount * MINUTES_PER_STOP);
                 }
             }
