@@ -62,6 +62,10 @@ public class ApiClient {
         return apiService;
     }
 
+    public static DaySyncApiService getDaySyncApiService() {
+        return getInstance().getApiService();
+    }
+
     public String getBaseUrl() {
         return BASE_URL;
     }

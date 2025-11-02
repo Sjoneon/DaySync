@@ -19,6 +19,13 @@ import com.sjoneon.cap.models.api.AlarmResponse;
 import com.sjoneon.cap.models.api.SessionListResponse;
 import com.sjoneon.cap.models.api.MessageListResponse;
 
+
+import com.sjoneon.cap.models.api.RouteSaveRequest;
+import com.sjoneon.cap.models.api.RouteSearchRequest;
+import com.sjoneon.cap.models.api.RouteResponse;
+import com.sjoneon.cap.models.api.RouteSearchResponse;
+import com.sjoneon.cap.models.api.RouteListResponse;
+
 import java.util.List;
 
 import retrofit2.Call;
@@ -28,6 +35,7 @@ import retrofit2.http.GET;
 import retrofit2.http.POST;
 import retrofit2.http.PUT;
 import retrofit2.http.Path;
+import retrofit2.http.Query;
 
 /**
  * DaySync 백엔드 API 서비스 인터페이스
@@ -162,4 +170,32 @@ public interface DaySyncApiService {
             @Path("session_id") int sessionId,
             @Body SessionUpdateRequest request
     );
+
+    /**
+     * 경로 저장
+     * POST /api/routes/save
+     */
+    @POST("api/routes/save")
+    Call<RouteResponse> saveRoute(@Body RouteSaveRequest request);
+
+    /**
+     * 경로 검색 (좌표 기반)
+     * POST /api/routes/search
+     */
+    @POST("api/routes/search")
+    Call<RouteSearchResponse> searchRoute(@Body RouteSearchRequest request);
+
+    /**
+     * 최근 경로 목록 조회
+     * GET /api/routes/recent?limit={limit}
+     */
+    @GET("api/routes/recent")
+    Call<RouteListResponse> getRecentRoutes(@Query("limit") int limit);
+
+    /**
+     * 경로 삭제
+     * DELETE /api/routes/{route_id}
+     */
+    @DELETE("api/routes/{route_id}")
+    Call<Void> deleteRoute(@Path("route_id") int routeId);
 }

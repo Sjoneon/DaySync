@@ -1,5 +1,3 @@
-// app/src/main/java/com/sjoneon/cap/RouteFragment.java
-
 package com.sjoneon.cap.fragments;
 
 import android.Manifest;
@@ -44,6 +42,11 @@ import com.sjoneon.cap.utils.BusDirectionAnalyzer;
 import com.sjoneon.cap.utils.TagoBusArrivalDeserializer;
 import com.sjoneon.cap.utils.TagoBusStopDeserializer;
 import com.sjoneon.cap.models.api.TmapPedestrianResponse;
+import androidx.lifecycle.ViewModelProvider;
+import com.sjoneon.cap.viewmodels.RouteViewModel;
+import com.sjoneon.cap.repositories.RouteRepository;
+import android.content.SharedPreferences;
+import static android.content.Context.MODE_PRIVATE;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -118,6 +121,10 @@ public class RouteFragment extends Fragment {
 
     private Location startLocation, endLocation;
 
+    private RouteViewModel routeViewModel;
+    private RouteRepository routeRepository;
+    private String userUuid;
+
     // 성능 최적화를 위한 캐시
     private final Map<String, Integer> stationIndexCache = new HashMap<>();
     private final Map<String, List<TagoBusStopResponse.BusStop>> busStopSearchCache = new HashMap<>();
@@ -130,11 +137,18 @@ public class RouteFragment extends Fragment {
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_route, container, false);
+
+        SharedPreferences prefs = requireContext().getSharedPreferences("UserPrefs", MODE_PRIVATE);
+        userUuid = prefs.getString("user_uuid", null);
+
+        routeViewModel = new ViewModelProvider(requireActivity()).get(RouteViewModel.class);
+        routeRepository = RouteRepository.getInstance(requireContext());
         initializeViews(view);
         initializeServices();
         setupRecyclerView();
         setupClickListeners();
         loadCurrentLocation();
+        observeViewModel();
         return view;
     }
 
@@ -1820,6 +1834,12 @@ public class RouteFragment extends Fragment {
         } else {
             routeList.clear();
             routeList.addAll(routes);
+
+            routeViewModel.updateRouteList(new ArrayList<>(routes), userUuid);
+            routeViewModel.setStartLocationText(editStartLocation.getText().toString());
+            routeViewModel.setEndLocationText(editEndLocation.getText().toString());
+            routeViewModel.setStartLocation(startLocation);
+            routeViewModel.setEndLocation(endLocation);
             routeAdapter.notifyDataSetChanged();
             updateRouteListVisibility(false, "");
             Log.i(TAG, "완전 개선된 경로 탐색 완료: " + routes.size() + "개 경로 표시");
@@ -2167,6 +2187,58 @@ public class RouteFragment extends Fragment {
                 buttonStartNavigation = itemView.findViewById(R.id.buttonStartNavigation);
                 layoutRouteDetail = itemView.findViewById(R.id.layoutRouteDetail);
             }
+        }
+    }
+
+    private void observeViewModel() {
+        routeViewModel.getRouteList().observe(getViewLifecycleOwner(), routes -> {
+            if (routes != null && !routes.isEmpty()) {
+                routeList.clear();
+                routeList.addAll(routes);
+                routeAdapter.notifyDataSetChanged();
+                updateRouteListVisibility(false, "");
+                Log.i(TAG, "ViewModel에서 경로 복구: " + routes.size() + "개");
+            }
+        });
+
+        routeViewModel.getStartLocationText().observe(getViewLifecycleOwner(), text -> {
+            if (text != null && !text.isEmpty() && editStartLocation != null) {
+                editStartLocation.setText(text);
+            }
+        });
+
+        routeViewModel.getEndLocationText().observe(getViewLifecycleOwner(), text -> {
+            if (text != null && !text.isEmpty() && editEndLocation != null) {
+                editEndLocation.setText(text);
+            }
+        });
+
+        routeViewModel.getIsLoading().observe(getViewLifecycleOwner(), isLoading -> {
+            if (isLoading != null) {
+                showLoading(isLoading);
+            }
+        });
+
+        routeViewModel.getErrorMessage().observe(getViewLifecycleOwner(), error -> {
+            if (error != null && !error.isEmpty()) {
+                showToast(error);
+            }
+        });
+
+        routeViewModel.getIsSyncedWithServer().observe(getViewLifecycleOwner(), isSynced -> {
+            if (isSynced != null && isSynced) {
+                Log.i(TAG, "경로가 서버에 저장되었습니다");
+            }
+        });
+
+        Location savedStartLocation = routeViewModel.getStartLocation();
+        Location savedEndLocation = routeViewModel.getEndLocation();
+
+        if (savedStartLocation != null) {
+            startLocation = savedStartLocation;
+        }
+        if (savedEndLocation != null) {
+            endLocation = savedEndLocation;
         }
     }
 }
