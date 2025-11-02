@@ -430,13 +430,40 @@ public class WeatherFragment extends Fragment {
     }
 
     private int getWeatherIconResource(String condition) {
-        if (condition == null) return android.R.drawable.ic_menu_help;
-        if (condition.contains("맑음")) return android.R.drawable.ic_menu_day;
-        if (condition.contains("구름")) return android.R.drawable.ic_menu_gallery;
-        if (condition.contains("흐림")) return android.R.drawable.ic_menu_close_clear_cancel;
-        if (condition.contains("비")) return android.R.drawable.ic_menu_send;
-        if (condition.contains("눈")) return android.R.drawable.ic_menu_compass;
-        return android.R.drawable.ic_menu_help;
+        if (condition == null) {
+            return R.drawable.ic_weather_default;
+        }
+
+        // 맑음
+        if (condition.contains("맑음")) {
+            return R.drawable.ic_weather_sunny;
+        }
+        // 구름많음
+        else if (condition.contains("구름")) {
+            return R.drawable.ic_weather_cloudy;
+        }
+        // 흐림
+        else if (condition.contains("흐림")) {
+            return R.drawable.ic_weather_overcast;
+        }
+        // 비 (비/눈 혼합 체크)
+        else if (condition.contains("비")) {
+            if (condition.contains("눈")) {
+                return R.drawable.ic_weather_sleet;
+            }
+            return R.drawable.ic_weather_rainy;
+        }
+        // 눈
+        else if (condition.contains("눈")) {
+            return R.drawable.ic_weather_snowy;
+        }
+        // 진눈깨비
+        else if (condition.contains("진눈깨비")) {
+            return R.drawable.ic_weather_sleet;
+        }
+
+        // 기본값 (정보 없음)
+        return R.drawable.ic_weather_default;
     }
 
     private String getBaseTimeFor(String apiType) {
