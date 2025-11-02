@@ -1835,11 +1835,15 @@ public class RouteFragment extends Fragment {
             routeList.clear();
             routeList.addAll(routes);
 
-            routeViewModel.updateRouteList(new ArrayList<>(routes), userUuid);
-            routeViewModel.setStartLocationText(editStartLocation.getText().toString());
-            routeViewModel.setEndLocationText(editEndLocation.getText().toString());
+            // 서버 저장을 위해 좌표를 먼저 ViewModel에 설정
             routeViewModel.setStartLocation(startLocation);
             routeViewModel.setEndLocation(endLocation);
+            routeViewModel.setStartLocationText(editStartLocation.getText().toString());
+            routeViewModel.setEndLocationText(editEndLocation.getText().toString());
+
+            // 좌표 설정 후 경로 목록 업데이트 (서버 저장 트리거)
+            routeViewModel.updateRouteList(new ArrayList<>(routes), userUuid);
+
             routeAdapter.notifyDataSetChanged();
             updateRouteListVisibility(false, "");
             Log.i(TAG, "완전 개선된 경로 탐색 완료: " + routes.size() + "개 경로 표시");

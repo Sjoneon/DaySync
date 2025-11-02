@@ -147,6 +147,29 @@ public class BusDirectionAnalyzer {
     private static boolean checkIfCrossesTurnaround(int startIndex, int endIndex,
                                                     TerminalInfo terminalInfo,
                                                     List<TagoBusRouteStationResponse.RouteStation> routeStations) {
+        // updowncd 기반 방향 검증 (우선 검증)
+        TagoBusRouteStationResponse.RouteStation startStation = routeStations.get(startIndex);
+        TagoBusRouteStationResponse.RouteStation endStation = routeStations.get(endIndex);
+
+        // 출발지와 도착지의 상행/하행 코드 확인
+        String startUpdown = startStation.updowncd;
+        String endUpdown = endStation.updowncd;
+
+        // updowncd 정보가 있는 경우 방향 검증
+        if (startUpdown != null && !startUpdown.equals("0") &&
+                endUpdown != null && !endUpdown.equals("0")) {
+
+            // 출발지와 도착지의 방향이 다르면 회차 필요 -> 차단
+            if (!startUpdown.equals(endUpdown)) {
+                Log.w(TAG, String.format("방향 코드 불일치 감지: 출발(%d,updown=%s) -> 도착(%d,updown=%s) - 회차 필요",
+                        startIndex, startUpdown, endIndex, endUpdown));
+                return true;
+            }
+
+            Log.d(TAG, String.format("방향 코드 일치: 출발(%s) == 도착(%s) - 같은 방향 경로",
+                    startUpdown, endUpdown));
+        }
+
 
         // 편도 버스는 회차점 통과 검증 불필요
         if (terminalInfo.middleTerminals.isEmpty()) {

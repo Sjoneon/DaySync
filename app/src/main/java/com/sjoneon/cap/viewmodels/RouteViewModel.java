@@ -84,10 +84,19 @@ public class RouteViewModel extends AndroidViewModel {
      * 경로 목록 업데이트 및 서버 저장
      */
     public void updateRouteList(List<RouteFragment.RouteInfo> routes, String userUuid) {
+        Log.i(TAG, "=== updateRouteList 호출 ===");
+        Log.i(TAG, "경로 개수: " + routes.size());
+        Log.i(TAG, "userUuid: " + (userUuid != null ? userUuid : "NULL"));
+        Log.i(TAG, "startLocation: " + (startLocation != null ?
+                startLocation.getLatitude() + ", " + startLocation.getLongitude() : "NULL"));
+        Log.i(TAG, "endLocation: " + (endLocation != null ?
+                endLocation.getLatitude() + ", " + endLocation.getLongitude() : "NULL"));
+
         routeList.setValue(routes);
 
         // 백그라운드에서 서버에 저장
         if (startLocation != null && endLocation != null && !routes.isEmpty()) {
+            Log.i(TAG, "서버 저장 조건 만족 - saveRoutesToServer 호출");
             saveRoutesToServer(
                     startLocation.getLatitude(),
                     startLocation.getLongitude(),
@@ -96,6 +105,11 @@ public class RouteViewModel extends AndroidViewModel {
                     routes,
                     userUuid
             );
+        } else {
+            Log.w(TAG, "서버 저장 조건 불만족:");
+            Log.w(TAG, "  - startLocation null? " + (startLocation == null));
+            Log.w(TAG, "  - endLocation null? " + (endLocation == null));
+            Log.w(TAG, "  - routes empty? " + routes.isEmpty());
         }
     }
 
@@ -108,6 +122,12 @@ public class RouteViewModel extends AndroidViewModel {
             List<RouteFragment.RouteInfo> routes,
             String userUuid
     ) {
+        Log.i(TAG, "=== saveRoutesToServer 시작 ===");
+        Log.i(TAG, "출발: " + startLat + ", " + startLng);
+        Log.i(TAG, "도착: " + endLat + ", " + endLng);
+        Log.i(TAG, "경로 개수: " + routes.size());
+        Log.i(TAG, "userUuid: " + (userUuid != null ? userUuid : "NULL"));
+
         repository.saveRouteToServer(
                 startLat, startLng, endLat, endLng,
                 routes, userUuid,
@@ -115,12 +135,13 @@ public class RouteViewModel extends AndroidViewModel {
                     @Override
                     public void onSuccess(RouteResponse response) {
                         Log.i(TAG, "서버 동기화 완료");
+                        Log.i(TAG, "저장된 경로 ID: " + response.getId());
                         isSyncedWithServer.postValue(true);
                     }
 
                     @Override
                     public void onFailure(String error) {
-                        Log.w(TAG, "서버 동기화 실패 (계속 진행): " + error);
+                        Log.e(TAG, "서버 동기화 실패: " + error);
                         // 서버 저장 실패해도 로컬에서는 정상 작동
                         isSyncedWithServer.postValue(false);
                     }
@@ -129,6 +150,7 @@ public class RouteViewModel extends AndroidViewModel {
 
         // 로컬에도 좌표 저장 (백업)
         repository.saveRouteToLocal("last_search", startLat, startLng, endLat, endLng);
+        Log.i(TAG, "로컬 저장 완료");
     }
 
     /**
