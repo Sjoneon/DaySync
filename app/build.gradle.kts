@@ -40,6 +40,9 @@ android {
         // 국토교통부(TAGO) API 키 (인코딩/디코딩)
         buildConfigField("String", "TAGO_API_KEY_ENCODED", "\"${properties.getProperty("TAGO_API_KEY_ENCODED")}\"")
         buildConfigField("String", "TAGO_API_KEY_DECODED", "\"${properties.getProperty("TAGO_API_KEY_DECODED")}\"")
+
+        // Gemini API 키 추가
+        buildConfigField("String", "GEMINI_API_KEY", "\"${properties.getProperty("GEMINI_API_KEY", "")}\"")
     }
 
     buildTypes {
@@ -74,6 +77,9 @@ dependencies {
 
     // Retrofit (네트워크 통신 라이브러리)
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
+
+    // JSON 처리
+    implementation("org.json:json:20231013")
 
     // Gson Converter (JSON <-> 객체 변환)
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")

@@ -10,13 +10,16 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.MotionEvent;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.view.Menu;
-import android.view.MenuItem;
+import android.media.AudioTrack;
+import android.media.AudioFormat;
+import android.media.AudioManager;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -46,6 +49,7 @@ import com.sjoneon.cap.helpers.PermissionHelper;
 import com.sjoneon.cap.models.local.Message;
 import com.sjoneon.cap.services.SpeechToTextService;
 import com.sjoneon.cap.services.DaySyncApiService;
+import com.sjoneon.cap.services.GeminiLiveApiService;
 import com.sjoneon.cap.models.api.ChatRequest;
 import com.sjoneon.cap.models.api.ChatResponse;
 import com.sjoneon.cap.models.api.UserCreateRequest;
@@ -57,6 +61,8 @@ import com.sjoneon.cap.models.api.SessionInfo;
 import com.sjoneon.cap.models.api.MessageInfo;
 import com.sjoneon.cap.utils.ApiClient;
 import com.sjoneon.cap.fragments.SessionListBottomSheet;
+import com.sjoneon.cap.BuildConfig;
+import org.json.JSONObject;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -99,6 +105,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private View inputLayout;
     private View chatContainer;
+
+    private GeminiLiveApiService geminiLiveService;
+    private AudioTrack audioTrack;
+    private boolean isLiveApiActive = false;
+    private static final int AUDIO_SAMPLE_RATE = 24000;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -387,8 +398,37 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         });
 
-        buttonVoice.setOnClickListener(v -> {
-            toggleSpeechRecognition();
+        // 마이크 버튼 - 길게 누르면 Live API, 짧게 누르면 STT
+        buttonVoice.setOnTouchListener(new View.OnTouchListener() {
+            private boolean isLongPress = false;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        isLongPress = false;
+                        v.postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                isLongPress = true;
+                                toggleLiveApiMode();
+                            }
+                        }, 2000);
+                        return true;
+
+                    case MotionEvent.ACTION_UP:
+                        v.removeCallbacks(null);
+                        if (!isLongPress) {
+                            toggleSpeechRecognition();
+                        }
+                        return true;
+
+                    case MotionEvent.ACTION_CANCEL:
+                        v.removeCallbacks(null);
+                        return true;
+                }
+                return false;
+            }
         });
     }
 
@@ -432,6 +472,102 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         apiService = ApiClient.getInstance().getApiService();
 
         Log.d(TAG, "AI 서비스 초기화 완료");
+
+        initializeGeminiLiveService();
+    }
+
+    /**
+     * Gemini Live API 서비스 초기화
+     */
+    private void initializeGeminiLiveService() {
+        String geminiApiKey = BuildConfig.GEMINI_API_KEY;
+
+        // 디버깅: API 키 확인 (키 값은 로그에 출력하지 않음)
+        if (geminiApiKey == null || geminiApiKey.isEmpty()) {
+            Log.e(TAG, "❌ GEMINI_API_KEY가 설정되지 않았습니다!");
+            Toast.makeText(this, "API 키가 설정되지 않았습니다", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        Log.d(TAG, "✅ API 키 로드 완료 (길이: " + geminiApiKey.length() + ")");
+
+        geminiLiveService = new GeminiLiveApiService(this, geminiApiKey);
+        geminiLiveService.setListener(new GeminiLiveApiService.LiveApiListener() {
+            @Override
+            public void onConnected() {
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this,
+                            "✅ 음성 대화 연결 성공!", Toast.LENGTH_SHORT).show();
+                    Log.d(TAG, "✅ Gemini Live API 연결됨");
+                });
+            }
+
+            @Override
+            public void onDisconnected() {
+                runOnUiThread(() -> {
+                    isLiveApiActive = false;
+                    buttonVoice.setImageResource(R.drawable.ic_mic);
+                    Toast.makeText(MainActivity.this,
+                            "음성 대화가 종료되었습니다", Toast.LENGTH_SHORT).show();
+                    Log.d(TAG, "Gemini Live API 연결 해제됨");
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this,
+                            "❌ 오류: " + error, Toast.LENGTH_LONG).show();
+                    Log.e(TAG, "❌ Gemini Live API 오류: " + error);
+                    isLiveApiActive = false;
+                    buttonVoice.setImageResource(R.drawable.ic_mic);
+                });
+            }
+
+            @Override
+            public void onTextResponse(String text) {
+                runOnUiThread(() -> {
+                    Message aiMessage = new Message(text, false);
+                    chatAdapter.addMessage(aiMessage);
+                    scrollToBottom();
+                    Log.d(TAG, "✅ AI 텍스트 응답: " + text);
+                });
+            }
+
+            @Override
+            public void onAudioResponse(byte[] audioData) {
+                Log.d(TAG, "✅ 오디오 응답 수신: " + audioData.length + " bytes");
+                playAudioResponse(audioData);
+            }
+
+            @Override
+            public void onFunctionCall(String functionName, JSONObject parameters) {
+                runOnUiThread(() -> {
+                    Log.d(TAG, "✅ Function Call: " + functionName);
+                    handleFunctionCall(functionName, parameters);
+                });
+            }
+        });
+
+        // 오디오 트랙 초기화
+        int bufferSize = AudioTrack.getMinBufferSize(
+                AUDIO_SAMPLE_RATE,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+        );
+
+        Log.d(TAG, "AudioTrack 버퍼 크기: " + bufferSize);
+
+        audioTrack = new AudioTrack(
+                AudioManager.STREAM_MUSIC,
+                AUDIO_SAMPLE_RATE,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                bufferSize,
+                AudioTrack.MODE_STREAM
+        );
+
+        Log.d(TAG, "✅ Gemini Live 서비스 초기화 완료");
     }
 
     /**
@@ -844,6 +980,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             speechToTextService.destroy();
             Log.d(TAG, "STT 서비스 정리 완료");
         }
+
+        if (geminiLiveService != null) {
+            geminiLiveService.destroy();
+            Log.d(TAG, "Gemini Live 서비스 정리 완료");
+        }
+
+        if (audioTrack != null) {
+            audioTrack.release();
+            audioTrack = null;
+        }
     }
 
     /**
@@ -1082,5 +1228,127 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         Toast.makeText(this, "새 대화를 시작합니다", Toast.LENGTH_SHORT).show();
         Log.d(TAG, "새 대화 시작");
+    }
+
+    /**
+     * Live API 모드 토글
+     */
+    private void toggleLiveApiMode() {
+        if (!isLiveApiActive) {
+            if (geminiLiveService != null) {
+                geminiLiveService.connect();
+                new android.os.Handler().postDelayed(() -> {
+                    if (geminiLiveService.isConnected()) {
+                        geminiLiveService.startRecording();
+                        isLiveApiActive = true;
+                        buttonVoice.setImageResource(R.drawable.ic_mic_active);
+                    }
+                }, 1000);
+            }
+        } else {
+            if (geminiLiveService != null) {
+                geminiLiveService.stopRecording();
+                geminiLiveService.disconnect();
+                isLiveApiActive = false;
+                buttonVoice.setImageResource(R.drawable.ic_mic);
+            }
+        }
+    }
+
+    /**
+     * 오디오 응답 재생
+     */
+    private void playAudioResponse(byte[] audioData) {
+        if (audioTrack != null && audioData != null && audioData.length > 0) {
+            try {
+                if (audioTrack.getState() == AudioTrack.STATE_INITIALIZED) {
+                    audioTrack.play();
+                    audioTrack.write(audioData, 0, audioData.length);
+                    Log.d(TAG, "오디오 재생: " + audioData.length + " bytes");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "오디오 재생 실패", e);
+            }
+        }
+    }
+
+    /**
+     * Function Call 처리
+     */
+    private void handleFunctionCall(String functionName, org.json.JSONObject parameters) {
+        Log.d(TAG, "함수 호출 처리: " + functionName);
+
+        try {
+            switch (functionName) {
+                case "navigate_to_screen":
+                    if (parameters != null && parameters.has("screen_name")) {
+                        String screenName = parameters.getString("screen_name");
+                        navigateToScreen(screenName);
+
+                        String message = screenName + " 화면으로 이동했습니다.";
+                        Message aiMessage = new Message(message, false);
+                        chatAdapter.addMessage(aiMessage);
+                        scrollToBottom();
+                    }
+                    break;
+
+                default:
+                    Log.w(TAG, "알 수 없는 함수: " + functionName);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "함수 호출 처리 실패", e);
+        }
+    }
+
+    /**
+     * 화면 이동 처리
+     */
+    private void navigateToScreen(String screenName) {
+        Fragment fragment = null;
+        String title = "";
+
+        switch (screenName) {
+            case "calendar":
+                fragment = new CalendarFragment();
+                title = getString(R.string.menu_calendar);
+                break;
+            case "alarm":
+                fragment = new AlarmFragment();
+                title = getString(R.string.menu_alarm);
+                break;
+            case "route":
+                fragment = new RouteFragment();
+                title = "추천 경로 정보";
+                break;
+            case "map":
+                fragment = new com.sjoneon.cap.fragments.MapFragment();
+                title = getString(R.string.map_title);
+                break;
+            case "weather":
+                fragment = new WeatherFragment();
+                title = "날씨 정보";
+                break;
+            case "notifications":
+                fragment = new NotificationsFragment();
+                title = getString(R.string.menu_notifications);
+                break;
+            case "settings":
+                fragment = new SettingsFragment();
+                title = "설정";
+                break;
+            case "help":
+                fragment = new HelpFragment();
+                title = "도움말";
+                break;
+            case "chat":
+                showChatInterface();
+                toolbar.setTitle(R.string.menu_chat);
+                return;
+        }
+
+        if (fragment != null) {
+            showFragment(fragment);
+            toolbar.setTitle(title);
+        }
     }
 }

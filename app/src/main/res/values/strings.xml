@@ -154,6 +154,14 @@
     <string name="speech_error_permission">음성 인식 권한이 필요합니다</string>
     <string name="speech_error_no_match">음성을 인식하지 못했습니다</string>
 
+    <!-- Gemini Live API 관련 문자열 -->
+    <string name="live_api_connecting">음성 대화 모드 연결 중...</string>
+    <string name="live_api_connected">음성 대화 모드가 시작되었습니다</string>
+    <string name="live_api_disconnected">음성 대화 모드가 종료되었습니다</string>
+    <string name="live_api_error">음성 대화 오류: %s</string>
+    <string name="live_api_function_executed">%s 실행됨</string>
+    <string name="live_api_press_hold">길게 누르면 음성 대화 모드</string>
+
     <!-- 채팅 관련 -->
     <string name="chat_input_hint">메시지를 입력하세요...</string>
     <string name="chat_send">전송</string>
