@@ -7,6 +7,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
@@ -17,9 +18,6 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.view.Menu;
-import android.media.AudioTrack;
-import android.media.AudioFormat;
-import android.media.AudioManager;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -49,7 +47,6 @@ import com.sjoneon.cap.helpers.PermissionHelper;
 import com.sjoneon.cap.models.local.Message;
 import com.sjoneon.cap.services.SpeechToTextService;
 import com.sjoneon.cap.services.DaySyncApiService;
-import com.sjoneon.cap.services.GeminiLiveApiService;
 import com.sjoneon.cap.models.api.ChatRequest;
 import com.sjoneon.cap.models.api.ChatResponse;
 import com.sjoneon.cap.models.api.UserCreateRequest;
@@ -62,7 +59,6 @@ import com.sjoneon.cap.models.api.MessageInfo;
 import com.sjoneon.cap.utils.ApiClient;
 import com.sjoneon.cap.fragments.SessionListBottomSheet;
 import com.sjoneon.cap.BuildConfig;
-import org.json.JSONObject;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -106,10 +102,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private View inputLayout;
     private View chatContainer;
 
-    private GeminiLiveApiService geminiLiveService;
-    private AudioTrack audioTrack;
-    private boolean isLiveApiActive = false;
-    private static final int AUDIO_SAMPLE_RATE = 24000;
+    private Handler autoListenHandler;
+    private Runnable autoListenRunnable;
+    private Runnable autoListenTimeoutRunnable;
+    private static final long AUTO_LISTEN_DELAY = 1000;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -142,6 +138,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         checkPermissionsAfterDelay();
 
         loadChatHistory();
+
+        autoListenHandler = new Handler();
 
         Log.d(TAG, "MainActivity 생성 완료");
     }
@@ -398,37 +396,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         });
 
-        // 마이크 버튼 - 길게 누르면 Live API, 짧게 누르면 STT
-        buttonVoice.setOnTouchListener(new View.OnTouchListener() {
-            private boolean isLongPress = false;
-
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        isLongPress = false;
-                        v.postDelayed(new Runnable() {
-                            @Override
-                            public void run() {
-                                isLongPress = true;
-                                toggleLiveApiMode();
-                            }
-                        }, 2000);
-                        return true;
-
-                    case MotionEvent.ACTION_UP:
-                        v.removeCallbacks(null);
-                        if (!isLongPress) {
-                            toggleSpeechRecognition();
-                        }
-                        return true;
-
-                    case MotionEvent.ACTION_CANCEL:
-                        v.removeCallbacks(null);
-                        return true;
-                }
-                return false;
-            }
+        // 마이크 버튼 - 단순 클릭으로 STT 실행
+        buttonVoice.setOnClickListener(v -> {
+            toggleSpeechRecognition();
         });
     }
 
@@ -443,6 +413,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 runOnUiThread(() -> {
                     editTextMessage.setText(text);
                     buttonVoice.setImageResource(R.drawable.ic_mic);
+
+                    // STT 결과를 자동으로 전송
+                    if (!text.trim().isEmpty()) {
+                        sendMessage(text);
+                    }
                 });
             }
 
@@ -458,6 +433,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             public void onSpeechStarted() {
                 runOnUiThread(() -> {
                     buttonVoice.setImageResource(R.drawable.ic_mic_active);
+
+                    // 사용자가 말하기 시작하면 타임아웃 취소
+                    cancelAutoListenTimeout();
                 });
             }
 
@@ -472,102 +450,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         apiService = ApiClient.getInstance().getApiService();
 
         Log.d(TAG, "AI 서비스 초기화 완료");
-
-        initializeGeminiLiveService();
-    }
-
-    /**
-     * Gemini Live API 서비스 초기화
-     */
-    private void initializeGeminiLiveService() {
-        String geminiApiKey = BuildConfig.GEMINI_API_KEY;
-
-        // 디버깅: API 키 확인 (키 값은 로그에 출력하지 않음)
-        if (geminiApiKey == null || geminiApiKey.isEmpty()) {
-            Log.e(TAG, "❌ GEMINI_API_KEY가 설정되지 않았습니다!");
-            Toast.makeText(this, "API 키가 설정되지 않았습니다", Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        Log.d(TAG, "✅ API 키 로드 완료 (길이: " + geminiApiKey.length() + ")");
-
-        geminiLiveService = new GeminiLiveApiService(this, geminiApiKey);
-        geminiLiveService.setListener(new GeminiLiveApiService.LiveApiListener() {
-            @Override
-            public void onConnected() {
-                runOnUiThread(() -> {
-                    Toast.makeText(MainActivity.this,
-                            "✅ 음성 대화 연결 성공!", Toast.LENGTH_SHORT).show();
-                    Log.d(TAG, "✅ Gemini Live API 연결됨");
-                });
-            }
-
-            @Override
-            public void onDisconnected() {
-                runOnUiThread(() -> {
-                    isLiveApiActive = false;
-                    buttonVoice.setImageResource(R.drawable.ic_mic);
-                    Toast.makeText(MainActivity.this,
-                            "음성 대화가 종료되었습니다", Toast.LENGTH_SHORT).show();
-                    Log.d(TAG, "Gemini Live API 연결 해제됨");
-                });
-            }
-
-            @Override
-            public void onError(String error) {
-                runOnUiThread(() -> {
-                    Toast.makeText(MainActivity.this,
-                            "❌ 오류: " + error, Toast.LENGTH_LONG).show();
-                    Log.e(TAG, "❌ Gemini Live API 오류: " + error);
-                    isLiveApiActive = false;
-                    buttonVoice.setImageResource(R.drawable.ic_mic);
-                });
-            }
-
-            @Override
-            public void onTextResponse(String text) {
-                runOnUiThread(() -> {
-                    Message aiMessage = new Message(text, false);
-                    chatAdapter.addMessage(aiMessage);
-                    scrollToBottom();
-                    Log.d(TAG, "✅ AI 텍스트 응답: " + text);
-                });
-            }
-
-            @Override
-            public void onAudioResponse(byte[] audioData) {
-                Log.d(TAG, "✅ 오디오 응답 수신: " + audioData.length + " bytes");
-                playAudioResponse(audioData);
-            }
-
-            @Override
-            public void onFunctionCall(String functionName, JSONObject parameters) {
-                runOnUiThread(() -> {
-                    Log.d(TAG, "✅ Function Call: " + functionName);
-                    handleFunctionCall(functionName, parameters);
-                });
-            }
-        });
-
-        // 오디오 트랙 초기화
-        int bufferSize = AudioTrack.getMinBufferSize(
-                AUDIO_SAMPLE_RATE,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-        );
-
-        Log.d(TAG, "AudioTrack 버퍼 크기: " + bufferSize);
-
-        audioTrack = new AudioTrack(
-                AudioManager.STREAM_MUSIC,
-                AUDIO_SAMPLE_RATE,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                bufferSize,
-                AudioTrack.MODE_STREAM
-        );
-
-        Log.d(TAG, "✅ Gemini Live 서비스 초기화 완료");
     }
 
     /**
@@ -621,6 +503,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
      * 음성 인식 토글
      */
     private void toggleSpeechRecognition() {
+        // 사용자가 수동으로 마이크 누르면 자동 인식 취소
+        cancelAutoListening();
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(this, "음성 인식 권한이 필요합니다", Toast.LENGTH_SHORT).show();
@@ -788,6 +673,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         if (aiMessage != null && !aiMessage.isEmpty()) {
                             addAiMessage(aiMessage);
                             Log.d(TAG, "AI 응답 수신: " + aiMessage);
+
+                            // AI가 질문으로 끝나면 자동으로 음성 인식 시작
+                            if (isQuestion(aiMessage)) {
+                                startAutoListening();
+                            }
                         }
 
                         if (chatResponse.getSessionId() != null) {
@@ -875,6 +765,118 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private void scrollToBottom() {
         if (messageList.size() > 0) {
             recyclerView.smoothScrollToPosition(messageList.size() - 1);
+        }
+    }
+
+    /**
+     * AI 메시지가 질문인지 확인
+     */
+    private boolean isQuestion(String message) {
+        if (message == null || message.isEmpty()) {
+            return false;
+        }
+
+        String trimmed = message.trim();
+
+        // 물음표로 끝나는 경우
+        if (trimmed.endsWith("?") || trimmed.endsWith("?")) {
+            return true;
+        }
+
+        // 요청/질문 패턴
+        String[] questionPatterns = {
+                "알려주세요", "말씀해주세요", "말해주세요", "이야기해주세요",
+                "입력해주세요", "선택해주세요", "확인해주세요",
+                "뭐", "무엇", "어디", "언제", "누구", "왜", "어떻게",
+                "어느", "몇", "얼마",
+                "할까요", "하시겠어요", "주시겠어요", "드릴까요",
+                "원하시나요", "필요하신가요", "있으신가요",
+                "어떤", "어떠", "무슨"
+        };
+
+        for (String pattern : questionPatterns) {
+            if (trimmed.contains(pattern)) {
+                return true;
+            }
+        }
+
+        // 문장이 짧고 "주세요"로 끝나는 경우
+        if (trimmed.length() < 50 && trimmed.endsWith("주세요")) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * 자동 음성 인식 시작
+     */
+    private void startAutoListening() {
+        // 이미 음성 인식 중이면 무시
+        if (speechToTextService != null && speechToTextService.isListening()) {
+            Log.d(TAG, "이미 음성 인식 중 - 자동 시작 취소");
+            return;
+        }
+
+        // 권한 확인
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "음성 인식 권한 없음 - 자동 시작 취소");
+            return;
+        }
+
+        // 기존 예약된 작업 취소
+        if (autoListenRunnable != null) {
+            autoListenHandler.removeCallbacks(autoListenRunnable);
+        }
+
+        // 1초 후 자동으로 음성 인식 시작
+        autoListenRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (speechToTextService != null && !speechToTextService.isListening()) {
+                    Log.d(TAG, "자동 음성 인식 시작");
+                    buttonVoice.setImageResource(R.drawable.ic_mic_active);
+                    speechToTextService.startListening();
+
+                    // 5초 후 자동으로 중지 (사용자가 말하지 않으면)
+                    autoListenTimeoutRunnable = new Runnable() {
+                        @Override
+                        public void run() {
+                            if (speechToTextService != null && speechToTextService.isListening()) {
+                                Log.d(TAG, "자동 음성 인식 타임아웃 - 중지");
+                                speechToTextService.stopListening();
+                                buttonVoice.setImageResource(R.drawable.ic_mic);
+                            }
+                        }
+                    };
+                    autoListenHandler.postDelayed(autoListenTimeoutRunnable, 5000);
+                }
+            }
+        };
+
+        autoListenHandler.postDelayed(autoListenRunnable, AUTO_LISTEN_DELAY);
+        Log.d(TAG, "자동 음성 인식 예약됨 (1초 후 시작)");
+    }
+
+    /**
+     * 자동 음성 인식 취소
+     */
+    private void cancelAutoListening() {
+        if (autoListenRunnable != null && autoListenHandler != null) {
+            autoListenHandler.removeCallbacks(autoListenRunnable);
+            Log.d(TAG, "자동 음성 인식 취소");
+        }
+        cancelAutoListenTimeout();
+    }
+
+    /**
+     * 자동 음성 인식 타임아웃 취소
+     */
+    private void cancelAutoListenTimeout() {
+        if (autoListenTimeoutRunnable != null && autoListenHandler != null) {
+            autoListenHandler.removeCallbacks(autoListenTimeoutRunnable);
+            Log.d(TAG, "자동 음성 인식 타임아웃 취소");
         }
     }
 
@@ -981,14 +983,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             Log.d(TAG, "STT 서비스 정리 완료");
         }
 
-        if (geminiLiveService != null) {
-            geminiLiveService.destroy();
-            Log.d(TAG, "Gemini Live 서비스 정리 완료");
-        }
-
-        if (audioTrack != null) {
-            audioTrack.release();
-            audioTrack = null;
+        // 자동 음성 인식 정리
+        if (autoListenHandler != null) {
+            if (autoListenRunnable != null) {
+                autoListenHandler.removeCallbacks(autoListenRunnable);
+            }
+            if (autoListenTimeoutRunnable != null) {
+                autoListenHandler.removeCallbacks(autoListenTimeoutRunnable);
+            }
         }
     }
 
@@ -1228,127 +1230,5 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         Toast.makeText(this, "새 대화를 시작합니다", Toast.LENGTH_SHORT).show();
         Log.d(TAG, "새 대화 시작");
-    }
-
-    /**
-     * Live API 모드 토글
-     */
-    private void toggleLiveApiMode() {
-        if (!isLiveApiActive) {
-            if (geminiLiveService != null) {
-                geminiLiveService.connect();
-                new android.os.Handler().postDelayed(() -> {
-                    if (geminiLiveService.isConnected()) {
-                        geminiLiveService.startRecording();
-                        isLiveApiActive = true;
-                        buttonVoice.setImageResource(R.drawable.ic_mic_active);
-                    }
-                }, 1000);
-            }
-        } else {
-            if (geminiLiveService != null) {
-                geminiLiveService.stopRecording();
-                geminiLiveService.disconnect();
-                isLiveApiActive = false;
-                buttonVoice.setImageResource(R.drawable.ic_mic);
-            }
-        }
-    }
-
-    /**
-     * 오디오 응답 재생
-     */
-    private void playAudioResponse(byte[] audioData) {
-        if (audioTrack != null && audioData != null && audioData.length > 0) {
-            try {
-                if (audioTrack.getState() == AudioTrack.STATE_INITIALIZED) {
-                    audioTrack.play();
-                    audioTrack.write(audioData, 0, audioData.length);
-                    Log.d(TAG, "오디오 재생: " + audioData.length + " bytes");
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "오디오 재생 실패", e);
-            }
-        }
-    }
-
-    /**
-     * Function Call 처리
-     */
-    private void handleFunctionCall(String functionName, org.json.JSONObject parameters) {
-        Log.d(TAG, "함수 호출 처리: " + functionName);
-
-        try {
-            switch (functionName) {
-                case "navigate_to_screen":
-                    if (parameters != null && parameters.has("screen_name")) {
-                        String screenName = parameters.getString("screen_name");
-                        navigateToScreen(screenName);
-
-                        String message = screenName + " 화면으로 이동했습니다.";
-                        Message aiMessage = new Message(message, false);
-                        chatAdapter.addMessage(aiMessage);
-                        scrollToBottom();
-                    }
-                    break;
-
-                default:
-                    Log.w(TAG, "알 수 없는 함수: " + functionName);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "함수 호출 처리 실패", e);
-        }
-    }
-
-    /**
-     * 화면 이동 처리
-     */
-    private void navigateToScreen(String screenName) {
-        Fragment fragment = null;
-        String title = "";
-
-        switch (screenName) {
-            case "calendar":
-                fragment = new CalendarFragment();
-                title = getString(R.string.menu_calendar);
-                break;
-            case "alarm":
-                fragment = new AlarmFragment();
-                title = getString(R.string.menu_alarm);
-                break;
-            case "route":
-                fragment = new RouteFragment();
-                title = "추천 경로 정보";
-                break;
-            case "map":
-                fragment = new com.sjoneon.cap.fragments.MapFragment();
-                title = getString(R.string.map_title);
-                break;
-            case "weather":
-                fragment = new WeatherFragment();
-                title = "날씨 정보";
-                break;
-            case "notifications":
-                fragment = new NotificationsFragment();
-                title = getString(R.string.menu_notifications);
-                break;
-            case "settings":
-                fragment = new SettingsFragment();
-                title = "설정";
-                break;
-            case "help":
-                fragment = new HelpFragment();
-                title = "도움말";
-                break;
-            case "chat":
-                showChatInterface();
-                toolbar.setTitle(R.string.menu_chat);
-                return;
-        }
-
-        if (fragment != null) {
-            showFragment(fragment);
-            toolbar.setTitle(title);
-        }
     }
 }

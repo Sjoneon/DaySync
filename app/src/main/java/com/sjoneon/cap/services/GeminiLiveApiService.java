@@ -1,11 +1,15 @@
 package com.sjoneon.cap.services;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder;
 import android.util.Log;
+
+import androidx.core.content.ContextCompat;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -138,21 +142,36 @@ public class GeminiLiveApiService {
      */
     private void sendSetupMessage() {
         try {
+            JSONObject rootObject = new JSONObject();
             JSONObject setup = new JSONObject();
-            JSONObject model = new JSONObject();
-            model.put("model", "models/gemini-live-2.5-flash-preview");
 
-            JSONObject config = new JSONObject();
+            // 모델 설정
+            setup.put("model", "models/gemini-2.0-flash-exp");
+
+            // 생성 설정
+            JSONObject generationConfig = new JSONObject();
             JSONArray responseModalities = new JSONArray();
             responseModalities.put("AUDIO");
-            config.put("response_modalities", responseModalities);
+            generationConfig.put("response_modalities", responseModalities);
 
-            config.put("system_instruction",
+            generationConfig.put("speech_config", new JSONObject()
+                    .put("voice_config", new JSONObject()
+                            .put("prebuilt_voice_config", new JSONObject()
+                                    .put("voice_name", "Puck"))));
+
+            setup.put("generation_config", generationConfig);
+
+            // 시스템 인스트럭션
+            JSONObject systemInstruction = new JSONObject();
+            JSONArray parts = new JSONArray();
+            parts.put(new JSONObject().put("text",
                     "당신은 DaySync 앱의 음성 비서입니다. " +
                             "사용자가 화면 이동, 알람 설정, 경로 검색 등을 요청하면 적절한 함수를 호출하세요. " +
-                            "한국어로 자연스럽고 친절하게 대답하세요.");
+                            "한국어로 자연스럽고 친절하게 대답하세요."));
+            systemInstruction.put("parts", parts);
+            setup.put("system_instruction", systemInstruction);
 
-            // Function declarations 추가
+            // 함수 선언 추가
             JSONArray tools = new JSONArray();
             JSONObject toolObject = new JSONObject();
             JSONArray functionDeclarations = new JSONArray();
@@ -161,12 +180,15 @@ public class GeminiLiveApiService {
             JSONObject navigateFunction = new JSONObject();
             navigateFunction.put("name", "navigate_to_screen");
             navigateFunction.put("description", "앱 내 특정 화면으로 이동합니다");
+
             JSONObject navParams = new JSONObject();
             navParams.put("type", "OBJECT");
+
             JSONObject navProperties = new JSONObject();
             JSONObject screenName = new JSONObject();
             screenName.put("type", "STRING");
             screenName.put("description", "이동할 화면 이름");
+
             JSONArray enumValues = new JSONArray();
             enumValues.put("calendar");
             enumValues.put("alarm");
@@ -177,28 +199,33 @@ public class GeminiLiveApiService {
             enumValues.put("settings");
             enumValues.put("help");
             screenName.put("enum", enumValues);
+
             navProperties.put("screen_name", screenName);
             navParams.put("properties", navProperties);
+
             JSONArray requiredFields = new JSONArray();
             requiredFields.put("screen_name");
             navParams.put("required", requiredFields);
-            navigateFunction.put("parameters", navParams);
 
+            navigateFunction.put("parameters", navParams);
             functionDeclarations.put(navigateFunction);
+
             toolObject.put("function_declarations", functionDeclarations);
             tools.put(toolObject);
 
-            config.put("tools", tools);
+            setup.put("tools", tools);
 
-            setup.put("setup", model);
-            setup.put("config", config);
+            rootObject.put("setup", setup);
 
-            String message = setup.toString();
+            String message = rootObject.toString();
             Log.d(TAG, "설정 메시지 전송: " + message);
             webSocket.send(message);
 
         } catch (Exception e) {
             Log.e(TAG, "설정 메시지 전송 실패", e);
+            if (listener != null) {
+                listener.onError("설정 메시지 전송 실패: " + e.getMessage());
+            }
         }
     }
 
@@ -276,6 +303,16 @@ public class GeminiLiveApiService {
             return;
         }
 
+        // 녹음 권한 체크
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "녹음 권한이 없습니다");
+            if (listener != null) {
+                listener.onError("녹음 권한이 필요합니다");
+            }
+            return;
+        }
+
         executorService.execute(() -> {
             try {
                 audioRecord = new AudioRecord(
@@ -286,21 +323,49 @@ public class GeminiLiveApiService {
                         BUFFER_SIZE
                 );
 
+                if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
+                    Log.e(TAG, "AudioRecord 초기화 실패");
+                    if (listener != null) {
+                        listener.onError("오디오 녹음 초기화 실패");
+                    }
+                    return;
+                }
+
                 audioRecord.startRecording();
                 isRecording.set(true);
                 Log.d(TAG, "오디오 녹음 시작");
 
                 byte[] buffer = new byte[BUFFER_SIZE];
+                int readCount = 0;
 
                 while (isRecording.get()) {
                     int bytesRead = audioRecord.read(buffer, 0, buffer.length);
+
                     if (bytesRead > 0) {
+                        readCount++;
+                        if (readCount % 10 == 0) {
+                            Log.d(TAG, "오디오 읽기 횟수: " + readCount + ", 바이트: " + bytesRead);
+                        }
                         sendAudioData(buffer, bytesRead);
+                    } else if (bytesRead == 0) {
+                        Log.w(TAG, "오디오 읽기 결과 0 바이트");
+                    } else {
+                        Log.e(TAG, "오디오 읽기 오류: " + bytesRead);
                     }
                 }
 
+                Log.d(TAG, "총 오디오 읽기 횟수: " + readCount);
+
+            } catch (SecurityException e) {
+                Log.e(TAG, "녹음 권한이 없습니다", e);
+                if (listener != null) {
+                    listener.onError("녹음 권한이 필요합니다");
+                }
             } catch (Exception e) {
                 Log.e(TAG, "오디오 녹음 실패", e);
+                if (listener != null) {
+                    listener.onError("오디오 녹음 실패: " + e.getMessage());
+                }
             }
         });
     }
@@ -332,6 +397,9 @@ public class GeminiLiveApiService {
 
             if (webSocket != null) {
                 webSocket.send(message.toString());
+                Log.d(TAG, "오디오 데이터 전송: " + length + " bytes");
+            } else {
+                Log.w(TAG, "WebSocket이 null입니다");
             }
 
         } catch (Exception e) {
@@ -351,9 +419,31 @@ public class GeminiLiveApiService {
                 audioRecord.release();
                 audioRecord = null;
                 Log.d(TAG, "오디오 녹음 중지");
+
+                // Turn 종료 신호 전송
+                sendTurnComplete();
             } catch (Exception e) {
                 Log.e(TAG, "오디오 녹음 중지 실패", e);
             }
+        }
+    }
+
+    /**
+     * Turn 종료 신호 전송
+     */
+    private void sendTurnComplete() {
+        try {
+            JSONObject message = new JSONObject();
+            JSONObject clientContent = new JSONObject();
+            clientContent.put("turnComplete", true);
+            message.put("clientContent", clientContent);
+
+            if (webSocket != null) {
+                webSocket.send(message.toString());
+                Log.d(TAG, "Turn 종료 신호 전송");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Turn 종료 신호 전송 실패", e);
         }
     }
 
@@ -363,13 +453,15 @@ public class GeminiLiveApiService {
     public void disconnect() {
         stopRecording();
 
-        if (webSocket != null) {
-            webSocket.close(1000, "사용자 종료");
-            webSocket = null;
-        }
-
-        isConnected.set(false);
-        Log.d(TAG, "연결 종료");
+        // AI 응답을 받을 시간을 주기 위해 약간 지연
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            if (webSocket != null) {
+                webSocket.close(1000, "사용자 종료");
+                webSocket = null;
+            }
+            isConnected.set(false);
+            Log.d(TAG, "연결 종료");
+        }, 1000);
     }
 
     /**

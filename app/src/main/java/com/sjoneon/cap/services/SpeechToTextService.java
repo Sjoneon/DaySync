@@ -104,11 +104,19 @@ public class SpeechToTextService {
         recognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE,
-                Locale.KOREAN.toString());
+
+        // 한국어 설정 - 여러 방법 시도
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR");
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ko-KR");
+
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE,
                 context.getPackageName());
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+
+        // 부분 결과 활성화
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+
+        Log.d(TAG, "음성 인식 초기화 완료 - 언어: 한국어 (ko-KR)");
     }
 
     public void startListening() {
@@ -117,7 +125,7 @@ public class SpeechToTextService {
             Log.w(TAG, "이미 음성 인식 중입니다");
             return;
         }
-        Log.d(TAG, "음성 인식 시작");
+        Log.d(TAG, "음성 인식 시작 - 한국어 모드");
         speechRecognizer.startListening(recognizerIntent);
     }
 
