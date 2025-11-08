@@ -30,6 +30,7 @@ import java.util.List;
 
 import retrofit2.Call;
 import retrofit2.http.Body;
+import retrofit2.http.PATCH;
 import retrofit2.http.DELETE;
 import retrofit2.http.GET;
 import retrofit2.http.POST;
@@ -69,11 +70,25 @@ public interface DaySyncApiService {
     Call<MessageListResponse> getSessionMessages(@Path("session_id") int sessionId);
 
     /**
+     * 세션 제목 수정
+     * PATCH /api/ai/sessions/{session_id}?user_uuid={user_uuid}
+     */
+    @PATCH("api/ai/sessions/{session_id}")
+    Call<ApiResponse> updateSession(
+            @Path("session_id") int sessionId,
+            @Query("user_uuid") String userUuid,
+            @Body SessionUpdateRequest request
+    );
+
+    /**
      * 세션 삭제
-     * DELETE /api/ai/sessions/{session_id}
+     * DELETE /api/ai/sessions/{session_id}?user_uuid={user_uuid}
      */
     @DELETE("api/ai/sessions/{session_id}")
-    Call<ApiResponse> deleteSession(@Path("session_id") int sessionId);
+    Call<ApiResponse> deleteSession(
+            @Path("session_id") int sessionId,
+            @Query("user_uuid") String userUuid
+    );
 
     // ========================================
     // 사용자 관리 API
@@ -160,16 +175,6 @@ public interface DaySyncApiService {
      */
     @PUT("/api/schedule/alarms/{alarm_id}/toggle")
     Call<AlarmResponse> toggleAlarm(@Path("alarm_id") int alarmId);
-
-    /**
-     * 세션 제목 수정
-     * PUT /api/ai/sessions/{session_id}
-     */
-    @PUT("api/ai/sessions/{session_id}")
-    Call<ApiResponse> updateSession(
-            @Path("session_id") int sessionId,
-            @Body SessionUpdateRequest request
-    );
 
     /**
      * 경로 저장

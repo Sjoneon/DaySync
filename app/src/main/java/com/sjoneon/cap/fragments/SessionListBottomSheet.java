@@ -200,7 +200,7 @@ public class SessionListBottomSheet extends BottomSheetDialogFragment implements
     private void updateSessionTitle(int sessionId, String newTitle) {
         SessionUpdateRequest request = new SessionUpdateRequest(newTitle);
 
-        apiService.updateSession(sessionId, request).enqueue(new Callback<ApiResponse>() {
+        apiService.updateSession(sessionId, userUuid, request).enqueue(new Callback<ApiResponse>() {
             @Override
             public void onResponse(Call<ApiResponse> call, Response<ApiResponse> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
@@ -220,7 +220,7 @@ public class SessionListBottomSheet extends BottomSheetDialogFragment implements
     }
 
     private void deleteSession(int sessionId, boolean isCurrentSession) {
-        apiService.deleteSession(sessionId).enqueue(new Callback<ApiResponse>() {
+        apiService.deleteSession(sessionId, userUuid).enqueue(new Callback<ApiResponse>() {
             @Override
             public void onResponse(Call<ApiResponse> call, Response<ApiResponse> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
