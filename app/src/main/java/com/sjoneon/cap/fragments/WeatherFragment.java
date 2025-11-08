@@ -46,7 +46,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
-
+import java.util.Collections;
+import java.util.Date;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -488,6 +489,164 @@ public class WeatherFragment extends Fragment {
     private void handleApiFailure(String apiName, Throwable t) {
         Log.e(TAG, apiName + " API 네트워크 실패", t);
         if(isAdded()) Toast.makeText(getContext(), "네트워크 오류로 " + apiName + " 정보를 가져올 수 없습니다.", Toast.LENGTH_SHORT).show();
+    }
+
+    /**
+     * 특정 날짜의 날씨 정보를 자연스러운 형식으로 반환
+     */
+    public String getFormattedWeatherInfo(Calendar targetCal) {
+        if (shortTermData == null) {
+            return null;
+        }
+
+        try {
+            JsonObject responseObj = shortTermData.getAsJsonObject("response");
+            if (responseObj == null) return null;
+
+            JsonElement bodyElement = responseObj.get("body");
+            if (bodyElement == null || !bodyElement.isJsonObject()) return null;
+
+            JsonElement itemsElement = bodyElement.getAsJsonObject().get("items");
+            if (itemsElement == null || !itemsElement.isJsonObject()) return null;
+
+            JsonElement itemElement = itemsElement.getAsJsonObject().get("item");
+            if (itemElement == null || !itemElement.isJsonArray()) return null;
+
+            List<WeatherResponse.WeatherItem> items = lenientGson.fromJson(
+                    itemElement.getAsJsonArray(),
+                    new com.google.gson.reflect.TypeToken<List<WeatherResponse.WeatherItem>>() {}.getType()
+            );
+
+            String targetDate = new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(targetCal.getTime());
+            int currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
+            boolean isToday = targetDate.equals(new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(new Date()));
+
+            List<WeatherResponse.WeatherItem> targetDateItems = items.stream()
+                    .filter(item -> targetDate.equals(item.fcstDate))
+                    .collect(Collectors.toList());
+
+            if (targetDateItems.isEmpty()) {
+                return null;
+            }
+
+            Map<String, Map<String, String>> hourlyData = targetDateItems.stream()
+                    .collect(Collectors.groupingBy(
+                            item -> item.fcstTime,
+                            Collectors.toMap(item -> item.category, item -> item.fcstValue, (v1, v2) -> v1)
+                    ));
+
+            List<String> sortedHours = new ArrayList<>(hourlyData.keySet());
+            Collections.sort(sortedHours);
+
+            int startHour = isToday ? currentHour : 0;
+            String startTimeStr = String.format(Locale.getDefault(), "%02d00", startHour);
+
+            StringBuilder weatherInfo = new StringBuilder();
+
+            if (isToday) {
+                weatherInfo.append(String.format("현재 %d시, ", currentHour));
+            }
+
+            String prevCondition = null;
+            int prevHour = -1;
+            int sameConditionStartHour = -1;
+
+            for (String hour : sortedHours) {
+                if (hour.compareTo(startTimeStr) < 0) continue;
+
+                Map<String, String> data = hourlyData.get(hour);
+                String sky = data.getOrDefault("SKY", "");
+                String pty = data.getOrDefault("PTY", "0");
+
+                String condition = getWeatherCondition(sky, pty);
+                int hourInt = Integer.parseInt(hour.substring(0, 2));
+
+                if (prevCondition == null) {
+                    sameConditionStartHour = hourInt;
+                    prevCondition = condition;
+                } else if (!condition.equals(prevCondition)) {
+                    if (sameConditionStartHour == prevHour) {
+                        weatherInfo.append(String.format("%d시에는 %s, ", prevHour, prevCondition));
+                    } else {
+                        weatherInfo.append(String.format("%d시부터 %d시까지는 %s, ", sameConditionStartHour, prevHour, prevCondition));
+                    }
+
+                    sameConditionStartHour = hourInt;
+                    prevCondition = condition;
+                }
+
+                prevHour = hourInt;
+            }
+
+            if (prevCondition != null && sameConditionStartHour != -1) {
+                if (sameConditionStartHour == prevHour) {
+                    weatherInfo.append(String.format("%d시에는 %s 소식이 있어요", prevHour, prevCondition));
+                } else {
+                    weatherInfo.append(String.format("%d시부터는 %s 소식이 있어요", sameConditionStartHour, prevCondition));
+                }
+            }
+
+            String maxTemp = getMaxTemp(targetDateItems);
+            String minTemp = getMinTemp(targetDateItems);
+            if (maxTemp != null && minTemp != null) {
+                weatherInfo.append(String.format(". 최고 기온 %s도, 최저 기온 %s도예요", maxTemp, minTemp));
+            }
+
+            return weatherInfo.toString();
+
+        } catch (Exception e) {
+            Log.e(TAG, "날씨 정보 포맷팅 실패", e);
+            return null;
+        }
+    }
+
+    /**
+     * 날씨 상태를 문자열로 변환
+     */
+    private String getWeatherCondition(String sky, String pty) {
+        int ptyValue = Integer.parseInt(pty);
+
+        if (ptyValue > 0) {
+            switch (ptyValue) {
+                case 1: return "비";
+                case 2: return "비/눈";
+                case 3: return "눈";
+                case 4: return "소나기";
+                default: return "강수";
+            }
+        }
+
+        int skyValue = Integer.parseInt(sky);
+        switch (skyValue) {
+            case 1: return "맑음";
+            case 3: return "구름많음";
+            case 4: return "흐림";
+            default: return "알 수 없음";
+        }
+    }
+
+    /**
+     * 최고 기온 조회
+     */
+    private String getMaxTemp(List<WeatherResponse.WeatherItem> items) {
+        for (WeatherResponse.WeatherItem item : items) {
+            if ("TMX".equals(item.category)) {
+                return item.fcstValue;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 최저 기온 조회
+     */
+    private String getMinTemp(List<WeatherResponse.WeatherItem> items) {
+        for (WeatherResponse.WeatherItem item : items) {
+            if ("TMN".equals(item.category)) {
+                return item.fcstValue;
+            }
+        }
+        return null;
     }
 
     public static class WeatherForecastItem {

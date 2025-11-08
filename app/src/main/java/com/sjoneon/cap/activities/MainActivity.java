@@ -69,8 +69,22 @@ import retrofit2.Response;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonElement;
+import com.sjoneon.cap.models.api.WeatherResponse;
+import com.sjoneon.cap.services.WeatherApiService;
+import okhttp3.OkHttpClient;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.Collections;
 
 /**
  * 앱의 메인 액티비티
@@ -100,7 +114,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private DaySyncApiService apiService;
     private String userUuid;
     private Integer sessionId;
-
+    private WeatherApiService weatherApiService;
+    private Gson lenientGson;
+    private JsonObject cachedWeatherData = null;
+    private int currentNx = 69;  // 청주시 기본 좌표
+    private int currentNy = 107;
     private View inputLayout;
     private View chatContainer;
 
@@ -133,6 +151,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         setupChatInterface();
 
         initializeAiServices();
+        initializeWeatherService();
         loadUserUuid();
         checkAndSyncUserWithServer();
         checkRecordAudioPermission();
@@ -690,6 +709,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                 return;
                             }
 
+                            // 날씨 조회 요청 처리
+                            if (chatResponse.getWeatherRequested() != null &&
+                                    chatResponse.getWeatherRequested()) {
+                                handleWeatherRequest(chatResponse.getWeatherTargetDate());
+                                return;
+                            }
+
                             // AI가 질문으로 끝나고 마지막 입력이 음성일 때만 자동 음성 인식 시작
                             if (isQuestion(aiMessage) && lastInputWasVoice) {
                                 Log.d(TAG, "후속 질문 감지 + 이전 입력이 음성 → 자동 음성인식 시작");
@@ -1048,6 +1074,380 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             toolbar.setTitle(R.string.menu_alarm);
             Log.d(TAG, "AlarmFragment 새로고침 완료");
         }
+    }
+
+    /**
+     * 날씨 데이터 API 호출
+     */
+    private void fetchWeatherDataForChat(String targetDate) {
+        String currentDate = new SimpleDateFormat("yyyyMMdd", Locale.getDefault())
+                .format(Calendar.getInstance().getTime());
+        String baseTime = getWeatherBaseTime();
+
+        Log.d(TAG, "날씨 API 호출 - baseDate: " + currentDate + ", baseTime: " + baseTime +
+                ", nx: " + currentNx + ", ny: " + currentNy);
+
+        weatherApiService.getVillageForecast(
+                BuildConfig.KMA_API_HUB_KEY,
+                500,
+                1,
+                "JSON",
+                currentDate,
+                baseTime,
+                currentNx,
+                currentNy
+        ).enqueue(new retrofit2.Callback<String>() {
+            @Override
+            public void onResponse(@NonNull retrofit2.Call<String> call,
+                                   @NonNull retrofit2.Response<String> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Log.d(TAG, "날씨 API 응답 성공");
+
+                    try {
+                        cachedWeatherData = lenientGson.fromJson(response.body(), JsonObject.class);
+                        String weatherInfo = formatWeatherInfoFromData(cachedWeatherData, targetDate);
+
+                        if (weatherInfo != null && !weatherInfo.isEmpty()) {
+                            sendWeatherContextToAi(weatherInfo);
+                        } else {
+                            addAiMessage("날씨 정보를 처리하는 중 문제가 발생했어요");
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "날씨 데이터 파싱 실패", e);
+                        addAiMessage("날씨 정보를 처리하는 중 문제가 발생했어요");
+                    }
+                } else {
+                    Log.e(TAG, "날씨 API 응답 실패: " + response.code());
+                    addAiMessage("날씨 정보를 가져오는데 실패했어요");
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull retrofit2.Call<String> call, @NonNull Throwable t) {
+                Log.e(TAG, "날씨 API 호출 실패", t);
+                addAiMessage("네트워크 오류로 날씨 정보를 가져올 수 없어요");
+            }
+        });
+    }
+
+    /**
+     * 날씨 API 기준 시각 계산
+     */
+    private String getWeatherBaseTime() {
+        Calendar cal = Calendar.getInstance();
+        int hour = cal.get(Calendar.HOUR_OF_DAY);
+        int minute = cal.get(Calendar.MINUTE);
+
+        if (hour < 2 || (hour == 2 && minute <= 10)) {
+            cal.add(Calendar.DATE, -1);
+            return "2300";
+        }
+
+        int[] baseTimes = {2, 5, 8, 11, 14, 17, 20, 23};
+        for (int i = baseTimes.length - 1; i >= 0; i--) {
+            if (hour >= baseTimes[i]) {
+                return String.format(Locale.getDefault(), "%02d00", baseTimes[i]);
+            }
+        }
+
+        return "2300";
+    }
+
+    /**
+     * 날씨 데이터를 자연스러운 문장으로 포맷팅
+     */
+    private String formatWeatherInfoFromData(JsonObject weatherData, String targetDate) {
+        if (weatherData == null) {
+            return null;
+        }
+
+        try {
+            JsonObject responseObj = weatherData.getAsJsonObject("response");
+            if (responseObj == null) return null;
+
+            JsonElement bodyElement = responseObj.get("body");
+            if (bodyElement == null || !bodyElement.isJsonObject()) return null;
+
+            JsonElement itemsElement = bodyElement.getAsJsonObject().get("items");
+            if (itemsElement == null || !itemsElement.isJsonObject()) return null;
+
+            JsonElement itemElement = itemsElement.getAsJsonObject().get("item");
+            if (itemElement == null || !itemElement.isJsonArray()) return null;
+
+            List<WeatherResponse.WeatherItem> items = lenientGson.fromJson(
+                    itemElement.getAsJsonArray(),
+                    new com.google.gson.reflect.TypeToken<List<WeatherResponse.WeatherItem>>() {}.getType()
+            );
+
+            // 대상 날짜 계산
+            Calendar targetCal = Calendar.getInstance();
+            if ("tomorrow".equals(targetDate)) {
+                targetCal.add(Calendar.DATE, 1);
+            } else if ("day_after_tomorrow".equals(targetDate)) {
+                targetCal.add(Calendar.DATE, 2);
+            }
+
+            String targetDateStr = new SimpleDateFormat("yyyyMMdd", Locale.getDefault())
+                    .format(targetCal.getTime());
+            int currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
+            boolean isToday = "today".equals(targetDate);
+
+            // 대상 날짜 데이터 필터링
+            List<WeatherResponse.WeatherItem> targetDateItems = items.stream()
+                    .filter(item -> targetDateStr.equals(item.fcstDate))
+                    .collect(Collectors.toList());
+
+            if (targetDateItems.isEmpty()) {
+                return null;
+            }
+
+            // 시간대별 날씨 정보 그룹화
+            Map<String, Map<String, String>> hourlyData = targetDateItems.stream()
+                    .collect(Collectors.groupingBy(
+                            item -> item.fcstTime,
+                            Collectors.toMap(
+                                    item -> item.category,
+                                    item -> item.fcstValue,
+                                    (v1, v2) -> v1
+                            )
+                    ));
+
+            List<String> sortedHours = new ArrayList<>(hourlyData.keySet());
+            Collections.sort(sortedHours);
+
+            int startHour = isToday ? currentHour : 0;
+            String startTimeStr = String.format(Locale.getDefault(), "%02d00", startHour);
+
+            StringBuilder weatherInfo = new StringBuilder();
+
+            if (isToday) {
+                weatherInfo.append(String.format("현재 %d시, ", currentHour));
+            }
+
+            String prevCondition = null;
+            int prevHour = -1;
+            int sameConditionStartHour = -1;
+
+            for (String hour : sortedHours) {
+                if (hour.compareTo(startTimeStr) < 0) continue;
+
+                Map<String, String> data = hourlyData.get(hour);
+
+                // 빈 문자열 방어: 기본값 설정
+                String sky = data.getOrDefault("SKY", "1");
+                String pty = data.getOrDefault("PTY", "0");
+
+                // 추가 방어: null이나 빈 문자열 체크
+                if (sky == null || sky.trim().isEmpty()) {
+                    sky = "1";
+                }
+                if (pty == null || pty.trim().isEmpty()) {
+                    pty = "0";
+                }
+
+                String condition = getWeatherConditionText(sky, pty);
+                int hourInt = Integer.parseInt(hour.substring(0, 2));
+
+                if (prevCondition == null) {
+                    sameConditionStartHour = hourInt;
+                    prevCondition = condition;
+                } else if (!condition.equals(prevCondition)) {
+                    if (sameConditionStartHour == prevHour) {
+                        weatherInfo.append(String.format("%d시에는 %s, ", prevHour, prevCondition));
+                    } else {
+                        weatherInfo.append(String.format("%d시부터 %d시까지는 %s, ",
+                                sameConditionStartHour, prevHour, prevCondition));
+                    }
+
+                    sameConditionStartHour = hourInt;
+                    prevCondition = condition;
+                }
+
+                prevHour = hourInt;
+            }
+
+            if (prevCondition != null && sameConditionStartHour != -1) {
+                if (sameConditionStartHour == prevHour) {
+                    weatherInfo.append(String.format("%d시에는 %s 소식이 있어요", prevHour, prevCondition));
+                } else {
+                    weatherInfo.append(String.format("%d시부터는 %s 소식이 있어요",
+                            sameConditionStartHour, prevCondition));
+                }
+            }
+
+            // 최고/최저 기온 추가
+            String maxTemp = getMaxTemp(targetDateItems);
+            String minTemp = getMinTemp(targetDateItems);
+            if (maxTemp != null && minTemp != null) {
+                weatherInfo.append(String.format(". 최고 기온 %s도, 최저 기온 %s도예요", maxTemp, minTemp));
+            }
+
+            return weatherInfo.toString();
+
+        } catch (Exception e) {
+            Log.e(TAG, "날씨 정보 포맷팅 실패", e);
+            return null;
+        }
+    }
+
+    /**
+     * 날씨 상태 코드를 텍스트로 변환
+     */
+    private String getWeatherConditionText(String sky, String pty) {
+        // 빈 문자열이거나 null이면 기본값 사용
+        if (pty == null || pty.trim().isEmpty()) {
+            pty = "0";
+        }
+        if (sky == null || sky.trim().isEmpty()) {
+            sky = "1";
+        }
+
+        int ptyValue;
+        try {
+            ptyValue = Integer.parseInt(pty.trim());
+        } catch (NumberFormatException e) {
+            Log.w(TAG, "PTY 값 파싱 실패: " + pty);
+            ptyValue = 0;
+        }
+
+        if (ptyValue > 0) {
+            switch (ptyValue) {
+                case 1: return "비";
+                case 2: return "비/눈";
+                case 3: return "눈";
+                case 4: return "소나기";
+                default: return "강수";
+            }
+        }
+
+        int skyValue;
+        try {
+            skyValue = Integer.parseInt(sky.trim());
+        } catch (NumberFormatException e) {
+            Log.w(TAG, "SKY 값 파싱 실패: " + sky);
+            skyValue = 1;
+        }
+
+        switch (skyValue) {
+            case 1: return "맑음";
+            case 3: return "구름많음";
+            case 4: return "흐림";
+            default: return "알 수 없음";
+        }
+    }
+
+    /**
+     * 최고 기온 조회
+     */
+    private String getMaxTemp(List<WeatherResponse.WeatherItem> items) {
+        for (WeatherResponse.WeatherItem item : items) {
+            if ("TMX".equals(item.category)) {
+                return item.fcstValue;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 최저 기온 조회
+     */
+    private String getMinTemp(List<WeatherResponse.WeatherItem> items) {
+        for (WeatherResponse.WeatherItem item : items) {
+            if ("TMN".equals(item.category)) {
+                return item.fcstValue;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 날씨 조회 요청 처리
+     */
+    private void handleWeatherRequest(String targetDate) {
+        if (targetDate == null) {
+            Log.w(TAG, "날씨 조회 대상 날짜가 null");
+            return;
+        }
+
+        Log.d(TAG, "날씨 조회 요청: " + targetDate);
+
+        // 캐시된 날씨 데이터가 있으면 바로 사용
+        if (cachedWeatherData != null) {
+            String weatherInfo = formatWeatherInfoFromData(cachedWeatherData, targetDate);
+
+            if (weatherInfo != null && !weatherInfo.isEmpty()) {
+                sendWeatherContextToAi(weatherInfo);
+                return;
+            }
+        }
+
+        // 캐시된 데이터가 없으면 API 호출
+        Log.d(TAG, "날씨 데이터 API 호출 시작");
+        fetchWeatherDataForChat(targetDate);
+    }
+
+    /**
+     * 날씨 정보를 AI에게 전달
+     */
+    private void sendWeatherContextToAi(String weatherInfo) {
+        if (userUuid == null) {
+            Log.w(TAG, "사용자 UUID 없음");
+            return;
+        }
+
+        Map<String, Object> context = new HashMap<>();
+        context.put("weather_data", weatherInfo);
+
+        ChatRequest request = new ChatRequest(userUuid, "날씨 정보를 받았습니다", sessionId, context);
+        Log.d(TAG, "날씨 Context 전송");
+
+        Call<ChatResponse> call = apiService.sendChatMessage(request);
+        call.enqueue(new Callback<ChatResponse>() {
+            @Override
+            public void onResponse(@NonNull Call<ChatResponse> call,
+                                   @NonNull Response<ChatResponse> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    ChatResponse chatResponse = response.body();
+
+                    if (chatResponse.isSuccess()) {
+                        String aiMessage = chatResponse.getAiResponse();
+                        if (aiMessage != null && !aiMessage.isEmpty()) {
+                            addAiMessage(aiMessage);
+                            Log.d(TAG, "날씨 기반 AI 응답 완료");
+                        }
+                    }
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<ChatResponse> call, @NonNull Throwable t) {
+                Log.e(TAG, "날씨 Context 전송 실패", t);
+                addAiMessage("네트워크 오류가 발생했어요");
+            }
+        });
+    }
+
+    /**
+     * 날씨 API 서비스 초기화
+     */
+    private void initializeWeatherService() {
+        lenientGson = new GsonBuilder().setLenient().create();
+
+        OkHttpClient okHttpClient = new OkHttpClient.Builder()
+                .connectTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .build();
+
+        retrofit2.Retrofit retrofit = new retrofit2.Retrofit.Builder()
+                .baseUrl("https://apihub.kma.go.kr/api/typ02/openApi/")
+                .client(okHttpClient)
+                .addConverterFactory(retrofit2.converter.scalars.ScalarsConverterFactory.create())
+                .build();
+
+        weatherApiService = retrofit.create(WeatherApiService.class);
+
+        Log.d(TAG, "날씨 API 서비스 초기화 완료");
     }
 
     /**

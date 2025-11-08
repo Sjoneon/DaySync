@@ -36,6 +36,13 @@ public class ChatResponse {
     @SerializedName("destination")
     private String destination;
 
+    // 날씨 조회 관련 필드
+    @SerializedName("weather_requested")
+    private Boolean weatherRequested;
+
+    @SerializedName("weather_target_date")
+    private String weatherTargetDate;
+
     // 생성자
     public ChatResponse(boolean success, String aiResponse, Integer sessionId, Integer messageId) {
         this.success = success;
@@ -81,6 +88,14 @@ public class ChatResponse {
         return destination;
     }
 
+    public Boolean getWeatherRequested() {
+        return weatherRequested;
+    }
+
+    public String getWeatherTargetDate() {
+        return weatherTargetDate;
+    }
+
     // Setters
     public void setSuccess(boolean success) {
         this.success = success;
@@ -118,6 +133,14 @@ public class ChatResponse {
         this.destination = destination;
     }
 
+    public void setWeatherRequested(Boolean weatherRequested) {
+        this.weatherRequested = weatherRequested;
+    }
+
+    public void setWeatherTargetDate(String weatherTargetDate) {
+        this.weatherTargetDate = weatherTargetDate;
+    }
+
     @Override
     public String toString() {
         return "ChatResponse{" +
@@ -130,6 +153,8 @@ public class ChatResponse {
                 ", routeSearchRequested=" + routeSearchRequested +
                 ", startLocation='" + startLocation + '\'' +
                 ", destination='" + destination + '\'' +
+                ", weatherRequested=" + weatherRequested +
+                ", weatherTargetDate='" + weatherTargetDate + '\'' +
                 '}';
     }
 }
