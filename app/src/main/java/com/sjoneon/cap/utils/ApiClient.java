@@ -34,12 +34,12 @@ public class ApiClient {
         HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
         loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
 
-        // 타임아웃을 5초로 단축 (사용자 경험 개선)
+        // 타임아웃을 각 상황(API)에 맞게 처리 (사용자 경험 개선)
         OkHttpClient okHttpClient = new OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS) // 연결 타임아웃: 10초
+                .readTimeout(30, TimeUnit.SECONDS) // 읽기 타임아웃: 30초
+                .writeTimeout(30, TimeUnit.SECONDS) // 쓰기 타임아웃: 30초
                 .addInterceptor(loggingInterceptor)
-                .connectTimeout(5, TimeUnit.SECONDS)
-                .readTimeout(5, TimeUnit.SECONDS)
-                .writeTimeout(5, TimeUnit.SECONDS)
                 .build();
 
         Retrofit retrofit = new Retrofit.Builder()

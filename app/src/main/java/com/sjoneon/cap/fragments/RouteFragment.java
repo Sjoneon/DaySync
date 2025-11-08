@@ -149,7 +149,51 @@ public class RouteFragment extends Fragment {
         setupClickListeners();
         loadCurrentLocation();
         observeViewModel();
+        handleAutoSearchRequest();
         return view;
+    }
+
+    /**
+     * AI 채팅에서 전달된 자동 경로 탐색 요청 처리
+     */
+    private void handleAutoSearchRequest() {
+        Bundle args = getArguments();
+        if (args == null || !args.getBoolean("auto_search", false)) {
+            Log.d(TAG, "자동 검색 플래그 없음");
+            return;
+        }
+
+        String destination = args.getString("destination");
+        String startLocationStr = args.getString("start_location");
+
+        Log.d(TAG, "자동 경로 탐색 요청 - 출발지: " + startLocationStr + ", 도착지: " + destination);
+
+        if (destination == null || destination.isEmpty()) {
+            showToast("도착지 정보가 없습니다.");
+            return;
+        }
+
+        // 도착지 설정
+        editEndLocation.setText(destination);
+        Log.d(TAG, "도착지 설정 완료: " + editEndLocation.getText().toString());
+
+        // 출발지 처리
+        if ("CURRENT_LOCATION".equals(startLocationStr)) {
+            // 현재 위치 사용 - 1.5초 대기 후 검색 (위치 로딩 대기)
+            Log.d(TAG, "현재 위치 대기 중... (1.5초)");
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                Log.d(TAG, "startLocation 상태: " + (startLocation != null ? "있음" : "없음"));
+                Log.d(TAG, "editStartLocation 내용: " + editStartLocation.getText().toString());
+
+                if (startLocation != null || !editStartLocation.getText().toString().trim().isEmpty()) {
+                    Log.d(TAG, "현재 위치로 자동 검색 시작");
+                    buttonSearchRoute.performClick();
+                } else {
+                    Log.e(TAG, "현재 위치 없음 - 검색 실패");
+                    showToast("현재 위치를 가져올 수 없습니다. 위치 권한을 확인해주세요.");
+                }
+            }, 1500);
+        }
     }
 
     @Override

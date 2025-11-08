@@ -2,12 +2,14 @@ package com.sjoneon.cap.activities;
 
 import android.Manifest;
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
@@ -664,6 +666,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         Call<ChatResponse> call = apiService.sendChatMessage(request);
         call.enqueue(new Callback<ChatResponse>() {
+            // sendMessageToApi() 메서드 내부의 onResponse 콜백 수정
             @Override
             public void onResponse(@NonNull Call<ChatResponse> call,
                                    @NonNull Response<ChatResponse> response) {
@@ -676,6 +679,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         if (aiMessage != null && !aiMessage.isEmpty()) {
                             addAiMessage(aiMessage);
                             Log.d(TAG, "AI 응답 수신: " + aiMessage);
+
+                            // 경로 탐색 요청 처리
+                            if (chatResponse.getRouteSearchRequested() != null &&
+                                    chatResponse.getRouteSearchRequested()) {
+                                handleRouteSearchRequest(
+                                        chatResponse.getStartLocation(),
+                                        chatResponse.getDestination()
+                                );
+                                return;
+                            }
 
                             // AI가 질문으로 끝나고 마지막 입력이 음성일 때만 자동 음성 인식 시작
                             if (isQuestion(aiMessage) && lastInputWasVoice) {
@@ -1035,6 +1048,54 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             toolbar.setTitle(R.string.menu_alarm);
             Log.d(TAG, "AlarmFragment 새로고침 완료");
         }
+    }
+
+    /**
+     * 경로 탐색 요청 처리
+     */
+    private void handleRouteSearchRequest(String startLocation, String destination) {
+        if (destination == null || destination.isEmpty()) {
+            Log.e(TAG, "도착지 정보가 없습니다");
+            Toast.makeText(this, "도착지 정보를 확인할 수 없습니다", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Log.d(TAG, "경로 탐색 시작 - 출발지: " + startLocation + ", 도착지: " + destination);
+
+        // 로딩 다이얼로그 표시
+        ProgressDialog loadingDialog = new ProgressDialog(this);
+        loadingDialog.setMessage("경로를 탐색 중입니다...");
+        loadingDialog.setCancelable(false);
+        loadingDialog.show();
+
+        // RouteFragment로 이동하여 경로 탐색 수행
+        RouteFragment routeFragment = new RouteFragment();
+        Bundle args = new Bundle();
+        args.putString("destination", destination);
+        args.putString("start_location", startLocation);
+        args.putBoolean("auto_search", true);
+        routeFragment.setArguments(args);
+
+        // 다이얼로그를 0.5초 후에 닫고 화면 전환
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            loadingDialog.dismiss();
+
+            // 채팅 컨테이너 숨기기
+            View chatContainer = findViewById(R.id.chat_container);
+            chatContainer.setVisibility(View.GONE);
+
+            // RouteFragment로 전환
+            getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.fragment_container, routeFragment)
+                    .addToBackStack(null)
+                    .commit();
+
+            if (getSupportActionBar() != null) {
+                getSupportActionBar().setTitle("추천 경로 정보");
+            }
+
+            Toast.makeText(this, "경로 탐색이 완료되면 결과가 표시됩니다", Toast.LENGTH_LONG).show();
+        }, 500);
     }
 
     /**

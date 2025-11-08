@@ -23,10 +23,18 @@ public class ChatResponse {
     @SerializedName("error")
     private String error;
 
-    // ===== [새로 추가] Function Call 필드 =====
     @SerializedName("function_called")
     private String functionCalled;
-    // ==========================================
+
+    // 경로 탐색 관련 필드
+    @SerializedName("route_search_requested")
+    private Boolean routeSearchRequested;
+
+    @SerializedName("start_location")
+    private String startLocation;
+
+    @SerializedName("destination")
+    private String destination;
 
     // 생성자
     public ChatResponse(boolean success, String aiResponse, Integer sessionId, Integer messageId) {
@@ -57,13 +65,23 @@ public class ChatResponse {
         return error;
     }
 
-    // ===== [새로 추가] Getter =====
     public String getFunctionCalled() {
         return functionCalled;
     }
-    // ================================
 
-    // Setters (필요시 사용)
+    public Boolean getRouteSearchRequested() {
+        return routeSearchRequested;
+    }
+
+    public String getStartLocation() {
+        return startLocation;
+    }
+
+    public String getDestination() {
+        return destination;
+    }
+
+    // Setters
     public void setSuccess(boolean success) {
         this.success = success;
     }
@@ -88,6 +106,18 @@ public class ChatResponse {
         this.functionCalled = functionCalled;
     }
 
+    public void setRouteSearchRequested(Boolean routeSearchRequested) {
+        this.routeSearchRequested = routeSearchRequested;
+    }
+
+    public void setStartLocation(String startLocation) {
+        this.startLocation = startLocation;
+    }
+
+    public void setDestination(String destination) {
+        this.destination = destination;
+    }
+
     @Override
     public String toString() {
         return "ChatResponse{" +
@@ -97,6 +127,9 @@ public class ChatResponse {
                 ", messageId=" + messageId +
                 ", error='" + error + '\'' +
                 ", functionCalled='" + functionCalled + '\'' +
+                ", routeSearchRequested=" + routeSearchRequested +
+                ", startLocation='" + startLocation + '\'' +
+                ", destination='" + destination + '\'' +
                 '}';
     }
 }
