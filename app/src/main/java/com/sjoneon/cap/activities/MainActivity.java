@@ -106,6 +106,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private Runnable autoListenRunnable;
     private Runnable autoListenTimeoutRunnable;
     private static final long AUTO_LISTEN_DELAY = 1000;
+    private boolean lastInputWasVoice = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -391,6 +392,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         buttonSend.setOnClickListener(v -> {
             String messageContent = editTextMessage.getText().toString().trim();
             if (!messageContent.isEmpty()) {
+                // 텍스트로 입력했으므로 플래그를 false로 설정
+                lastInputWasVoice = false;
+
                 sendMessage(messageContent);
                 editTextMessage.setText("");
             }
@@ -416,6 +420,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
                     // STT 결과를 자동으로 전송
                     if (!text.trim().isEmpty()) {
+                        // 음성으로 입력했으므로 플래그를 true로 설정
+                        lastInputWasVoice = true;
+
                         sendMessage(text);
                     }
                 });
@@ -433,8 +440,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             public void onSpeechStarted() {
                 runOnUiThread(() -> {
                     buttonVoice.setImageResource(R.drawable.ic_mic_active);
-
-                    // 사용자가 말하기 시작하면 타임아웃 취소
                     cancelAutoListenTimeout();
                 });
             }
@@ -448,7 +453,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         });
 
         apiService = ApiClient.getInstance().getApiService();
-
         Log.d(TAG, "AI 서비스 초기화 완료");
     }
 
@@ -656,7 +660,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
 
         ChatRequest request = new ChatRequest(userUuid, messageText, sessionId);
-
         Log.d(TAG, "API 호출 시작 - UUID: " + userUuid + ", SessionID: " + sessionId);
 
         Call<ChatResponse> call = apiService.sendChatMessage(request);
@@ -674,9 +677,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             addAiMessage(aiMessage);
                             Log.d(TAG, "AI 응답 수신: " + aiMessage);
 
-                            // AI가 질문으로 끝나면 자동으로 음성 인식 시작
-                            if (isQuestion(aiMessage)) {
+                            // AI가 질문으로 끝나고 마지막 입력이 음성일 때만 자동 음성 인식 시작
+                            if (isQuestion(aiMessage) && lastInputWasVoice) {
+                                Log.d(TAG, "후속 질문 감지 + 이전 입력이 음성 → 자동 음성인식 시작");
                                 startAutoListening();
+                            } else if (isQuestion(aiMessage)) {
+                                Log.d(TAG, "후속 질문 감지되었으나 이전 입력이 텍스트 → 자동 음성인식 취소");
                             }
                         }
 
