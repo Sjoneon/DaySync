@@ -173,14 +173,25 @@ public class RouteFragment extends Fragment {
             return;
         }
 
+        // ViewModel 초기화 (이전 검색 데이터 제거)
+        routeViewModel.clearData();
+        Log.d(TAG, "ViewModel 초기화 완료");
+
         // 도착지 설정
         editEndLocation.setText(destination);
         Log.d(TAG, "도착지 설정 완료: " + editEndLocation.getText().toString());
 
         // 출발지 처리
         if ("CURRENT_LOCATION".equals(startLocationStr)) {
-            // 현재 위치 사용 - 1.5초 대기 후 검색 (위치 로딩 대기)
-            Log.d(TAG, "현재 위치 대기 중... (1.5초)");
+            // 현재 위치 사용 - 출발지 입력창 비우고 현재 위치 로딩
+            editStartLocation.setText("");
+            Log.d(TAG, "출발지 입력창 초기화 완료");
+
+            // 현재 위치 강제 재로딩
+            loadCurrentLocation();
+
+            // 2초 대기 후 검색 (위치 로딩 대기)
+            Log.d(TAG, "현재 위치 대기 중... (2초)");
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 Log.d(TAG, "startLocation 상태: " + (startLocation != null ? "있음" : "없음"));
                 Log.d(TAG, "editStartLocation 내용: " + editStartLocation.getText().toString());
@@ -192,7 +203,16 @@ public class RouteFragment extends Fragment {
                     Log.e(TAG, "현재 위치 없음 - 검색 실패");
                     showToast("현재 위치를 가져올 수 없습니다. 위치 권한을 확인해주세요.");
                 }
-            }, 1500);
+            }, 2000);
+        } else if (startLocationStr != null && !startLocationStr.isEmpty()) {
+            // 특정 출발지가 지정된 경우
+            editStartLocation.setText(startLocationStr);
+            Log.d(TAG, "출발지 설정 완료: " + startLocationStr);
+
+            // 1초 대기 후 검색
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                buttonSearchRoute.performClick();
+            }, 1000);
         }
     }
 
