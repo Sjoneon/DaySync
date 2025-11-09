@@ -157,55 +157,70 @@
 
         </androidx.cardview.widget.CardView>
 
-        <!-- 현재 위치 & 새로고침 버튼 -->
-        <LinearLayout
+        <!-- 추천 경로 타이틀 -->
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="@dimen/margin_medium"
-            android:orientation="horizontal">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/recommended_routes"
-                android:textColor="@color/text_primary"
-                android:textSize="@dimen/text_size_large"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/textRefresh"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/current_location_refresh"
-                android:textColor="@color/text_tertiary"
-                android:textSize="@dimen/text_size_medium"
-                android:background="?attr/selectableItemBackground"
-                android:clickable="true"
-                android:focusable="true"
-                android:padding="@dimen/padding_small" />
-
-        </LinearLayout>
-
-        <!-- 경로 검색 결과가 없을 때 메시지 -->
-        <TextView
-            android:id="@+id/textNoRoutes"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginTop="@dimen/margin_xlarge"
-            android:text="@string/no_routes"
-            android:textColor="@color/text_secondary"
+            android:text="@string/recommended_routes"
+            android:textColor="@color/text_primary"
             android:textSize="@dimen/text_size_large"
-            android:visibility="visible" />
+            android:textStyle="bold" />
 
-        <!-- 경로 검색 결과 리스트 -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerViewRoutes"
+        <!-- 경로 목록 영역 (로딩/메시지/리스트를 같은 위치에 표시) -->
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:clipToPadding="false"
-            android:visibility="gone" />
+            android:minHeight="200dp">
+
+            <!-- 경로 검색 결과가 없을 때 메시지 -->
+            <TextView
+                android:id="@+id/textNoRoutes"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:text="@string/no_routes"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_size_large"
+                android:visibility="visible" />
+
+            <!-- 경로 검색 결과 리스트 -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerViewRoutes"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:visibility="gone" />
+
+            <!-- 경로 검색 중 로딩 표시 -->
+            <LinearLayout
+                android:id="@+id/layoutRouteLoading"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="@dimen/padding_xlarge"
+                android:visibility="gone">
+
+                <ProgressBar
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginBottom="@dimen/margin_medium"
+                    android:indeterminate="true"
+                    android:indeterminateTint="@color/text_primary" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="경로를 검색하고 있습니다..."
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/text_size_medium" />
+
+            </LinearLayout>
+
+        </FrameLayout>
 
     </LinearLayout>
 

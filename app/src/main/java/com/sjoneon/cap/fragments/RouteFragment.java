@@ -116,9 +116,8 @@ public class RouteFragment extends Fragment {
     private TagoApiService tagoApiService;
     private ExecutorService executorService;
     private Handler mainHandler;
-
     private LinearLayout layoutLoading;
-
+    private LinearLayout layoutRouteLoading;
     private Location startLocation, endLocation;
 
     private RouteViewModel routeViewModel;
@@ -162,6 +161,9 @@ public class RouteFragment extends Fragment {
             Log.d(TAG, "자동 검색 플래그 없음");
             return;
         }
+
+        //자동 검색 플래그 제거 (한 번만 실행되도록)
+        args.remove("auto_search");
 
         String destination = args.getString("destination");
         String startLocationStr = args.getString("start_location");
@@ -246,6 +248,7 @@ public class RouteFragment extends Fragment {
         textNoRoutes = view.findViewById(R.id.textNoRoutes);
         recyclerViewRoutes = view.findViewById(R.id.recyclerViewRoutes);
         layoutLoading = view.findViewById(R.id.layoutLoading);
+        layoutRouteLoading = view.findViewById(R.id.layoutRouteLoading);
     }
 
     private void initializeServices() {
@@ -285,6 +288,7 @@ public class RouteFragment extends Fragment {
         if (buttonSearchRoute != null) {
             buttonSearchRoute.setOnClickListener(v -> {
                 showLoading(true);
+                showRouteLoading(true);
                 searchRoutes();
             });
         }
@@ -303,6 +307,23 @@ public class RouteFragment extends Fragment {
     private void showLoading(boolean show) {
         if (layoutLoading != null) {
             layoutLoading.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    /**
+     * 경로 목록 영역의 로딩 표시 제어
+     */
+    private void showRouteLoading(boolean show) {
+        if (layoutRouteLoading == null) return;
+
+        if (getActivity() != null) {
+            getActivity().runOnUiThread(() -> {
+                layoutRouteLoading.setVisibility(show ? View.VISIBLE : View.GONE);
+                if (show) {
+                    textNoRoutes.setVisibility(View.GONE);
+                    recyclerViewRoutes.setVisibility(View.GONE);
+                }
+            });
         }
     }
 
@@ -344,13 +365,16 @@ public class RouteFragment extends Fragment {
         String startAddress = editStartLocation.getText().toString().trim();
         String endAddress = editEndLocation.getText().toString().trim();
 
+        // 입력 검증 실패 시
         if (startAddress.isEmpty() || endAddress.isEmpty()) {
             showToast("출발지와 도착지를 모두 입력해주세요.");
             showLoading(false);
+            showRouteLoading(false);
             return;
         }
 
         updateRouteListVisibility(false, "경로를 탐색 중입니다...");
+        showRouteLoading(true);
         routeList.clear();
         routeAdapter.notifyDataSetChanged();
 
@@ -363,6 +387,7 @@ public class RouteFragment extends Fragment {
 
                 if (start == null || end == null) {
                     mainHandler.post(() -> {
+                        showRouteLoading(false);
                         updateRouteListVisibility(true, "주소를 찾을 수 없습니다.");
                         showToast("주소를 다시 확인해주세요.");
                         showLoading(false);
@@ -394,6 +419,7 @@ public class RouteFragment extends Fragment {
             } catch (Exception e) {
                 Log.e(TAG, "경로 탐색 중 예외 발생", e);
                 mainHandler.post(() -> {
+                    showRouteLoading(false);
                     updateRouteListVisibility(true, "경로 탐색 중 오류가 발생했습니다.");
                     showToast("경로 탐색에 실패했습니다.");
                     showLoading(false);
@@ -1916,6 +1942,8 @@ public class RouteFragment extends Fragment {
     // ================================================================================================
 
     private void finalizeAndDisplayRoutes(List<RouteInfo> routes) {
+        showRouteLoading(false);
+
         if (routes.isEmpty()) {
             updateRouteListVisibility(true, "경로를 찾을 수 없습니다.\n다른 출발지나 도착지를 시도해보세요.");
         } else {
@@ -1949,6 +1977,10 @@ public class RouteFragment extends Fragment {
                 if (noRoutes && !message.isEmpty()) {
                     textNoRoutes.setText(message);
                 }
+            }
+
+            if (noRoutes && layoutRouteLoading != null) {
+                layoutRouteLoading.setVisibility(View.GONE);
             }
         });
     }
