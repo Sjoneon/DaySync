@@ -436,7 +436,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             @Override
             public void onSpeechResult(String text) {
                 runOnUiThread(() -> {
-                    editTextMessage.setText(text);
+                    //editTextMessage.setText(text); //이거 추가하면 텍스트 필드에 텍스트 표시 (단, 삭제 안되고 유지 되어 있음.)
                     buttonVoice.setImageResource(R.drawable.ic_mic);
 
                     // STT 결과를 자동으로 전송
@@ -735,9 +735,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             String functionName = chatResponse.getFunctionCalled();
                             Log.d(TAG, "Function 호출됨: " + functionName);
 
-                            if ("create_schedule".equals(functionName)) {
+                            // 일정 관련 함수 처리
+                            if ("create_schedule".equals(functionName) ||
+                                    "update_schedule".equals(functionName) ||
+                                    "delete_schedule".equals(functionName)) {
                                 refreshCalendarIfVisible();
-                            } else if ("create_alarm".equals(functionName)) {
+                            }
+                            // 알람 관련 함수 처리
+                            else if ("create_alarm".equals(functionName) ||
+                                    "update_alarm".equals(functionName) ||
+                                    "delete_alarm".equals(functionName)) {
                                 refreshAlarmIfVisible();
                             }
                         }
@@ -772,7 +779,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
      */
     private void addAiMessage(String content) {
         if (content != null) {
+            // 앞뒤 공백과 줄바꿈 완전히 제거
             content = content.trim();
+            // 끝에 있는 줄바꿈 문자 제거
+            content = content.replaceAll("[\\n\\r]+$", "");
         }
 
         Message aiMessage = new Message(content, false);

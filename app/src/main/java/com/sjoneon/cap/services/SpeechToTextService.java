@@ -105,18 +105,29 @@ public class SpeechToTextService {
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
 
-        // 한국어 설정 - 여러 방법 시도
+        // 한국어 설정
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ko-KR");
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ko-KR");
 
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE,
                 context.getPackageName());
+
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
 
         // 부분 결과 활성화
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
 
-        Log.d(TAG, "음성 인식 초기화 완료 - 언어: 한국어 (ko-KR)");
+        // 무음 감지 타임아웃 설정 (밀리초 단위)
+        // 완전 무음으로 판단하는 시간: 5초 (기본값: 2-3초)
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 5000L);
+
+        // 말이 끝났을 가능성이 있다고 판단하는 시간: 3초 (기본값: 1-2초)
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L);
+
+        // 최소 음성 입력 시간: 500ms (너무 짧은 소리 무시)
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 250L);
+
+        Log.d(TAG, "음성 인식 초기화 완료 - 언어: 한국어 (ko-KR), 무음 타임아웃: 5초");
     }
 
     public void startListening() {
