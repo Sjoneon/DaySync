@@ -24,8 +24,12 @@ public class ApiClient {
     // 실제 기기용 (개발 PC의 로컬 IP로 변경 필요)
     private static final String BASE_URL_DEVICE = "http://192.168.0.24:8000/";
 
+    // 클라우드 배포용
+    private static final String BASE_URL_CLOUD = "http://15.165.205.156:8000/";
+
     // 현재 사용할 BASE_URL
-    private static final String BASE_URL = BASE_URL_DEVICE;
+    private static final String BASE_URL = BASE_URL_CLOUD;
+
 
     private static ApiClient instance;
     private DaySyncApiService apiService;
