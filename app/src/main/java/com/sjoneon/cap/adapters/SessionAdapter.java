@@ -1,11 +1,13 @@
 package com.sjoneon.cap.adapters;
 
+
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.PopupMenu;
 import android.widget.TextView;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.cardview.widget.CardView;
@@ -18,6 +20,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.TimeZone;
 
 /**
  * 세션 목록을 표시하기 위한 RecyclerView 어댑터
@@ -111,10 +114,13 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.SessionV
      */
     private String formatRelativeTime(String isoTimestamp) {
         try {
+            // ISO 8601 형식의 UTC 시간을 파싱
             SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+            format.setTimeZone(TimeZone.getTimeZone("UTC"));
             Date date = format.parse(isoTimestamp);
             if (date == null) return "알 수 없음";
 
+            // 현재 시간과의 차이 계산
             long diff = System.currentTimeMillis() - date.getTime();
             long seconds = diff / 1000;
             long minutes = seconds / 60;
@@ -134,6 +140,7 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.SessionV
                 return dateFormat.format(date);
             }
         } catch (Exception e) {
+            Log.e("SessionAdapter", "시간 파싱 오류: " + e.getMessage());
             return "알 수 없음";
         }
     }

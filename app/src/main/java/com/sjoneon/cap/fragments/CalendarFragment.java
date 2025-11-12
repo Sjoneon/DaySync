@@ -44,6 +44,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.TimeZone;
 
 public class CalendarFragment extends Fragment {
 
@@ -165,38 +166,67 @@ public class CalendarFragment extends Fragment {
 
                         Log.d(TAG, "서버에서 일정 불러오기 성공: " + response.body().size() + "개");
 
+                        // 타임존을 한국 시간으로 설정
+                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+                        sdf.setTimeZone(TimeZone.getTimeZone("Asia/Seoul"));
+
                         List<CalendarEvent> existingEvents = eventRepository.getAllEvents();
 
                         for (CalendarEventResponse eventResponse : response.body()) {
-                            boolean exists = false;
-                            for (CalendarEvent existingEvent : existingEvents) {
-                                if (existingEvent.getServerId() != null &&
-                                        existingEvent.getServerId() == eventResponse.getId()) {
-                                    exists = true;
+                            CalendarEvent existingEvent = null;
+
+                            // serverId로 기존 일정 찾기
+                            for (CalendarEvent event : existingEvents) {
+                                if (event.getServerId() != null && event.getServerId() == eventResponse.getId()) {
+                                    existingEvent = event;
                                     break;
                                 }
                             }
 
-                            if (!exists) {
-                                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
-                                try {
-                                    Date startDate = sdf.parse(eventResponse.getEventStartTime());
-                                    if (startDate != null) {
-                                        CalendarEvent newEvent = new CalendarEvent(
-                                                eventResponse.getEventTitle(),
-                                                eventResponse.getDescription() != null ? eventResponse.getDescription() : "",
-                                                startDate.getTime()
-                                        );
-                                        newEvent.setServerId(eventResponse.getId());
-                                        eventRepository.addEvent(newEvent);
-                                        Log.d(TAG, "서버에서 가져온 일정 로컬에 추가: " + eventResponse.getEventTitle());
-                                    }
-                                } catch (Exception e) {
-                                    Log.e(TAG, "날짜 파싱 오류", e);
+                            try {
+                                Date startDate = sdf.parse(eventResponse.getEventStartTime());
+                                if (startDate == null) {
+                                    Log.e(TAG, "날짜 파싱 실패: " + eventResponse.getEventStartTime());
+                                    continue;
                                 }
+
+                                long newDateTime = startDate.getTime();
+
+                                if (existingEvent != null) {
+                                    // 기존 일정이 있는 경우 - 시간이 다르면 업데이트
+                                    if (existingEvent.getDateTime() != newDateTime) {
+                                        Log.d(TAG, "일정 시간 변경 감지: " + eventResponse.getEventTitle());
+                                        Log.d(TAG, "기존: " + new Date(existingEvent.getDateTime()));
+                                        Log.d(TAG, "신규: " + new Date(newDateTime));
+
+                                        existingEvent.setDateTime(newDateTime);
+                                        existingEvent.setTitle(eventResponse.getEventTitle());
+                                        existingEvent.setDescription(
+                                                eventResponse.getDescription() != null ? eventResponse.getDescription() : ""
+                                        );
+
+                                        eventRepository.updateEvent(existingEvent);
+                                        Log.d(TAG, "로컬 일정 업데이트 완료");
+                                    } else {
+                                        Log.d(TAG, "일정 시간 변경 없음: " + eventResponse.getEventTitle());
+                                    }
+                                } else {
+                                    // 새 일정인 경우 - 추가
+                                    CalendarEvent newEvent = new CalendarEvent(
+                                            eventResponse.getEventTitle(),
+                                            eventResponse.getDescription() != null ? eventResponse.getDescription() : "",
+                                            newDateTime
+                                    );
+                                    newEvent.setServerId(eventResponse.getId());
+                                    eventRepository.addEvent(newEvent);
+                                    Log.d(TAG, "서버에서 가져온 새 일정 추가: " + eventResponse.getEventTitle());
+                                }
+                            } catch (Exception e) {
+                                Log.e(TAG, "날짜 파싱 오류: " + eventResponse.getEventStartTime(), e);
                             }
                         }
 
+                        // UI 업데이트
                         loadEventsForDate(selectedDate);
                     }
 
@@ -498,7 +528,9 @@ public class CalendarFragment extends Fragment {
             return;
         }
 
+        // 타임존을 한국 시간으로 설정
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+        sdf.setTimeZone(TimeZone.getTimeZone("Asia/Seoul"));
         String eventStartTime = sdf.format(new Date(dateTime));
 
         CalendarEventRequest request = new CalendarEventRequest(userUuid, title, eventStartTime);
@@ -578,7 +610,9 @@ public class CalendarFragment extends Fragment {
             return;
         }
 
+        // 타임존을 한국 시간으로 설정
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+        sdf.setTimeZone(TimeZone.getTimeZone("Asia/Seoul"));
         String eventStartTime = sdf.format(new Date(dateTime));
 
         CalendarEventUpdateRequest request = new CalendarEventUpdateRequest(title, eventStartTime);

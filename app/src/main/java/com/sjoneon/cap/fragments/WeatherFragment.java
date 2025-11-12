@@ -253,10 +253,21 @@ public class WeatherFragment extends Fragment {
     }
 
     private void fetchWeatherData() {
-        String currentDate = new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Calendar.getInstance().getTime());
         shortTermData = null;
         weeklyForecastList.clear();
-        fetchVillageForecast(currentDate, 0);
+
+        // baseTime과 baseDate를 함께 계산
+        Calendar cal = Calendar.getInstance();
+        int hour = cal.get(Calendar.HOUR_OF_DAY);
+        int minute = cal.get(Calendar.MINUTE);
+
+        // 02:10 이전이면 전날 2300시 데이터 사용
+        if (hour < 2 || (hour == 2 && minute <= 10)) {
+            cal.add(Calendar.DATE, -1);
+        }
+
+        String baseDate = new SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(cal.getTime());
+        fetchVillageForecast(baseDate, 0);
     }
 
     private void fetchVillageForecast(String baseDate, int retryCount) {
@@ -271,7 +282,32 @@ public class WeatherFragment extends Fragment {
                     public void onResponse(@NonNull Call<String> call, @NonNull Response<String> response) {
                         if (response.isSuccessful() && response.body() != null) {
                             Log.d(TAG, "날씨 API 응답 성공");
+
                             shortTermData = lenientGson.fromJson(response.body(), JsonObject.class);
+
+                            // API 에러 코드 확인
+                            if (shortTermData != null && shortTermData.has("response")) {
+                                JsonObject responseObj = shortTermData.getAsJsonObject("response");
+                                if (responseObj.has("header")) {
+                                    JsonObject header = responseObj.getAsJsonObject("header");
+                                    String resultCode = header.has("resultCode") ? header.get("resultCode").getAsString() : "00";
+
+                                    if (!"00".equals(resultCode)) {
+                                        String resultMsg = header.has("resultMsg") ? header.get("resultMsg").getAsString() : "알 수 없는 오류";
+                                        Log.e(TAG, "API 에러: " + resultCode + " - " + resultMsg);
+
+                                        if (isAdded()) {
+                                            getActivity().runOnUiThread(() -> {
+                                                Toast.makeText(getContext(),
+                                                        "날씨 정보를 불러올 수 없습니다",
+                                                        Toast.LENGTH_SHORT).show();
+                                            });
+                                        }
+                                        return;
+                                    }
+                                }
+                            }
+
                             parseAndDisplayShortTermWeather();
                             parseAndDisplayWeeklyForecast();
                         } else if (retryCount < MAX_RETRY_COUNT) {
@@ -281,6 +317,7 @@ public class WeatherFragment extends Fragment {
                             handleApiError("단기예보", response);
                         }
                     }
+
                     @Override
                     public void onFailure(@NonNull Call<String> call, @NonNull Throwable t) {
                         if (retryCount < MAX_RETRY_COUNT) {
@@ -340,9 +377,38 @@ public class WeatherFragment extends Fragment {
 
         List<WeeklyForecastItem> dailyList = new ArrayList<>();
         try {
-            JsonArray itemsArray = shortTermData.getAsJsonObject("response").getAsJsonObject("body").getAsJsonObject("items").getAsJsonArray("item");
-            List<WeatherResponse.WeatherItem> items = lenientGson.fromJson(itemsArray, new com.google.gson.reflect.TypeToken<List<WeatherResponse.WeatherItem>>() {}.getType());
-            Map<String, List<WeatherResponse.WeatherItem>> groupedByDate = items.stream().collect(Collectors.groupingBy(item -> item.fcstDate));
+            // 안전한 JSON 파싱 - 각 단계별 null 체크
+            JsonObject response = shortTermData.getAsJsonObject("response");
+            if (response == null) {
+                Log.e(TAG, "response 객체가 null입니다.");
+                return;
+            }
+
+            JsonObject body = response.getAsJsonObject("body");
+            if (body == null) {
+                Log.e(TAG, "body 객체가 null입니다.");
+                return;
+            }
+
+            JsonObject items = body.getAsJsonObject("items");
+            if (items == null) {
+                Log.e(TAG, "items 객체가 null입니다.");
+                return;
+            }
+
+            JsonArray itemsArray = items.getAsJsonArray("item");
+            if (itemsArray == null || itemsArray.size() == 0) {
+                Log.e(TAG, "item 배열이 null이거나 비어있습니다.");
+                return;
+            }
+
+            List<WeatherResponse.WeatherItem> itemsList = lenientGson.fromJson(
+                    itemsArray,
+                    new com.google.gson.reflect.TypeToken<List<WeatherResponse.WeatherItem>>() {}.getType()
+            );
+
+            Map<String, List<WeatherResponse.WeatherItem>> groupedByDate = itemsList.stream()
+                    .collect(Collectors.groupingBy(item -> item.fcstDate));
 
             Calendar cal = Calendar.getInstance();
             SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd", Locale.KOREAN);
@@ -355,10 +421,25 @@ public class WeatherFragment extends Fragment {
                 if (groupedByDate.containsKey(date)) {
                     List<WeatherResponse.WeatherItem> dailyItems = groupedByDate.get(date);
 
-                    int maxTemp = dailyItems.stream().filter(item -> "TMX".equals(item.category)).mapToInt(item -> (int)Double.parseDouble(item.fcstValue)).findFirst()
-                            .orElse((int) dailyItems.stream().filter(item->"TMP".equals(item.category)).mapToDouble(item->Double.parseDouble(item.fcstValue)).max().orElse(0.0));
-                    int minTemp = dailyItems.stream().filter(item -> "TMN".equals(item.category)).mapToInt(item -> (int)Double.parseDouble(item.fcstValue)).findFirst()
-                            .orElse((int) dailyItems.stream().filter(item->"TMP".equals(item.category)).mapToDouble(item->Double.parseDouble(item.fcstValue)).min().orElse(0.0));
+                    int maxTemp = dailyItems.stream()
+                            .filter(item -> "TMX".equals(item.category))
+                            .mapToInt(item -> (int)Double.parseDouble(item.fcstValue))
+                            .findFirst()
+                            .orElse((int) dailyItems.stream()
+                                    .filter(item->"TMP".equals(item.category))
+                                    .mapToDouble(item->Double.parseDouble(item.fcstValue))
+                                    .max()
+                                    .orElse(0.0));
+
+                    int minTemp = dailyItems.stream()
+                            .filter(item -> "TMN".equals(item.category))
+                            .mapToInt(item -> (int)Double.parseDouble(item.fcstValue))
+                            .findFirst()
+                            .orElse((int) dailyItems.stream()
+                                    .filter(item->"TMP".equals(item.category))
+                                    .mapToDouble(item->Double.parseDouble(item.fcstValue))
+                                    .min()
+                                    .orElse(0.0));
 
                     String amCondition = getWeatherConditionFromShortTerm(dailyItems, "0900");
                     String pmCondition = getWeatherConditionFromShortTerm(dailyItems, "1500");
