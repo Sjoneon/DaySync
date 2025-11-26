@@ -193,22 +193,27 @@ public class CalendarFragment extends Fragment {
                                 long newDateTime = startDate.getTime();
 
                                 if (existingEvent != null) {
-                                    // 기존 일정이 있는 경우 - 시간이 다르면 업데이트
-                                    if (existingEvent.getDateTime() != newDateTime) {
-                                        Log.d(TAG, "일정 시간 변경 감지: " + eventResponse.getEventTitle());
-                                        Log.d(TAG, "기존: " + new Date(existingEvent.getDateTime()));
-                                        Log.d(TAG, "신규: " + new Date(newDateTime));
+                                    // 서버와 로컬 데이터 비교
+                                    String serverDescription = eventResponse.getDescription() != null ? eventResponse.getDescription() : "";
+                                    String localDescription = existingEvent.getDescription() != null ? existingEvent.getDescription() : "";
+
+                                    boolean timeChanged = existingEvent.getDateTime() != newDateTime;
+                                    boolean descriptionChanged = !serverDescription.equals(localDescription);
+                                    boolean titleChanged = !eventResponse.getEventTitle().equals(existingEvent.getTitle());
+
+                                    // 시간, 설명, 제목 중 하나라도 변경되면 업데이트
+                                    if (timeChanged || descriptionChanged || titleChanged) {
+                                        Log.d(TAG, "일정 변경 감지: " + eventResponse.getEventTitle());
+                                        Log.d(TAG, "시간변경: " + timeChanged + ", 설명변경: " + descriptionChanged + ", 제목변경: " + titleChanged);
 
                                         existingEvent.setDateTime(newDateTime);
                                         existingEvent.setTitle(eventResponse.getEventTitle());
-                                        existingEvent.setDescription(
-                                                eventResponse.getDescription() != null ? eventResponse.getDescription() : ""
-                                        );
+                                        existingEvent.setDescription(serverDescription);
 
                                         eventRepository.updateEvent(existingEvent);
                                         Log.d(TAG, "로컬 일정 업데이트 완료");
                                     } else {
-                                        Log.d(TAG, "일정 시간 변경 없음: " + eventResponse.getEventTitle());
+                                        Log.d(TAG, "일정 변경 없음: " + eventResponse.getEventTitle());
                                     }
                                 } else {
                                     // 새 일정인 경우 - 추가
@@ -768,13 +773,30 @@ public class CalendarFragment extends Fragment {
     public void onResume() {
         super.onResume();
         Log.d(TAG, "onResume called");
-        syncWithServer();
+
+        // 일정 변경 플래그 확인
+        SharedPreferences prefs = requireActivity().getSharedPreferences("UserPrefs", Context.MODE_PRIVATE);
+        if (prefs.getBoolean("calendar_needs_sync", false)) {
+            Log.d(TAG, "일정 변경 플래그 감지 - 서버 동기화");
+            loadEventsFromServer();
+            prefs.edit().putBoolean("calendar_needs_sync", false).apply();
+        } else {
+            syncWithServer();
+        }
 
         if (getView() != null) {
             getView().postDelayed(() -> {
                 loadEventsForDate(selectedDate);
             }, 100);
         }
+    }
+
+    /**
+     * 외부에서 호출 가능한 서버 동기화 메서드
+     */
+    public void syncFromServer() {
+        Log.d(TAG, "외부에서 동기화 요청됨");
+        loadEventsFromServer();
     }
 
     private void syncWithServer() {

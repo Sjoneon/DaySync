@@ -20,6 +20,11 @@
     <!-- 알람 관련 권한 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
 
     <application
         android:name=".MyApplication"
@@ -74,18 +79,26 @@
         <!-- 알람 액티비티 -->
         <activity
             android:name=".activities.AlarmActivity"
-            android:exported="false"
+            android:exported="true"
             android:launchMode="singleTop"
             android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@style/Theme.Cap"
-            android:turnScreenOn="true" />
+            android:theme="@style/Theme.Cap" />
 
         <!-- 알람 리시버 -->
         <receiver
             android:name=".receivers.AlarmReceiver"
             android:enabled="true"
             android:exported="false" />
+
+        <!-- 알람 서비스 -->
+        <service
+            android:name=".services.AlarmService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <!-- 부팅 완료 리시버 -->
         <receiver

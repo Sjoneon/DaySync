@@ -10,6 +10,7 @@ import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Build;
 import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
@@ -20,6 +21,8 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.view.Menu;
+import android.provider.Settings;
+import android.net.Uri;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -177,13 +180,50 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     Log.d(TAG, "권한 상태 체크 시작");
                     PermissionHelper.logPermissionStatus(MainActivity.this);
 
-                    if (!PermissionHelper.hasNotificationPermission(MainActivity.this) ||
-                            !PermissionHelper.hasExactAlarmPermission(MainActivity.this)) {
-                        showPermissionInfoDialog();
-                    }
+                    // Overlay 권한부터 체크 (내부에서 알림 권한도 순차 체크)
+                    checkOverlayPermission();
                 }
             }
-        }, 3000);
+        }, 2000);
+    }
+
+    /**
+     * 다른 앱 위에 표시 권한 체크 및 요청
+     */
+    private void checkOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                new AlertDialog.Builder(this, R.style.DialogTheme)
+                        .setTitle("알람 화면 표시 권한")
+                        .setMessage("알람이 울릴 때 화면을 표시하려면 '다른 앱 위에 표시' 권한이 필요합니다.")
+                        .setPositiveButton("설정으로 이동", (dialog, which) -> {
+                            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:" + getPackageName()));
+                            startActivityForResult(intent, 1234);
+                        })
+                        .setNegativeButton("나중에", (dialog, which) -> {
+                            // 나중에 눌러도 알림 권한 체크
+                            checkNotificationPermission();
+                        })
+                        .setCancelable(false)
+                        .show();
+            } else {
+                // Overlay 권한 있으면 알림 권한 체크
+                checkNotificationPermission();
+            }
+        } else {
+            checkNotificationPermission();
+        }
+    }
+
+    /**
+     * 알림 권한 체크
+     */
+    private void checkNotificationPermission() {
+        if (!PermissionHelper.hasNotificationPermission(this) ||
+                !PermissionHelper.hasExactAlarmPermission(this)) {
+            showPermissionInfoDialog();
+        }
     }
 
     /**
@@ -240,6 +280,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+
+        // Overlay 권한 설정 후 알림 권한 체크
+        if (requestCode == 1234) {
+            // 약간 지연 후 알림 권한 체크
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                checkNotificationPermission();
+            }, 500);
+        }
 
         if (requestCode == PermissionHelper.REQUEST_EXACT_ALARM_PERMISSION) {
             if (PermissionHelper.hasExactAlarmPermission(this)) {
@@ -1066,9 +1114,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 .findFragmentById(R.id.fragment_container);
 
         if (currentFragment instanceof CalendarFragment) {
-            showFragment(new CalendarFragment());
-            toolbar.setTitle(R.string.menu_calendar);
-            Log.d(TAG, "CalendarFragment 새로고침 완료");
+            // 현재 CalendarFragment가 보이면 즉시 동기화
+            ((CalendarFragment) currentFragment).syncFromServer();
+            Log.d(TAG, "CalendarFragment 서버 동기화 요청");
+        } else {
+            // CalendarFragment가 안 보이면 플래그 설정
+            SharedPreferences prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+            prefs.edit().putBoolean("calendar_needs_sync", true).apply();
+            Log.d(TAG, "일정 변경 플래그 설정");
         }
     }
 

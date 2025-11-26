@@ -5,32 +5,32 @@
     <group android:checkableBehavior="single">
         <item
             android:id="@+id/nav_chat"
-            android:icon="@android:drawable/ic_dialog_email"
+            android:icon="@drawable/ic_chat"
             android:iconTint="@color/text_primary"
             android:title="채팅" />
         <item
             android:id="@+id/nav_calendar"
-            android:icon="@android:drawable/ic_menu_my_calendar"
+            android:icon="@drawable/ic_calendar"
             android:iconTint="@color/text_primary"
             android:title="일정 관리" />
         <item
             android:id="@+id/nav_alarm"
-            android:icon="@android:drawable/ic_lock_idle_alarm"
+            android:icon="@drawable/ic_alarm"
             android:iconTint="@color/text_primary"
             android:title="알람 설정" />
         <item
             android:id="@+id/nav_route_info"
-            android:icon="@android:drawable/ic_menu_directions"
+            android:icon="@drawable/ic_route"
             android:iconTint="@color/text_primary"
             android:title="추천 경로 정보" />
         <item
             android:id="@+id/nav_weather"
-            android:icon="@android:drawable/ic_menu_day"
+            android:icon="@drawable/ic_weather"
             android:iconTint="@color/text_primary"
             android:title="날씨 정보" />
         <item
             android:id="@+id/nav_notifications"
-            android:icon="@android:drawable/ic_popup_reminder"
+            android:icon="@drawable/ic_notification"
             android:iconTint="@color/text_primary"
             android:title="알림 목록" />
     </group>
@@ -43,12 +43,12 @@
         <menu>
             <item
                 android:id="@+id/nav_settings"
-                android:icon="@android:drawable/ic_menu_preferences"
+                android:icon="@drawable/ic_settings"
                 android:iconTint="@color/text_primary"
                 android:title="설정" />
             <item
                 android:id="@+id/nav_help"
-                android:icon="@android:drawable/ic_menu_help"
+                android:icon="@drawable/ic_help"
                 android:iconTint="@color/text_primary"
                 android:title="도움말" />
         </menu>

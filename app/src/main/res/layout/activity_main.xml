@@ -85,12 +85,11 @@
                         android:layout_marginStart="@dimen/margin_medium"
                         android:background="@drawable/rounded_button_background"
                         android:contentDescription="@string/content_desc_voice"
-                        android:src="@android:drawable/ic_btn_speak_now"
+                        android:src="@drawable/ic_mic"
                         app:layout_constraintBottom_toBottomOf="parent"
                         app:layout_constraintEnd_toStartOf="@+id/buttonSend"
                         app:layout_constraintStart_toEndOf="@+id/editTextMessage"
-                        app:layout_constraintTop_toTopOf="parent"
-                        app:tint="@color/text_primary" />
+                        app:layout_constraintTop_toTopOf="parent" />
 
                     <ImageButton
                         android:id="@+id/buttonSend"

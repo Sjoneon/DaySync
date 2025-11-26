@@ -2,6 +2,7 @@ package com.sjoneon.cap.activities;
 
 import android.app.KeyguardManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
@@ -22,6 +23,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.sjoneon.cap.receivers.AlarmReceiver;
 import com.sjoneon.cap.R;
 import com.sjoneon.cap.helpers.AlarmScheduler;
+import com.sjoneon.cap.helpers.AlarmNotificationHelper;
+import com.sjoneon.cap.services.AlarmService;
+import com.sjoneon.cap.helpers.NotificationHelper;
+
+
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -191,6 +197,18 @@ public class AlarmActivity extends AppCompatActivity {
     }
 
     private void stopAlarm() {
+        // AlarmService 중지
+        Intent serviceIntent = new Intent(this, AlarmService.class);
+        serviceIntent.setAction(AlarmService.ACTION_STOP_ALARM);
+        startService(serviceIntent);
+
+        // 소리/진동 중지
+        AlarmNotificationHelper.stopAll();
+
+        // 알림 제거
+        NotificationHelper notificationHelper = new NotificationHelper(this);
+        notificationHelper.cancelNotification(alarmId);
+
         Log.d(TAG, "알람 정지");
         stopSoundAndVibration();
         finish();
