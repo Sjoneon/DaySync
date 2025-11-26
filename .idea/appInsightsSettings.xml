@@ -8,10 +8,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.sjoneon.cap" />
+                  <option name="mobileSdkAppId" value="1:766708068168:android:68dbf24d73b7772ea1cd7d" />
+                  <option name="projectId" value="daysync-1f1eb" />
+                  <option name="projectNumber" value="766708068168" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />
