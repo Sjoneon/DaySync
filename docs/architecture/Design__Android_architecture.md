@@ -11,41 +11,43 @@ DaySync Android 앱은 **MVVM (Model-View-ViewModel) 아키텍처 패턴**을 �
 ### 아키텍처 다이어그램
 
 ```mermaid
-  graph TB
-      subgraph "뷰 레이어"
-          A[Activities]
-          B[Fragments]
-          C[RecyclerView Adapters]
-      end
-      
-      subgraph "뷰모델 레이어"
-          D[ViewModel]
-          E[LiveData]
-      end
-      
-      subgraph "모델 레이어"
-          F[Repository]
-          G[API Service]
-          H[Local Data Source]
-      end
-      
-      A --> D
-      B --> D
-      D --> E
-      E --> A
-      E --> B
-      D --> F
-      F --> G
-      F --> H
-      
-      style A fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
-      style B fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
-      style C fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
-      style D fill:#ce93d8,stroke:#7b1fa2,stroke-width:3px,color:#000
-      style E fill:#ce93d8,stroke:#7b1fa2,stroke-width:3px,color:#000
-      style F fill:#ffcc80,stroke:#f57c00,stroke-width:3px,color:#000
-      style G fill:#ffcc80,stroke:#f57c00,stroke-width:3px,color:#000
-      style H fill:#ffcc80,stroke:#f57c00,stroke-width:3px,color:#000
+graph LR
+    subgraph view["뷰 레이어"]
+        A[Activities]
+        B[Fragments]
+        C[RecyclerView Adapters]
+    end
+    
+    subgraph viewmodel["뷰모델 레이어"]
+        D[ViewModel]
+        E[LiveData]
+    end
+    
+    subgraph model["모델 레이어"]
+        F[Repository]
+        G[API Service]
+        H[Local Data Source]
+    end
+    
+    A --> D
+    B --> D
+    
+    D --> E
+    E --> A
+    E --> B
+    
+    D --> F
+    F --> G
+    F --> H
+    
+    style A fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
+    style B fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
+    style C fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
+    style D fill:#ce93d8,stroke:#7b1fa2,stroke-width:3px,color:#000
+    style E fill:#ce93d8,stroke:#7b1fa2,stroke-width:3px,color:#000
+    style F fill:#ffcc80,stroke:#f57c00,stroke-width:3px,color:#000
+    style G fill:#ffcc80,stroke:#f57c00,stroke-width:3px,color:#000
+    style H fill:#ffcc80,stroke:#f57c00,stroke-width:3px,color:#000
 ```
 
 ### 계층별 역할
