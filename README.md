@@ -286,7 +286,7 @@ API_BASE_URL=http://your_server_url:8000
 - **확장성**: 향후 기능 추가를 고려한 모듈형 구조 설계
 
 ### 기술적 도전과 해결
-- **AI 통합**: Gemini Function Calling을 활용하여 구조화된 데이터 추출
+- **AI 통합**: Gemini Function Calling을 활용하여 구조화된 데이터 추출 
 - **다중 API 연동**: TMAP, TAGO, Naver Maps 등 여러 API의 일관된 인터페이스 구현
 - **성능 최적화**: 데이터베이스 인덱싱 및 쿼리 최적화로 응답 시간 단축
 - **사용자 경험**: 음성 인식과 텍스트 입력의 자연스러운 전환
