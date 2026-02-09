@@ -11,31 +11,29 @@ DaySync 백엔드는 **FastAPI 프레임워크**를 기반으로 RESTful API를 
 ### 계층형 아키텍처 다이어그램
 
 ```mermaid
-  graph TB
-      subgraph "프레젠테이션 레이어"
-          A[API 게이트웨이<br/>FastAPI Router]
-          B[요청 검증<br/>Pydantic Schemas]
+  graph LR
+      subgraph Layer1["프레젠테이션 레이어"]
+          A[API 게이트웨이]
+          B[요청 검증]
       end
       
-      subgraph "비즈니스 로직 레이어"
+      subgraph Layer2["비즈니스 로직 레이어"]
           C[세션 관리자]
           D[일정 관리자]
           E[경로 관리자]
           F[AI 서비스]
       end
       
-      subgraph "데이터 접근 레이어"
+      subgraph Layer3["데이터 접근 레이어"]
           G[SQLAlchemy ORM]
           H[CRUD 연산]
       end
       
-      subgraph "외부 통합 레이어"
-          I[Gemini AI Client]
-          J[Maps API Client]
-          K[Weather API Client]
-      end
+      I[Gemini AI Client]
+      J[Maps API Client]
+      K[Weather API Client]
       
-      subgraph "데이터 레이어"
+      subgraph Layer4["데이터 레이어"]
           L[(MySQL Database)]
           M[(Cache Tables)]
       end
@@ -44,17 +42,21 @@ DaySync 백엔드는 **FastAPI 프레임워크**를 기반으로 RESTful API를 
       B --> C
       B --> D
       B --> E
+      
       C --> F
       D --> F
+      F --> I
+      
       C --> G
       D --> G
       E --> G
+      
       G --> H
       H --> L
       H --> M
-      F --> I
-      E --> J
-      D --> K
+      
+      E -.-> J
+      D -.-> K
       
       style A fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
       style B fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
@@ -67,6 +69,8 @@ DaySync 백엔드는 **FastAPI 프레임워크**를 기반으로 RESTful API를 
       style I fill:#a5d6a7,stroke:#388e3c,stroke-width:3px,color:#000
       style J fill:#a5d6a7,stroke:#388e3c,stroke-width:3px,color:#000
       style K fill:#a5d6a7,stroke:#388e3c,stroke-width:3px,color:#000
+      style L fill:#90caf9,stroke:#1565c0,stroke-width:3px,color:#000
+      style M fill:#90caf9,stroke:#1565c0,stroke-width:3px,color:#000
 ```
 
 ### 계층별 책임
