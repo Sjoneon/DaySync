@@ -19,44 +19,59 @@
 DaySync는 **3-Tier 클라이언트-서버 아키텍처**를 채택합니다.
 
 ```mermaid
-  graph TB
-      subgraph "클라이언트 레이어 (Android)"
-          A[UI 레이어<br/>Activities & Fragments]
-          B[데이터 레이어<br/>Repositories & API Client]
-          C[음성 인식 서비스<br/>Android Speech API]
+  graph LR
+      subgraph client["클라이언트 레이어"]
+          A[UI 레이어]
+          B[데이터 레이어]
+          C[음성 인식]
       end
       
-      subgraph "백엔드 레이어 (FastAPI)"
-          D[API 게이트웨이<br/>RESTful Endpoints]
-          E[비즈니스 로직<br/>세션 및 일정 관리자]
-          F[AI 통합 서비스<br/>Gemini Function Calling]
+      subgraph backend["백엔드 레이어"]
+          D[API 게이트웨이]
+          E[비즈니스 로직]
+          F[AI 통합]
       end
       
-      subgraph "외부 서비스"
-          G[Gemini AI<br/>의도 분석 및 자연어 처리]
-          H[지도 API<br/>위치 및 경로]
-          I[날씨 API<br/>예보 데이터]
+      subgraph external["외부 서비스"]
+          G[Gemini AI]
+          H[Maps API]
+          I[Weather API]
       end
       
-      subgraph "데이터 레이어"
-          J[(관계형 데이터베이스<br/>사용자, 세션, 일정)]
-          K[(캐시 레이어<br/>경로 및 날씨 캐시)]
+      subgraph data["데이터 레이어"]
+          J[(데이터베이스)]
+          K[(캐시)]
       end
       
-      A -->|사용자 상호작용| B
-      B -->|음성 입력| C
-      C -->|변환된 텍스트| B
-      B -->|HTTP/REST| D
-      D -->|요청 라우팅| E
-      E -->|AI 분석 요청| F
-      F -->|API 호출| G
-      G -->|구조화된 응답| F
-      E -->|CRUD 연산| J
-      E -->|캐시 조회| K
-      E -->|외부 API| H
-      E -->|외부 API| I
-      D -->|JSON 응답| B
-      B -->|UI 업데이트| A
+      A --> B
+      B --> C
+      C --> B
+      
+      B --> D
+      D --> E
+      E --> F
+      
+      F --> G
+      E --> H
+      E --> I
+      
+      E --> J
+      E --> K
+      
+      D --> B
+      B --> A
+      
+      style A fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
+      style B fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
+      style C fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
+      style D fill:#ce93d8,stroke:#7b1fa2,stroke-width:3px,color:#000
+      style E fill:#ce93d8,stroke:#7b1fa2,stroke-width:3px,color:#000
+      style F fill:#ce93d8,stroke:#7b1fa2,stroke-width:3px,color:#000
+      style G fill:#ffcc80,stroke:#f57c00,stroke-width:3px,color:#000
+      style H fill:#ffcc80,stroke:#f57c00,stroke-width:3px,color:#000
+      style I fill:#ffcc80,stroke:#f57c00,stroke-width:3px,color:#000
+      style J fill:#a5d6a7,stroke:#388e3c,stroke-width:3px,color:#000
+      style K fill:#a5d6a7,stroke:#388e3c,stroke-width:3px,color:#000
 ```
 
 ### 아키텍처 레이어
