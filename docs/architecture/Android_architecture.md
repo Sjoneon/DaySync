@@ -38,14 +38,14 @@ DaySync Android 앱은 **MVVM (Model-View-ViewModel) 아키텍처 패턴**을 �
       F --> G
       F --> H
       
-      style A fill:#e3f2fd
-      style B fill:#e3f2fd
-      style C fill:#e3f2fd
-      style D fill:#f3e5f5
-      style E fill:#f3e5f5
-      style F fill:#fff3e0
-      style G fill:#fff3e0
-      style H fill:#fff3e0
+      style A fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
+      style B fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
+      style C fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
+      style D fill:#ce93d8,stroke:#7b1fa2,stroke-width:3px,color:#000
+      style E fill:#ce93d8,stroke:#7b1fa2,stroke-width:3px,color:#000
+      style F fill:#ffcc80,stroke:#f57c00,stroke-width:3px,color:#000
+      style G fill:#ffcc80,stroke:#f57c00,stroke-width:3px,color:#000
+      style H fill:#ffcc80,stroke:#f57c00,stroke-width:3px,color:#000
 ```
 
 ### 계층별 역할
