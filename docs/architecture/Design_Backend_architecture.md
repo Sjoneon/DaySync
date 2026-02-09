@@ -12,30 +12,32 @@ DaySync 백엔드는 **FastAPI 프레임워크**를 기반으로 RESTful API를 
 
 ```mermaid
   graph LR
-      subgraph Layer1["프레젠테이션 레이어"]
+      subgraph presentation["프레젠테이션 레이어"]
           A[API 게이트웨이]
           B[요청 검증]
       end
       
-      subgraph Layer2["비즈니스 로직 레이어"]
+      subgraph business["비즈니스 로직 레이어"]
           C[세션 관리자]
           D[일정 관리자]
           E[경로 관리자]
           F[AI 서비스]
       end
       
-      subgraph Layer3["데이터 접근 레이어"]
+      subgraph dataAccess["데이터 접근 레이어"]
           G[SQLAlchemy ORM]
           H[CRUD 연산]
       end
       
-      I[Gemini AI Client]
-      J[Maps API Client]
-      K[Weather API Client]
+      subgraph external["외부 통합 레이어"]
+          I[Gemini AI]
+          J[Maps API]
+          K[Weather API]
+      end
       
-      subgraph Layer4["데이터 레이어"]
-          L[(MySQL Database)]
-          M[(Cache Tables)]
+      subgraph data["데이터 레이어"]
+          L[(MySQL DB)]
+          M[(Cache)]
       end
       
       A --> B
@@ -45,7 +47,10 @@ DaySync 백엔드는 **FastAPI 프레임워크**를 기반으로 RESTful API를 
       
       C --> F
       D --> F
+      
       F --> I
+      E --> J
+      D --> K
       
       C --> G
       D --> G
@@ -54,9 +59,6 @@ DaySync 백엔드는 **FastAPI 프레임워크**를 기반으로 RESTful API를 
       G --> H
       H --> L
       H --> M
-      
-      E -.-> J
-      D -.-> K
       
       style A fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
       style B fill:#bbdefb,stroke:#1976d2,stroke-width:3px,color:#000
