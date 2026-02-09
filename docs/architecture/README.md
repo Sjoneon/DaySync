@@ -273,12 +273,12 @@ architecture/                # 아키텍처 문서
 
 ### 아키텍처 문서
 
-프로젝트의 상세한 아키텍처 정보는 [`architecture/`](./architecture/) 디렉토리에서 확인할 수 있습니다:
+프로젝트의 상세한 아키텍처 정보는 [`docs/architecture/`](./docs/architecture/) 디렉토리에서 확인할 수 있습니다:
 
-- **[시스템 개요](./architecture/Design_System_overview.md)** - 전체 시스템 구조, 기술 스택, 데이터 플로우
-- **[Android 아키텍처](./architecture/Design_Android_architecture.md)** - MVVM 패턴, 프로젝트 구조, 주요 컴포넌트
-- **[백엔드 아키텍처](./architecture/Design_Backend_architecture.md)** - FastAPI 구조, API 설계, 비즈니스 로직
-- **[데이터베이스 스키마](./architecture/Design_Database_schema.md)** - ERD, 테이블 구조, 인덱스 전략
+- **[시스템 개요](./docs/architecture/Design_System_overview.md)** - 전체 시스템 구조, 기술 스택, 데이터 플로우
+- **[Android 아키텍처](./docs/architecture/Design_Android_architecture.md)** - MVVM 패턴, 프로젝트 구조, 주요 컴포넌트
+- **[백엔드 아키텍처](./docs/architecture/Design_Backend_architecture.md)** - FastAPI 구조, API 설계, 비즈니스 로직
+- **[데이터베이스 스키마](./docs/architecture/Design_Database_schema.md)** - ERD, 테이블 구조, 인덱스 전략
 
 ---
 
