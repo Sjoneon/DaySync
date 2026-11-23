@@ -61,6 +61,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import retrofit2.Response;
@@ -1342,26 +1343,35 @@ public class RouteFragment extends Fragment {
         Set<String> uniqueStopIds = new HashSet<>();
 
         // API 500m 제한으로 여러 지점 검색하여 1km 범위 커버
-        double offset = 0.0045; // 약 500m
+        double offset = 0.0045; // 위도 0.0045도 ≈ 500m
+        // 경도 1도의 거리는 위도에 따라 줄어들므로 cos(위도)로 보정해야 동서도 500m가 됨
+        double lngOffset = offset / Math.cos(Math.toRadians(latitude));
 
         double[][] searchPoints = {
                 {latitude, longitude},              // 중심점
                 {latitude + offset, longitude},     // 북쪽 500m
                 {latitude - offset, longitude},     // 남쪽 500m
-                {latitude, longitude + offset},     // 동쪽 500m
-                {latitude, longitude - offset}      // 서쪽 500m
+                {latitude, longitude + lngOffset},  // 동쪽 500m
+                {latitude, longitude - lngOffset}   // 서쪽 500m
         };
 
         Log.d(TAG, locationName + " 다중 지점 검색 (1km 범위 커버)");
 
+        // 5개 지점을 동시에 요청하고, 결과는 아래에서 지점 순서대로 처리
+        ExecutorService searchPool = Executors.newFixedThreadPool(searchPoints.length);
+        List<Future<Response<TagoBusStopResponse>>> futures = new ArrayList<>();
+        for (double[] point : searchPoints) {
+            futures.add(searchPool.submit(() -> tagoApiService.getNearbyBusStops(
+                    BuildConfig.TAGO_API_KEY_DECODED,
+                    point[0], point[1],
+                    100, 1, "json"
+            ).execute()));
+        }
+        searchPool.shutdown();
+
         for (int i = 0; i < searchPoints.length; i++) {
-            double[] point = searchPoints[i];
             try {
-                Response<TagoBusStopResponse> response = tagoApiService.getNearbyBusStops(
-                        BuildConfig.TAGO_API_KEY_DECODED,
-                        point[0], point[1],
-                        100, 1, "json"
-                ).execute();
+                Response<TagoBusStopResponse> response = futures.get(i).get();
 
                 if (response.isSuccessful() && response.body() != null) {
                     TagoBusStopResponse.Items itemsContainer = null;

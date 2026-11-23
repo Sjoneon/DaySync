@@ -25,25 +25,20 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // 기존 기상청 API 키
-        buildConfigField("String", "KMA_API_KEY", "\"${properties.getProperty("KMA_API_KEY")}\"")
+        // DaySync 서버 주소 (예: DAYSYNC_BASE_URL=https://api.example.com/)
+        buildConfigField("String", "DAYSYNC_BASE_URL", "\"${properties.getProperty("DAYSYNC_BASE_URL", "http://10.0.2.2:8000/")}\"")
 
         // 기상청 API Hub 키
         buildConfigField("String", "KMA_API_HUB_KEY", "\"${properties.getProperty("KMA_API_HUB_KEY")}\"")
 
-        // 네이버 API 키
-        buildConfigField("String", "NAVER_CLIENT_ID", "\"${properties.getProperty("NAVER_CLIENT_ID")}\"")
-        buildConfigField("String", "NAVER_CLIENT_SECRET", "\"${properties.getProperty("NAVER_CLIENT_SECRET")}\"")
-
         // TMAP API 키
         buildConfigField("String", "TMAP_API_KEY", "\"${properties.getProperty("TMAP_API_KEY")}\"")
 
-        // 국토교통부(TAGO) API 키 (인코딩/디코딩)
-        buildConfigField("String", "TAGO_API_KEY_ENCODED", "\"${properties.getProperty("TAGO_API_KEY_ENCODED")}\"")
+        // 국토교통부(TAGO) API 키 (디코딩)
         buildConfigField("String", "TAGO_API_KEY_DECODED", "\"${properties.getProperty("TAGO_API_KEY_DECODED")}\"")
 
-        // Gemini API 키 추가
-        buildConfigField("String", "GEMINI_API_KEY", "\"${properties.getProperty("GEMINI_API_KEY", "")}\"")
+        // 네이버 지도 SDK 클라이언트 ID (AndroidManifest에 주입)
+        manifestPlaceholders["NAVER_MAP_CLIENT_ID"] = properties.getProperty("NAVER_MAP_CLIENT_ID", "")
     }
 
     buildTypes {

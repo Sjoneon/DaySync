@@ -178,7 +178,7 @@ public class SettingsFragment extends Fragment {
             String nickname = preferences.getString("nickname", "사용자");
             createUserOnServer(nickname);
         } else {
-            Log.d(TAG, "UUID 존재 확인: " + existingUuid);
+            Log.d(TAG, "UUID 존재 확인");
         }
     }
 
@@ -214,7 +214,7 @@ public class SettingsFragment extends Fragment {
                                 editor.putString("user_uuid", serverUuid);
                                 editor.apply();
 
-                                Log.d(TAG, "서버에서 UUID 생성 성공: " + serverUuid);
+                                Log.d(TAG, "서버에서 UUID 생성 성공");
 
                                 if (getActivity() != null) {
                                     getActivity().runOnUiThread(() ->
@@ -263,7 +263,7 @@ public class SettingsFragment extends Fragment {
             editor.putString("user_uuid", newUuid);
             editor.apply();
 
-            Log.w(TAG, "로컬에서 UUID 생성 (서버 미등록): " + newUuid);
+            Log.w(TAG, "로컬에서 UUID 생성 (서버 미등록)");
 
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() ->

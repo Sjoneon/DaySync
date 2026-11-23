@@ -251,13 +251,14 @@ python run.py
 ```bash
 cd DaySync
 
-# local.properties 파일 설정
-NAVER_CLIENT_ID=your_naver_client_id
-NAVER_CLIENT_SECRET=your_naver_client_secret
+# local.properties 파일 설정 (저장소에 올리지 않음)
+DAYSYNC_BASE_URL=http://your_server_url:8000/
+NAVER_MAP_CLIENT_ID=your_naver_map_client_id
 TMAP_API_KEY=your_tmap_api_key
-TAGO_API_KEY=your_tago_api_key
-WEATHER_API_KEY=your_weather_api_key
-API_BASE_URL=http://your_server_url:8000
+TAGO_API_KEY_DECODED=your_tago_api_key
+KMA_API_HUB_KEY=your_kma_api_hub_key
+
+# HTTP 서버 주소는 debug 빌드에서만 연결됩니다. release 빌드는 HTTPS 주소가 필요합니다.
 
 # Android Studio에서 프로젝트 열기
 # Build -> Make Project (Ctrl+F9)
@@ -276,7 +277,6 @@ API_BASE_URL=http://your_server_url:8000
 - **AI Function Calling**: 자연어를 통한 직접적인 기능 실행
 - **비동기 처리**: FastAPI의 async/await 패턴으로 높은 처리량 구현
 - **캐싱 전략**: 자주 조회되는 경로 및 날씨 정보 캐싱으로 성능 최적화
-- **보안**: API 키 관리 및 UUID 기반 사용자 식별로 보안 강화
 
 ## 개발 과정에서 고려한 점
 
@@ -321,6 +321,13 @@ Gemini AI의 Function Calling 기능을 활용하여 자연어로 복잡한 일�
 
 **버스 GPS 위치정보 미사용**
 실시간 버스 GPS 위치정보를 활용하려 했으나, 대량의 데이터 처리로 인해 경로 검색 시간이 과도하게 증가하는 문제가 발생했습니다. 이를 해결하기 위해 정류장 순서 기반의 간이 처리 방식을 채택했지만, GPS 위치정보를 사용할 경우 더 정확한 버스 대기시간 및 목적지 도착 예상시간을 제공할 수 있을 것으로 생각합니다. 향후 데이터 처리 최적화 및 캐싱 전략 개선을 통해 GPS 기반 실시간 추적 기능을 도입할 필요가 있습니다.
+
+**외부 API 키가 앱에 포함되는 구조**
+TAGO, TMAP, 기상청, Gemini 키를 `local.properties`에서 읽어 `BuildConfig`로 앱에 넣었고 네이버 지도 클라이언트 ID는 `AndroidManifest.xml`에 직접 적었습니다. `local.properties`는 저장소에 올리지 않았지만 빌드한 APK를 풀면 키를 그대로 찾을 수 있었고 네이버 지도 ID는 저장소에도 공개되어 있었습니다. Gemini 키는 앱 코드에서 쓰지 않는데도 APK에 들어가 있었습니다.
+
+현재 이 프로젝트에서 사용한 키는 모두 삭제했습니다. 저장소 코드를 그대로 빌드하면 외부 API는 동작하지 않습니다. 실행하려면 각 서비스에서 새 키를 발급받아 `local.properties`에 넣어야 합니다. 쓰지 않던 키는 빌드 설정에서 지웠고 네이버 지도 ID도 `local.properties`에서 읽도록 바꿨습니다. 외부 API 호출을 서버로 옮겨 앱이 키를 갖지 않게 하는 것이 남은 과제입니다.
+
+AWS에 올렸던 백엔드 서버도 현재 삭제한 상태라 앱이 서버에 접속할 수 없습니다. 다시 실행하려면 서버를 새로 띄우고 그 주소를 `local.properties`의 `DAYSYNC_BASE_URL`에 넣어야 합니다.
 
 **테스트 자동화**
 단위 테스트와 통합 테스트를 초기부터 작성하지 못해 버그 발견이 늦어진 경우가 있었습니다. 이후 프로젝트에서는 TDD 방식을 도입할 계획이 있습니다.

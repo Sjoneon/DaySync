@@ -535,7 +535,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         int savedSessionId = prefs.getInt("session_id", -1);
         sessionId = (savedSessionId == -1) ? null : savedSessionId;
 
-        Log.d(TAG, "사용자 UUID: " + userUuid);
+        Log.d(TAG, "사용자 UUID 로드됨");
         Log.d(TAG, "세션 ID: " + sessionId);
     }
 
@@ -611,7 +611,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             return;
         }
 
-        Log.d(TAG, "대화 내역 불러오기 시작: " + userUuid);
+        Log.d(TAG, "대화 내역 불러오기 시작");
 
         apiService.getUserSessions(userUuid).enqueue(new Callback<SessionListResponse>() {
             @Override
@@ -729,7 +729,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
 
         ChatRequest request = new ChatRequest(userUuid, messageText, sessionId);
-        Log.d(TAG, "API 호출 시작 - UUID: " + userUuid + ", SessionID: " + sessionId);
+        Log.d(TAG, "API 호출 시작 - SessionID: " + sessionId);
 
         Call<ChatResponse> call = apiService.sendChatMessage(request);
         call.enqueue(new Callback<ChatResponse>() {
@@ -1602,7 +1602,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             return;
         }
 
-        Log.d(TAG, "서버에 사용자 존재 확인 중: " + userUuid);
+        Log.d(TAG, "서버에 사용자 존재 확인 중");
 
         apiService.getUser(userUuid).enqueue(new Callback<UserResponse>() {
             @Override
@@ -1650,7 +1650,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
                         userUuid = serverUuid;
 
-                        Log.d(TAG, "백그라운드 서버 등록 성공: " + serverUuid);
+                        Log.d(TAG, "백그라운드 서버 등록 성공");
 
                         runOnUiThread(() -> {
                             Toast.makeText(MainActivity.this,

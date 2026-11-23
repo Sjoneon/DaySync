@@ -176,7 +176,7 @@ public class LoginActivity extends AppCompatActivity {
         if (existingUuid == null) {
             createUserOnServer(nickname, preferences);
         } else {
-            Log.d(TAG, "기존 UUID 사용: " + existingUuid);
+            Log.d(TAG, "기존 UUID 사용");
             updateNicknameAndProceed(nickname, preferences);
         }
     }
@@ -213,7 +213,7 @@ public class LoginActivity extends AppCompatActivity {
                                 editor.putLong("setup_time", System.currentTimeMillis());
                                 editor.apply();
 
-                                Log.d(TAG, "서버에서 UUID 생성 성공: " + serverUuid);
+                                Log.d(TAG, "서버에서 UUID 생성 성공");
 
                                 runOnUiThread(() -> navigateToMainActivity(nickname));
                             } else {
@@ -260,7 +260,7 @@ public class LoginActivity extends AppCompatActivity {
             editor.putLong("setup_time", System.currentTimeMillis());
             editor.apply();
 
-            Log.w(TAG, "로컬에서 UUID 생성 (서버 미등록): " + localUuid);
+            Log.w(TAG, "로컬에서 UUID 생성 (서버 미등록)");
             Log.w(TAG, "나중에 서버 연결 시 동기화가 필요합니다");
 
             runOnUiThread(() -> navigateToMainActivity(nickname));
