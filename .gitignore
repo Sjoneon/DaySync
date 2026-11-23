@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Firebase 설정 (프로젝트 키 포함)
+google-services.json
+
+# 개인 점검 메모
+DaySync_점검_결과.md

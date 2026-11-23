@@ -168,11 +168,11 @@ git clone https://github.com/yourusername/DaySync.git
 cd DaySync
 
 # 2. API 키 설정 (local.properties)
-NAVER_CLIENT_ID=your_naver_client_id
-NAVER_CLIENT_SECRET=your_naver_client_secret
+DAYSYNC_BASE_URL=http://your_server_url:8000/
+NAVER_MAP_CLIENT_ID=your_naver_map_client_id
 TMAP_API_KEY=your_tmap_api_key
-TAGO_API_KEY=your_tago_api_key
-WEATHER_API_KEY=your_weather_api_key
+TAGO_API_KEY_DECODED=your_tago_api_key
+KMA_API_HUB_KEY=your_kma_api_hub_key
 
 # 3. 빌드 및 실행
 ./gradlew assembleDebug

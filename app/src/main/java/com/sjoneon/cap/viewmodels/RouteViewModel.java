@@ -86,7 +86,7 @@ public class RouteViewModel extends AndroidViewModel {
     public void updateRouteList(List<RouteFragment.RouteInfo> routes, String userUuid) {
         Log.i(TAG, "=== updateRouteList 호출 ===");
         Log.i(TAG, "경로 개수: " + routes.size());
-        Log.i(TAG, "userUuid: " + (userUuid != null ? userUuid : "NULL"));
+        Log.i(TAG, "userUuid: " + (userUuid != null ? "있음" : "NULL"));
         Log.i(TAG, "startLocation: " + (startLocation != null ?
                 startLocation.getLatitude() + ", " + startLocation.getLongitude() : "NULL"));
         Log.i(TAG, "endLocation: " + (endLocation != null ?
@@ -126,7 +126,7 @@ public class RouteViewModel extends AndroidViewModel {
         Log.i(TAG, "출발: " + startLat + ", " + startLng);
         Log.i(TAG, "도착: " + endLat + ", " + endLng);
         Log.i(TAG, "경로 개수: " + routes.size());
-        Log.i(TAG, "userUuid: " + (userUuid != null ? userUuid : "NULL"));
+        Log.i(TAG, "userUuid: " + (userUuid != null ? "있음" : "NULL"));
 
         repository.saveRouteToServer(
                 startLat, startLng, endLat, endLng,
